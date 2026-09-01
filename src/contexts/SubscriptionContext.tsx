@@ -1,0 +1,66 @@
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./AuthContext";
+import { useRole } from "./RoleContext";
+
+export type SubscriptionStatus = 'pending' | 'active' | 'suspended';
+
+interface SubscriptionContextType {
+  status: SubscriptionStatus | null;
+  loading: boolean;
+}
+
+const SubscriptionContext = createContext<SubscriptionContextType>({
+  status: null,
+  loading: true,
+});
+
+export const useSubscription = () => useContext(SubscriptionContext);
+
+export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
+  const { isAdmin } = useRole();
+  const [status, setStatus] = useState<SubscriptionStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      if (!user) {
+        setStatus(null);
+        setLoading(false);
+        return;
+      }
+
+      // Skip check for admins
+      if (isAdmin === true) {
+        setStatus('active');
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('subscription_status')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching subscription status:", error);
+        setStatus('pending');
+      } else {
+        setStatus(data.subscription_status as SubscriptionStatus);
+      }
+      setLoading(false);
+    };
+
+    if (isAdmin !== null) {
+      fetchStatus();
+    }
+  }, [user, isAdmin]);
+
+  return (
+    <SubscriptionContext.Provider value={{ status, loading }}>
+      {children}
+    </SubscriptionContext.Provider>
+  );
+};

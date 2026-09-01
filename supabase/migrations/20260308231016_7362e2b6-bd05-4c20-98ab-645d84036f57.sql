@@ -1,0 +1,1 @@
+ALTER TABLE public.queue ADD COLUMN status text NOT NULL DEFAULT 'waiting';

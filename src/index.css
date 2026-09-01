@@ -1,0 +1,214 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 88 33% 91%;
+    --foreground: 120 23% 23%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 120 23% 23%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 120 23% 23%;
+
+    --primary: 120 23% 23%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 88 30% 50%;
+
+    --secondary: 88 33% 94%;
+    --secondary-foreground: 120 23% 23%;
+
+    --muted: 88 30% 94%;
+    --muted-foreground: 120 12% 45%;
+
+    --accent: 88 33% 88%;
+    --accent-foreground: 120 23% 23%;
+
+    --success: 145 45% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 85% 48%;
+    --warning-foreground: 0 0% 100%;
+    --info: 205 70% 45%;
+    --info-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 120 15% 88%;
+    --input: 120 15% 88%;
+    --ring: 88 30% 50%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 120 23% 23%;
+    --sidebar-foreground: 88 33% 91%;
+    --sidebar-primary: 88 30% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 120 20% 30%;
+    --sidebar-accent-foreground: 88 33% 91%;
+    --sidebar-border: 120 18% 30%;
+    --sidebar-ring: 88 30% 50%;
+
+    /* Olive-themed gradients */
+    --gradient-olive: linear-gradient(135deg, hsl(120 23% 23%), hsl(88 30% 50%));
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%), hsl(88 33% 94%));
+    --gradient-glow: radial-gradient(circle at 100% 0%, hsl(88 30% 50% / 0.18), transparent 60%);
+
+    /* Shadows */
+    --shadow-olive: 0 18px 40px -18px hsl(120 23% 23% / 0.35);
+    --shadow-soft: 0 2px 10px -4px hsl(120 23% 23% / 0.08);
+    --shadow-card: 0 1px 2px hsl(120 23% 23% / 0.04), 0 12px 32px -20px hsl(120 23% 23% / 0.25);
+
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    --background: 120 18% 8%;
+    --foreground: 88 25% 92%;
+
+    --card: 120 18% 11%;
+    --card-foreground: 88 25% 92%;
+
+    --popover: 120 18% 11%;
+    --popover-foreground: 88 25% 92%;
+
+    --primary: 88 34% 55%;
+    --primary-foreground: 120 25% 10%;
+    --primary-glow: 88 40% 65%;
+
+    --secondary: 120 12% 17%;
+    --secondary-foreground: 88 25% 92%;
+
+    --muted: 120 12% 17%;
+    --muted-foreground: 88 10% 65%;
+
+    --accent: 120 14% 20%;
+    --accent-foreground: 88 25% 92%;
+
+    --success: 145 45% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 80% 55%;
+    --warning-foreground: 120 25% 10%;
+    --info: 205 65% 55%;
+    --info-foreground: 120 25% 10%;
+
+    --destructive: 0 62.8% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 120 10% 20%;
+    --input: 120 10% 20%;
+    --ring: 88 34% 55%;
+
+    --sidebar-background: 120 20% 10%;
+    --sidebar-foreground: 88 18% 85%;
+    --sidebar-primary: 88 34% 55%;
+    --sidebar-primary-foreground: 120 25% 10%;
+    --sidebar-accent: 120 12% 17%;
+    --sidebar-accent-foreground: 88 18% 85%;
+    --sidebar-border: 120 10% 18%;
+    --sidebar-ring: 88 34% 55%;
+
+    /* Dark mode gradients */
+    --gradient-olive: linear-gradient(135deg, hsl(88 34% 45%), hsl(88 40% 60%));
+    --gradient-subtle: linear-gradient(180deg, hsl(120 18% 11%), hsl(120 12% 17%));
+    --gradient-glow: radial-gradient(circle at 100% 0%, hsl(88 34% 55% / 0.16), transparent 60%);
+
+    /* Dark shadows */
+    --shadow-olive: 0 18px 40px -18px hsl(0 0% 0% / 0.6);
+    --shadow-soft: 0 2px 10px -4px hsl(0 0% 0% / 0.5);
+    --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.3), 0 12px 32px -20px hsl(0 0% 0% / 0.6);
+  }
+}
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+
+
+  html {
+    direction: rtl;
+  }
+
+  /* RTL support */
+  [dir="rtl"] {
+    direction: rtl;
+  }
+
+  [dir="ltr"] {
+    direction: ltr;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); background-clip: content-box; }
+}
+
+@layer utilities {
+  .olive-gradient {
+    background: var(--gradient-olive);
+  }
+
+  .subtle-gradient {
+    background: var(--gradient-subtle);
+  }
+
+  .glow-gradient {
+    background-image: var(--gradient-glow);
+  }
+
+  .shadow-olive {
+    box-shadow: var(--shadow-olive);
+  }
+
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+
+  .surface-card {
+    @apply rounded-3xl border border-border/60 bg-card shadow-card;
+  }
+
+  .glass-bar {
+    @apply bg-card/70 backdrop-blur-xl border-border/60;
+  }
+
+  .animate-rise {
+    animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
