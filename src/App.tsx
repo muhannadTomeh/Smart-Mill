@@ -265,7 +265,7 @@ const ProtectedLayout = () => {
               <HeaderBar />
               <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
                 <Routes>
-                  <Route path="/admin" element={<AdminIndex />} />
+                  <Route path="/admin" element={<AdminErrorBoundary><AdminIndex /></AdminErrorBoundary>} />
                   <Route path="/admin/mill/:id" element={<AdminErrorBoundary><MillDetails /></AdminErrorBoundary>} />
                   <Route path="*" element={<Navigate to="/admin" replace />} />
                 </Routes>

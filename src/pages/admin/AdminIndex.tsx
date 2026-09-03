@@ -69,6 +69,26 @@ export default function AdminIndex() {
     owner_email?: string;
   } | null>(null);
 
+  // Safe helpers to prevent any render crashes
+  const formatDate = (dateStr: any) => {
+    if (!dateStr) return '---';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '---';
+      return d.toLocaleDateString("ar-EG");
+    } catch {
+      return '---';
+    }
+  };
+
+  const safeText = (val: any, fallback = '---') => {
+    if (val === null || val === undefined) return fallback;
+    if (typeof val === 'object') {
+      try { return JSON.stringify(val); } catch { return fallback; }
+    }
+    return String(val);
+  };
+
   const generatePassword = () => {
     const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let retVal = "";
@@ -680,7 +700,7 @@ export default function AdminIndex() {
             <Droplets className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="text-right">
-            <div className="text-2xl font-bold">{stats.totalOil.toLocaleString()} كغم</div>
+            <div className="text-2xl font-bold">{(Number(stats.totalOil) || 0).toLocaleString()} كغم</div>
             <p className="text-xs text-muted-foreground mt-1">إنتاج إجمالي</p>
           </CardContent>
         </Card>
@@ -733,19 +753,19 @@ export default function AdminIndex() {
             <TableBody>
               {filteredMills.map((mill) => (
                 <TableRow key={mill.id}>
-                  <TableCell className="font-bold text-foreground text-right">{mill.millName}</TableCell>
-                  <TableCell className="font-medium text-muted-foreground text-right">{mill.ownerName}</TableCell>
+                  <TableCell className="font-bold text-foreground text-right">{safeText(mill.millName, "معصرة غير مسماة")}</TableCell>
+                  <TableCell className="font-medium text-muted-foreground text-right">{safeText(mill.ownerName, "غير محدد")}</TableCell>
                   <TableCell className="text-right">
                     <div className="text-xs">
-                      <span className="font-medium text-foreground">{mill.millLocation}</span>
-                      <span className="text-muted-foreground me-1"> ({mill.country})</span>
+                      <span className="font-medium text-foreground">{safeText(mill.millLocation, "غير محدد")}</span>
+                      <span className="text-muted-foreground me-1"> ({safeText(mill.country, "فلسطين")})</span>
                     </div>
                   </TableCell>
                   <TableCell dir="ltr" className="text-right text-xs font-mono">
-                    <div>{mill.phone}</div>
-                    {mill.secondaryPhone && <div className="text-muted-foreground text-[10px]">{mill.secondaryPhone}</div>}
+                    <div>{safeText(mill.phone, "---")}</div>
+                    {mill.secondaryPhone && <div className="text-muted-foreground text-[10px]">{safeText(mill.secondaryPhone)}</div>}
                   </TableCell>
-                  <TableCell className="text-xs text-right">{new Date(mill.createdAt).toLocaleDateString("ar-EG")}</TableCell>
+                  <TableCell className="text-xs text-right">{formatDate(mill.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     {getStatusBadge(mill.subscriptionStatus)}
                   </TableCell>
