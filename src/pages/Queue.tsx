@@ -30,6 +30,16 @@ interface QueueItem {
   position: number;
   created_at: string;
   status: string;
+  estimated_minutes?: number | null;
+}
+
+export function parseEstimatedMinutes(item: { estimated_minutes?: number | null; notes?: string | null }): number | null {
+  if (item.estimated_minutes != null && !isNaN(Number(item.estimated_minutes))) {
+    return Number(item.estimated_minutes);
+  }
+  if (!item.notes) return null;
+  const match = item.notes.match(/\[(?:وقت_تقديري|الوقت|est):?\s*(\d+)/i);
+  return match ? parseInt(match[1]) : null;
 }
 
 const formatTime = (dateStr: string) => {
@@ -91,15 +101,36 @@ const Queue = () => {
       toast.error("يرجى إدخال الاسم وعدد الشوالات");
       return;
     }
-    const { error } = await supabase.from("queue").insert({
+
+    const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes) : null;
+    const basePayload: any = {
       user_id: targetUserId!,
       season_id: activeSeason!.id,
-      name: newCustomer.name,
-      phone: newCustomer.phone || null,
+      name: newCustomer.name.trim(),
+      phone: newCustomer.phone?.trim() || null,
       bags: parseInt(newCustomer.bags),
-      notes: newCustomer.notes || null,
+      notes: newCustomer.notes?.trim() || null,
       status: "waiting",
+    };
+
+    // Try inserting with estimated_minutes column
+    let { error } = await supabase.from("queue").insert({
+      ...basePayload,
+      ...(estMin ? { estimated_minutes: estMin } : {}),
     });
+
+    // Fallback if estimated_minutes column is not yet migrated in Supabase
+    if (error && (error.message?.includes("estimated_minutes") || error.code === "PGRST204")) {
+      const fallbackNotes = estMin 
+        ? `[وقت_تقديري:${estMin}] ${basePayload.notes || ""}`.trim()
+        : basePayload.notes;
+      const retry = await supabase.from("queue").insert({
+        ...basePayload,
+        notes: fallbackNotes || null,
+      });
+      error = retry.error;
+    }
+
     if (!error) {
       setNewCustomer({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
       setShowExtra(false);
@@ -107,7 +138,7 @@ const Queue = () => {
       toast.success(`تم إضافة ${newCustomer.name} إلى الطابور`);
       await fetchQueue();
     } else {
-      toast.error("تعذر إضافة الزبون");
+      toast.error("تعذر إضافة الزبون: " + error.message);
     }
   };
 
@@ -282,7 +313,15 @@ const Queue = () => {
                         #{p.position}
                       </Badge>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-foreground truncate text-lg">{p.name}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-foreground truncate text-lg">{p.name}</h3>
+                          {parseEstimatedMinutes(p) ? (
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
+                              <Clock className="h-3 w-3" />
+                              {parseEstimatedMinutes(p)} دقيقة
+                            </Badge>
+                          ) : null}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           🛍️ {p.bags} شوال • ⏰ {formatTime(p.created_at)}
                           {p.phone && ` • ${p.phone}`}
@@ -349,7 +388,15 @@ const Queue = () => {
                       #{customer.position}
                     </Badge>
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-foreground truncate text-sm">{customer.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground truncate text-sm">{customer.name}</h3>
+                        {parseEstimatedMinutes(customer) ? (
+                          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-[11px] py-0 px-1.5">
+                            <Clock className="h-2.5 w-2.5" />
+                            {parseEstimatedMinutes(customer)} د
+                          </Badge>
+                        ) : null}
+                      </div>
                       <p className="text-xs text-muted-foreground truncate">
                         🛍️ {customer.bags} • {formatTime(customer.created_at)}
                         {customer.phone && ` • ${customer.phone}`}
