@@ -21,13 +21,14 @@ import {
 import { 
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Building2, Receipt, Droplets, CalendarCheck, Filter, UserPlus, Copy, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Users, User, Building2, Receipt, Droplets, CalendarCheck, Filter, UserPlus, Copy, RefreshCw, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -108,7 +109,7 @@ export default function AdminIndex() {
       }
 
       console.log("Creating mill account via admin_create_mill RPC...");
-      const { data, error } = await supabase.rpc('admin_create_mill', {
+      const { data, error } = await (supabase as any).rpc('admin_create_mill', {
         p_mill_name: newAccountData.mill_name.trim(),
         p_country: newAccountData.country.trim() || 'فلسطين',
         p_username: cleanUsername,
@@ -190,12 +191,12 @@ export default function AdminIndex() {
           { data: invoices },
           { data: adminRoles }
         ] = await Promise.all([
-          supabase.from("mills").select(`
+          (supabase as any).from("mills").select(`
             id, name, location, country, phone, secondary_phone,
             mill_code, subscription_status, monthly_fee, owner_user_id, created_at,
             mill_memberships(id, user_id, role, display_username)
           `).order("created_at", { ascending: false }),
-          supabase.from("subscription_payments").select("mill_user_id, payment_date, mill_id").order("payment_date", { ascending: false }),
+          (supabase as any).from("subscription_payments").select("mill_user_id, payment_date, mill_id").order("payment_date", { ascending: false }),
           supabase.from("seasons").select("user_id, status"),
           supabase.from("invoices").select("oil_produced, created_at, user_id"),
           supabase.from("user_roles").select("user_id").eq("role", "platform_admin")

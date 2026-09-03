@@ -14,7 +14,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { 
   Info, ArrowRight, Receipt, Package, Calendar, ShieldCheck, ShieldAlert, 
   Save, Plus, History, Banknote, Building2, MapPin, Phone, User, Globe, 
-  Clock, UserCheck, ShoppingCart, Wallet, Lock, Mail, Users, CheckCircle2 
+  Clock, UserCheck, ShoppingCart, Wallet, Lock, Mail, Users, CheckCircle2,
+  RotateCcw, Copy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ import { Label } from "@/components/ui/label";
 export default function MillDetails() {
   const { id: millId } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [millData, setMillData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
