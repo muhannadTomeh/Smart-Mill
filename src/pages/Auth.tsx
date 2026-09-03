@@ -7,6 +7,7 @@ import AuthBranding from "@/components/auth/AuthBranding";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
 import ForgotPasswordForm from "@/components/auth/ForgotPasswordForm";
+import { normalizeUsernameToEmail } from "@/lib/authUtils";
 
 export type AuthView = "login" | "register" | "forgot-password";
 
@@ -32,13 +33,14 @@ const Auth = () => {
   const nextPath = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "";
   const returnUrl = nextPath ? `${window.location.origin}${nextPath}` : window.location.origin;
 
-  const handleLogin = async (email: string, password: string) => {
+  const handleLogin = async (usernameOrEmail: string, password: string) => {
     localStorage.removeItem('employee_owner_id');
     setLoading(true);
+    const email = normalizeUsernameToEmail(usernameOrEmail);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      toast({ title: "خطأ في تسجيل الدخول", description: error.message, variant: "destructive" });
+      toast({ title: "خطأ في تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة", variant: "destructive" });
     } else {
       toast({ title: "تم تسجيل الدخول بنجاح" });
       if (nextPath) {
@@ -51,7 +53,17 @@ const Auth = () => {
         if (isAdminRole) {
           navigate("/admin");
         } else {
-          navigate("/seasons");
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('parent_mill_id')
+            .eq('user_id', data.user.id)
+            .maybeSingle();
+
+          if (profileRow?.parent_mill_id) {
+            navigate("/queue");
+          } else {
+            navigate("/seasons");
+          }
         }
       } else {
         navigate("/seasons");

@@ -3,22 +3,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LogIn, Mail, Lock, Sprout } from "lucide-react";
+import { LogIn, User, Lock, Sprout } from "lucide-react";
 import type { AuthView } from "@/pages/Auth";
 
 interface LoginFormProps {
   loading: boolean;
-  onSubmit: (email: string, password: string) => void;
+  onSubmit: (emailOrUsername: string, password: string) => void;
   onNavigate: (view: AuthView) => void;
 }
 
 const LoginForm = ({ loading, onSubmit, onNavigate }: LoginFormProps) => {
-  const [email, setEmail] = useState("");
+  const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(email, password);
+    onSubmit(usernameOrEmail, password);
   };
 
   return (
@@ -35,22 +35,24 @@ const LoginForm = ({ loading, onSubmit, onNavigate }: LoginFormProps) => {
       </div>
 
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-1">مرحباً بعودتك</h2>
-        <p className="text-muted-foreground">سجّل دخولك للوصول إلى لوحة التحكم</p>
+        <h2 className="text-2xl font-bold text-foreground mb-1">تسجيل الدخول</h2>
+        <p className="text-muted-foreground">أدخل اسم المستخدم أو البريد وكلمة المرور للبدء</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="login-email">البريد الإلكتروني</Label>
+          <Label htmlFor="login-username">اسم المستخدم أو البريد</Label>
           <div className="relative">
-            <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              id="login-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
+              id="login-username"
+              type="text"
+              value={usernameOrEmail}
+              onChange={(e) => setUsernameOrEmail(e.target.value)}
+              placeholder="مثال: ahmed أو cashier1"
               className="pr-10 h-12"
+              autoCapitalize="none"
+              autoCorrect="off"
               required
             />
           </div>
@@ -74,7 +76,7 @@ const LoginForm = ({ loading, onSubmit, onNavigate }: LoginFormProps) => {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Checkbox id="remember" />
+            <Checkbox id="remember" defaultChecked />
             <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">تذكرني</Label>
           </div>
           <button
@@ -91,7 +93,6 @@ const LoginForm = ({ loading, onSubmit, onNavigate }: LoginFormProps) => {
           {loading ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول"}
         </Button>
       </form>
-
     </div>
   );
 };

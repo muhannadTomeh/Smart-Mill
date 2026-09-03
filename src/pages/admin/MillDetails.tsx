@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { normalizeUsernameToEmail, getDisplayUsername } from "@/lib/authUtils";
 import {
   Dialog,
   DialogContent,
@@ -53,7 +54,7 @@ export default function MillDetails() {
   
   // New Employee Modal
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({ name: "", email: "", password: "" });
+  const [newEmployee, setNewEmployee] = useState({ name: "", username: "", password: "" });
   const [creatingEmployee, setCreatingEmployee] = useState(false);
 
   const { toast } = useToast();
@@ -313,23 +314,21 @@ export default function MillDetails() {
 
   // Create Employee Cashier Sub-account
   const handleCreateEmployee = async () => {
-    if (!newEmployee.name.trim() || !newEmployee.email.trim() || !newEmployee.password.trim()) {
-      toast({ title: "خطأ", description: "يرجى ملء كافة الحقول", variant: "destructive" });
-      return;
-    }
-    if (newEmployee.password.length < 6) {
-      toast({ title: "خطأ", description: "كلمة المرور يجب أن تكون 6 أحرف على الأقل", variant: "destructive" });
+    if (!newEmployee.name.trim() || !newEmployee.username.trim() || !newEmployee.password.trim()) {
+      toast({ title: "خطأ", description: "يرجى كتابة اسم الموظف، واسم المستخدم، وكلمة المرور", variant: "destructive" });
       return;
     }
 
     setCreatingEmployee(true);
     try {
+      const email = normalizeUsernameToEmail(newEmployee.username);
       const { data, error } = await supabase.auth.signUp({
-        email: newEmployee.email.trim(),
+        email,
         password: newEmployee.password,
         options: {
           data: {
             display_name: newEmployee.name.trim(),
+            username: newEmployee.username.trim(),
             parent_mill_id: millId,
             mill_name: millData?.profile?.mill_name,
           }
@@ -339,17 +338,17 @@ export default function MillDetails() {
       if (error) throw error;
 
       toast({
-        title: "تم إنشاء حساب الموظف بنجاح",
-        description: `تم ربط الحساب (${newEmployee.email}) بهذه المعصرة بصلاحيات الطابور والفوترة فقط.`
+        title: "تم إنشاء حساب الكاشير بنجاح",
+        description: `اسم المستخدم: ${newEmployee.username.trim()} (كلمة المرور: ${newEmployee.password})`
       });
 
       setIsEmployeeModalOpen(false);
-      setNewEmployee({ name: "", email: "", password: "" });
+      setNewEmployee({ name: "", username: "", password: "" });
       fetchData();
     } catch (err: any) {
       toast({
         title: "خطأ في إنشاء الحساب",
-        description: err.message || "تعذر إنشاء حساب الموظف",
+        description: err.message || "تعذر إنشاء حساب الكاشير",
         variant: "destructive"
       });
     } finally {
@@ -681,29 +680,30 @@ export default function MillDetails() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>البريد الإلكتروني / اسم الدخول *</Label>
+                      <Label>اسم المستخدم (Username) *</Label>
                       <Input 
-                        type="email"
-                        value={newEmployee.email} 
-                        onChange={(e) => setNewEmployee(p => ({ ...p, email: e.target.value }))} 
-                        placeholder="cashier@example.com" 
+                        type="text"
+                        value={newEmployee.username} 
+                        onChange={(e) => setNewEmployee(p => ({ ...p, username: e.target.value }))} 
+                        placeholder="مثال: ahmad أو cashier1" 
                         dir="ltr"
                       />
+                      <p className="text-[11px] text-muted-foreground">نص عادي بسيط بدون قيود أو بريد إلكتروني</p>
                     </div>
                     <div className="space-y-2">
                       <Label>كلمة المرور *</Label>
                       <Input 
-                        type="password"
+                        type="text"
                         value={newEmployee.password} 
                         onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))} 
-                        placeholder="6 أحرف أو أرقام على الأقل" 
+                        placeholder="أدخل كلمة المرور (مثال: 123456)" 
                         dir="ltr"
                       />
                     </div>
                   </div>
                   <DialogFooter>
                     <Button onClick={handleCreateEmployee} disabled={creatingEmployee} className="w-full">
-                      {creatingEmployee ? "جارٍ إنشاء الحساب..." : "تأكيد إنشاء حساب الكاشير"}
+                      {creatingEmployee ? "جارٍ إنشاء الحساب..." : "تأكيد وإنشاء حساب الكاشير"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -714,7 +714,7 @@ export default function MillDetails() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">اسم الموظف</TableHead>
-                    <TableHead className="text-right">معرّف الدخول</TableHead>
+                    <TableHead className="text-right">اسم المستخدم</TableHead>
                     <TableHead className="text-right">الصلاحيات</TableHead>
                     <TableHead className="text-right">تاريخ الإنشاء</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
@@ -724,7 +724,9 @@ export default function MillDetails() {
                   {employees.map((emp: any) => (
                     <TableRow key={emp.id}>
                       <TableCell className="font-bold text-foreground">{emp.display_name || 'موظف كاشير'}</TableCell>
-                      <TableCell className="font-mono text-xs">{emp.phone || emp.user_id.substring(0, 8)}</TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-primary">
+                        {getDisplayUsername(emp.display_name, emp.display_name)}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-xs">
                           الطابور + الفوترة + طباعة الفواتير

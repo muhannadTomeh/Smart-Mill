@@ -17,6 +17,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
+import { normalizeUsernameToEmail, getDisplayUsername } from "@/lib/authUtils";
 
 interface ContainerType {
   id: string;
@@ -82,7 +83,7 @@ export default function Settings() {
   // Cashier Sub-Accounts
   const [employees, setEmployees] = useState<any[]>([]);
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({ name: "", email: "", password: "" });
+  const [newEmployee, setNewEmployee] = useState({ name: "", username: "", password: "" });
   const [creatingEmployee, setCreatingEmployee] = useState(false);
 
   const [newPassword, setNewPassword] = useState("");
@@ -300,23 +301,21 @@ export default function Settings() {
   }, [user]);
 
   const handleCreateEmployee = async () => {
-    if (!newEmployee.name.trim() || !newEmployee.email.trim() || !newEmployee.password.trim()) {
-      toast({ title: "خطأ", description: "يرجى ملء كافة الحقول", variant: "destructive" });
-      return;
-    }
-    if (newEmployee.password.length < 6) {
-      toast({ title: "خطأ", description: "كلمة المرور يجب أن تكون 6 أحرف على الأقل", variant: "destructive" });
+    if (!newEmployee.name.trim() || !newEmployee.username.trim() || !newEmployee.password.trim()) {
+      toast({ title: "خطأ", description: "يرجى كتابة اسم الموظف، واسم المستخدم، وكلمة المرور", variant: "destructive" });
       return;
     }
 
     setCreatingEmployee(true);
     try {
+      const email = normalizeUsernameToEmail(newEmployee.username);
       const { error } = await supabase.auth.signUp({
-        email: newEmployee.email.trim(),
+        email,
         password: newEmployee.password,
         options: {
           data: {
             display_name: newEmployee.name.trim(),
+            username: newEmployee.username.trim(),
             parent_mill_id: user?.id,
             mill_name: profileForm.mill_name,
           }
@@ -326,12 +325,12 @@ export default function Settings() {
       if (error) throw error;
 
       toast({
-        title: "تم إنشاء حساب الكاشير",
-        description: `تم إنشاء حساب (${newEmployee.email}) بصلاحيات الطابور والفوترة فقط.`
+        title: "تم إنشاء حساب الكاشير بنجاح",
+        description: `اسم المستخدم: ${newEmployee.username.trim()} (كلمة المرور: ${newEmployee.password})`
       });
 
       setIsEmployeeModalOpen(false);
-      setNewEmployee({ name: "", email: "", password: "" });
+      setNewEmployee({ name: "", username: "", password: "" });
       fetchEmployees();
     } catch (err: any) {
       toast({
@@ -714,22 +713,23 @@ export default function Settings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>البريد الإلكتروني / اسم الدخول *</Label>
+                  <Label>اسم المستخدم (Username) *</Label>
                   <Input 
-                    type="email"
-                    value={newEmployee.email} 
-                    onChange={(e) => setNewEmployee(p => ({ ...p, email: e.target.value }))} 
-                    placeholder="cashier@example.com" 
+                    type="text"
+                    value={newEmployee.username} 
+                    onChange={(e) => setNewEmployee(p => ({ ...p, username: e.target.value }))} 
+                    placeholder="مثال: ahmad أو cashier1" 
                     dir="ltr"
                   />
+                  <p className="text-[11px] text-muted-foreground">نص عادي بسيط بدون قيود أو بريد إلكتروني</p>
                 </div>
                 <div className="space-y-2">
                   <Label>كلمة المرور *</Label>
                   <Input 
-                    type="password"
+                    type="text"
                     value={newEmployee.password} 
                     onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))} 
-                    placeholder="6 أحرف أو أرقام على الأقل" 
+                    placeholder="أدخل كلمة المرور (مثال: 123456)" 
                     dir="ltr"
                   />
                 </div>
@@ -746,7 +746,9 @@ export default function Settings() {
               <div key={emp.id} className="flex items-center justify-between p-3 border rounded-xl bg-muted/20">
                 <div className="space-y-0.5">
                   <p className="font-bold text-sm text-foreground">{emp.display_name || "موظف كاشير"}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{emp.phone || emp.user_id.substring(0, 8)}</p>
+                  <p className="text-xs text-primary font-mono font-medium">
+                    {getDisplayUsername(emp.display_name, emp.display_name)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium">
