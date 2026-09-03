@@ -31,6 +31,7 @@ interface QueueItem {
   created_at: string;
   status: string;
   estimated_minutes?: number | null;
+  started_at?: string | null;
 }
 
 export function parseEstimatedMinutes(item: { estimated_minutes?: number | null; notes?: string | null }): number | null {
@@ -42,6 +43,44 @@ export function parseEstimatedMinutes(item: { estimated_minutes?: number | null;
   return match ? parseInt(match[1]) : null;
 }
 
+export function parseStartedAt(item: { started_at?: string | null; notes?: string | null; id?: string }): number | null {
+  if (item.started_at) {
+    const t = new Date(item.started_at).getTime();
+    if (!isNaN(t)) return t;
+  }
+  if (item.notes) {
+    const match = item.notes.match(/\[بدء_العصر:([^\]]+)\]/);
+    if (match) {
+      const t = new Date(match[1]).getTime();
+      if (!isNaN(t)) return t;
+      const num = Number(match[1]);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+  if (item.id) {
+    const local = localStorage.getItem(`processing_started_${item.id}`);
+    if (local) {
+      const t = new Date(local).getTime();
+      if (!isNaN(t)) return t;
+    }
+  }
+  return null;
+}
+
+export function getRemainingSeconds(item: QueueItem, nowMs: number): number | null {
+  const estMin = parseEstimatedMinutes(item);
+  if (!estMin || estMin <= 0) return null;
+  const startedAt = parseStartedAt(item) || new Date(item.created_at).getTime();
+  const elapsed = Math.max(0, Math.floor((nowMs - startedAt) / 1000));
+  return Math.max(0, estMin * 60 - elapsed);
+}
+
+export function formatRemaining(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 const formatTime = (dateStr: string) => {
   const d = new Date(dateStr);
   return d.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -50,6 +89,7 @@ const formatTime = (dateStr: string) => {
 const Queue = () => {
   const [allItems, setAllItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nowMs, setNowMs] = useState(Date.now());
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
   const [showExtra, setShowExtra] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -58,6 +98,12 @@ const Queue = () => {
   const [deleteTarget, setDeleteTarget] = useState<QueueItem | null>(null);
   const { user, effectiveUserId } = useAuth();
   const { activeSeason } = useSeason();
+
+  // Tick every second for live countdown
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
   const targetUserId = effectiveUserId || user?.id;
 
   const processing = allItems.filter((i) => i.status === "processing");
@@ -152,10 +198,31 @@ const Queue = () => {
   };
 
   const startProcessing = async (id: string) => {
-    setAllItems((prev) => prev.map((i) => (i.id === id ? { ...i, status: "processing" } : i)));
-    const { error } = await supabase.from("queue").update({ status: "processing" }).eq("id", id);
-    if (error) toast.error("تعذر بدء العصر");
-    else toast.success("تم بدء العصر");
+    const startedAt = new Date().toISOString();
+    setAllItems((prev) => prev.map((i) => (i.id === id ? { ...i, status: "processing", started_at: startedAt } : i)));
+
+    // Save locally for instant cross-tab sync
+    localStorage.setItem(`processing_started_${id}`, startedAt);
+
+    // Save to database
+    let { error } = await supabase.from("queue").update({
+      status: "processing",
+      started_at: startedAt,
+    } as any).eq("id", id);
+
+    // Fallback if started_at column is not yet migrated in Supabase
+    if (error && (error.message?.includes("started_at") || error.code === "PGRST204")) {
+      const target = allItems.find((i) => i.id === id);
+      const updatedNotes = `[بدء_العصر:${startedAt}] ${target?.notes || ""}`.trim();
+      const retry = await supabase.from("queue").update({
+        status: "processing",
+        notes: updatedNotes,
+      }).eq("id", id);
+      error = retry.error;
+    }
+
+    if (error) toast.error("تعذر بدء العصر: " + error.message);
+    else toast.success("تم بدء العصر وبدء التوقيت التنازلي");
     await fetchQueue();
   };
 
@@ -313,14 +380,42 @@ const Queue = () => {
                         #{p.position}
                       </Badge>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-bold text-foreground truncate text-lg">{p.name}</h3>
-                          {parseEstimatedMinutes(p) ? (
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
-                              <Clock className="h-3 w-3" />
-                              {parseEstimatedMinutes(p)} دقيقة
-                            </Badge>
-                          ) : null}
+                          {(() => {
+                            const remSec = getRemainingSeconds(p, nowMs);
+                            const estMin = parseEstimatedMinutes(p);
+                            if (remSec !== null) {
+                              const isNear = remSec <= 5 * 60;
+                              return (
+                                <Badge
+                                  variant="outline"
+                                  className={`gap-1 text-xs font-mono font-bold transition-all ${
+                                    isNear
+                                      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 animate-pulse"
+                                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                                  }`}
+                                >
+                                  <Clock className="h-3 w-3" />
+                                  {remSec > 0 ? `متبقي: ${formatRemaining(remSec)}` : "أوشك على الانتهاء"}
+                                  {isNear && (
+                                    <span className="text-[10px] bg-emerald-500 text-white px-1.5 py-0.2 rounded ms-1">
+                                      استعد
+                                    </span>
+                                  )}
+                                </Badge>
+                              );
+                            }
+                            if (estMin) {
+                              return (
+                                <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
+                                  <Clock className="h-3 w-3" />
+                                  {estMin} دقيقة
+                                </Badge>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                         <p className="text-xs text-muted-foreground">
                           🛍️ {p.bags} شوال • ⏰ {formatTime(p.created_at)}
@@ -376,10 +471,21 @@ const Queue = () => {
               </div>
             ) : (
               <div className="space-y-1.5 max-h-[500px] overflow-y-auto">
-                {waiting.map((customer) => (
+                {waiting.map((customer, idx) => {
+                  const isFirst = idx === 0;
+                  const isAnyProcessingNear = processing.some((p) => {
+                    const s = getRemainingSeconds(p, nowMs);
+                    return s !== null && s <= 5 * 60;
+                  });
+
+                  return (
                   <div
                     key={customer.id}
-                    className="flex items-center gap-2 p-2.5 border rounded-lg hover:bg-accent/50 transition-colors"
+                    className={`flex items-center gap-2 p-2.5 border rounded-lg transition-colors ${
+                      isFirst && isAnyProcessingNear
+                        ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm"
+                        : "hover:bg-accent/50"
+                    }`}
                   >
                     <Badge
                       variant="outline"
@@ -388,7 +494,7 @@ const Queue = () => {
                       #{customer.position}
                     </Badge>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-foreground truncate text-sm">{customer.name}</h3>
                         {parseEstimatedMinutes(customer) ? (
                           <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-[11px] py-0 px-1.5">
@@ -396,6 +502,12 @@ const Queue = () => {
                             {parseEstimatedMinutes(customer)} د
                           </Badge>
                         ) : null}
+
+                        {isFirst && isAnyProcessingNear && (
+                          <Badge className="bg-emerald-500 text-white animate-bounce text-[10px] py-0.5 px-2">
+                            🟢 استعد للدخول!
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         🛍️ {customer.bags} • {formatTime(customer.created_at)}
@@ -431,9 +543,10 @@ const Queue = () => {
                       </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
+          )}
           </CardContent>
         </Card>
       </div>

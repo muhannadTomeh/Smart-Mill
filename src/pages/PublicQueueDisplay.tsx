@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { parseEstimatedMinutes } from "@/pages/Queue";
+import { parseEstimatedMinutes, parseStartedAt } from "@/pages/Queue";
 
 interface QueueItem {
   id: string;
@@ -10,6 +10,7 @@ interface QueueItem {
   status: string;
   bags: number;
   estimated_minutes?: number | null;
+  started_at?: string | null;
   notes?: string | null;
 }
 
@@ -83,17 +84,26 @@ export default function PublicQueueDisplay() {
       supabase.rpc("get_public_season_display", { p_season_id: seasonId }),
     ]);
 
-    // Map queue items and ensure estimated_minutes is extracted accurately
+    // Map queue items and ensure estimated_minutes & started_at are extracted accurately
     const rawQueue = (queueRes.data as any[]) || [];
-    const mappedItems: QueueItem[] = rawQueue.map((i) => ({
-      id: i.id,
-      name: i.name,
-      position: i.queue_position ?? i.position,
-      status: i.status,
-      bags: i.bags,
-      notes: i.notes || null,
-      estimated_minutes: parseEstimatedMinutes(i),
-    }));
+    const mappedItems: QueueItem[] = rawQueue.map((i) => {
+      const item: QueueItem = {
+        id: i.id,
+        name: i.name,
+        position: i.queue_position ?? i.position,
+        status: i.status,
+        bags: i.bags,
+        notes: i.notes || null,
+        started_at: i.started_at || null,
+        estimated_minutes: parseEstimatedMinutes(i),
+      };
+      // If it's processing and has no started_at stored, record locally so timer starts immediately
+      if (item.status === "processing" && !parseStartedAt(item)) {
+        const nowIso = new Date().toISOString();
+        localStorage.setItem(`processing_started_${item.id}`, nowIso);
+      }
+      return item;
+    });
     setItems(mappedItems);
 
     const seasonRow = (seasonRes.data as any[] | null)?.[0];
@@ -169,8 +179,38 @@ export default function PublicQueueDisplay() {
     }
   }, [currentItem?.id]);
 
+  const nowMs = clock.getTime();
   const hours = String(clock.getHours()).padStart(2, "0");
   const minutes = String(clock.getMinutes()).padStart(2, "0");
+
+  // Calculate live second-by-second countdown for current processing customer
+  const currentEstMin = currentItem ? parseEstimatedMinutes(currentItem) : null;
+  const currentStartedAt = currentItem ? parseStartedAt(currentItem) : null;
+
+  let currentRemainingSeconds: number | null = null;
+  let isCurrentNearCompletion = false;
+  let remainingText = "";
+
+  if (currentItem && currentEstMin && currentEstMin > 0) {
+    const startMs = currentStartedAt || nowMs;
+    const totalSec = currentEstMin * 60;
+    const elapsedSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+    currentRemainingSeconds = Math.max(0, totalSec - elapsedSec);
+
+    const m = Math.floor(currentRemainingSeconds / 60);
+    const s = currentRemainingSeconds % 60;
+    const padM = String(m).padStart(2, "0");
+    const padS = String(s).padStart(2, "0");
+
+    if (currentRemainingSeconds > 0) {
+      remainingText = `${padM}:${padS}`;
+    } else {
+      remainingText = "00:00 (المراحل الأخيرة)";
+    }
+
+    // Flash green warning if 5 minutes or less remain
+    isCurrentNearCompletion = currentRemainingSeconds <= 5 * 60;
+  }
 
   const hasBottomPrices =
     displaySettings.show_oil_prices &&
@@ -270,7 +310,7 @@ export default function PublicQueueDisplay() {
                   {currentItem.name}
                 </span>
 
-                {/* Sub-info: Bags count and Estimated time */}
+                {/* Sub-info: Bags count and Live Countdown */}
                 <div className="flex flex-wrap items-center justify-center gap-3 mt-5">
                   {displaySettings.show_bags_count && currentItem.bags > 0 && (
                     <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-white/10 text-white/90 text-lg font-bold border border-white/10 backdrop-blur-md">
@@ -278,11 +318,28 @@ export default function PublicQueueDisplay() {
                     </span>
                   )}
 
-                  {displaySettings.show_estimated_time && currentItem.estimated_minutes ? (
-                    <span className="inline-flex items-center gap-2 px-5 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 text-lg font-black border border-amber-500/40 shadow-lg animate-pulse">
-                      <span>⏳ الوقت التقديري:</span>
-                      <span className="text-white font-mono text-xl">{currentItem.estimated_minutes} دقيقة</span>
-                    </span>
+                  {displaySettings.show_estimated_time && currentEstMin ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <span
+                        className={`inline-flex items-center gap-2.5 px-6 py-2 rounded-2xl text-lg md:text-xl font-black border shadow-xl transition-all ${
+                          isCurrentNearCompletion
+                            ? "bg-emerald-500/30 text-emerald-200 border-emerald-400 animate-pulse shadow-[0_0_40px_rgba(52,211,153,0.7)]"
+                            : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        }`}
+                      >
+                        <span className="text-2xl">⏳</span>
+                        <span>الوقت المتبقي:</span>
+                        <span className="text-white font-mono text-2xl md:text-3xl font-black tracking-wider" dir="ltr">
+                          {remainingText}
+                        </span>
+                      </span>
+                      {isCurrentNearCompletion && (
+                        <span className="text-sm font-bold text-emerald-300 animate-pulse mt-0.5 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                          متبقي أقل من 5 دقائق — مرحلة تفريغ الزيت
+                        </span>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -334,12 +391,20 @@ export default function PublicQueueDisplay() {
                     className="flex items-center gap-5 rounded-2xl px-6 py-4 transition-all duration-300"
                     style={{
                       background: isNext
-                        ? "linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(180,83,9,0.12) 100%)"
+                        ? (isCurrentNearCompletion
+                            ? "linear-gradient(135deg, rgba(16,185,129,0.35) 0%, rgba(5,150,105,0.2) 100%)"
+                            : "linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(180,83,9,0.12) 100%)")
                         : "rgba(255,255,255,0.03)",
                       border: isNext
-                        ? "2px solid rgba(251,191,36,0.45)"
+                        ? (isCurrentNearCompletion
+                            ? "3px solid #34d399"
+                            : "2px solid rgba(251,191,36,0.45)")
                         : "1px solid rgba(255,255,255,0.06)",
-                      boxShadow: isNext ? "0 0 40px rgba(245,158,11,0.12)" : "none",
+                      boxShadow: isNext
+                        ? (isCurrentNearCompletion
+                            ? "0 0 55px rgba(52,211,153,0.55)"
+                            : "0 0 40px rgba(245,158,11,0.12)")
+                        : "none",
                       animation: `qd-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.06}s both`,
                     }}
                   >
@@ -348,8 +413,8 @@ export default function PublicQueueDisplay() {
                       className="font-black leading-none flex-shrink-0 text-center"
                       style={{
                         fontSize: isNext ? "4.5rem" : "3.2rem",
-                        color: isNext ? "#fbbf24" : "rgba(255,255,255,0.4)",
-                        textShadow: isNext ? "0 0 25px rgba(251,191,36,0.35)" : "none",
+                        color: isNext ? (isCurrentNearCompletion ? "#a7f3d0" : "#fbbf24") : "rgba(255,255,255,0.4)",
+                        textShadow: isNext ? (isCurrentNearCompletion ? "0 0 30px rgba(52,211,153,0.6)" : "0 0 25px rgba(251,191,36,0.35)") : "none",
                         minWidth: "4.5rem",
                       }}
                     >
@@ -386,12 +451,19 @@ export default function PublicQueueDisplay() {
                         ) : null}
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        {isNext && (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {/* Flashing Green Alert when current turn <= 5 minutes */}
+                        {isNext && isCurrentNearCompletion ? (
+                          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/35 border-2 border-emerald-400 text-emerald-100 font-black text-sm md:text-base animate-bounce shadow-[0_0_25px_rgba(52,211,153,0.8)]">
+                            <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
+                            <span>🟢 استعد لدورك! (متبقي أقل من 5 دقائق)</span>
+                          </div>
+                        ) : isNext ? (
                           <span className="text-xs md:text-sm font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/30">
                             الدور التالي مباشرة
                           </span>
-                        )}
+                        ) : null}
+
                         {displaySettings.show_bags_count && item.bags > 0 && (
                           <span className="text-sm font-medium text-white/50">
                             🛍️ {item.bags} شوال

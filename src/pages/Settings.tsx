@@ -18,7 +18,7 @@ import {
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
@@ -119,46 +119,73 @@ export default function Settings() {
   const [savingDisplay, setSavingDisplay] = useState(false);
   const [newFaqQ, setNewFaqQ] = useState("");
   const [newFaqA, setNewFaqA] = useState("");
+  const loadedSeasonIdRef = useRef<string | null>(null);
 
   const displayUrl = activeSeason ? `${window.location.origin}/display/${activeSeason.id}` : "";
 
+  // Load display settings once per active season without resetting during render
   useEffect(() => {
-    if (activeSeason) {
-      // 1. Try reading from activeSeason object if present
-      const raw = (activeSeason as any).display_settings;
-      if (raw && typeof raw === "object") {
+    if (!activeSeason?.id) return;
+    if (loadedSeasonIdRef.current === activeSeason.id) return;
+    loadedSeasonIdRef.current = activeSeason.id;
+
+    // 1. Try local storage cache first
+    const savedLocal = localStorage.getItem(`display_settings_${activeSeason.id}`);
+    if (savedLocal) {
+      try {
+        const parsed = JSON.parse(savedLocal);
         setDisplaySettings({
           ...defaultDisplaySettings,
-          ...raw,
-          custom_faqs: Array.isArray(raw.custom_faqs) ? raw.custom_faqs : defaultDisplaySettings.custom_faqs,
+          ...parsed,
+          custom_faqs: Array.isArray(parsed.custom_faqs) ? parsed.custom_faqs : defaultDisplaySettings.custom_faqs,
         });
-      } else {
-        // 2. Fetch directly from seasons table or localStorage fallback
-        const savedLocal = localStorage.getItem(`display_settings_${activeSeason.id}`);
-        if (savedLocal) {
-          try {
-            setDisplaySettings(JSON.parse(savedLocal));
-          } catch {}
-        }
-        
-        supabase
-          .from("seasons")
-          .select("display_settings")
-          .eq("id", activeSeason.id)
-          .single()
-          .then(({ data }) => {
-            if (data && (data as any).display_settings) {
-              const ds = (data as any).display_settings;
-              setDisplaySettings({
-                ...defaultDisplaySettings,
-                ...ds,
-                custom_faqs: Array.isArray(ds.custom_faqs) ? ds.custom_faqs : defaultDisplaySettings.custom_faqs,
-              });
-            }
-          });
-      }
+      } catch {}
+    } else if ((activeSeason as any).display_settings) {
+      const raw = (activeSeason as any).display_settings;
+      setDisplaySettings({
+        ...defaultDisplaySettings,
+        ...raw,
+        custom_faqs: Array.isArray(raw.custom_faqs) ? raw.custom_faqs : defaultDisplaySettings.custom_faqs,
+      });
     }
-  }, [activeSeason]);
+
+    // 2. Fetch from DB if available
+    supabase
+      .from("seasons")
+      .select("display_settings")
+      .eq("id", activeSeason.id)
+      .single()
+      .then(({ data }) => {
+        if (data && (data as any).display_settings) {
+          const ds = (data as any).display_settings;
+          setDisplaySettings((prev) => {
+            const merged = {
+              ...defaultDisplaySettings,
+              ...ds,
+              ...prev,
+              custom_faqs: Array.isArray(prev.custom_faqs) && prev.custom_faqs.length > 0
+                ? prev.custom_faqs
+                : (Array.isArray(ds.custom_faqs) ? ds.custom_faqs : defaultDisplaySettings.custom_faqs),
+            };
+            if (activeSeason?.id) {
+              localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(merged));
+            }
+            return merged;
+          });
+        }
+      });
+  }, [activeSeason?.id]);
+
+  // Instantly persist any toggle change so it never reverts
+  const updateDisplaySetting = <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
+    setDisplaySettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      if (activeSeason?.id) {
+        localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
 
   const handleSaveDisplaySettings = async () => {
     if (!activeSeason) {
@@ -167,10 +194,8 @@ export default function Settings() {
     }
     setSavingDisplay(true);
     try {
-      // Save in localStorage as instant fallback
       localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(displaySettings));
 
-      // Save in Supabase
       const { error } = await supabase
         .from("seasons")
         .update({ display_settings: displaySettings } as any)
@@ -194,29 +219,45 @@ export default function Settings() {
       toast({ title: "تنبيه", description: "يرجى كتابة السؤال/العنوان والتفاصيل", variant: "destructive" });
       return;
     }
-    setDisplaySettings((prev) => ({
-      ...prev,
-      custom_faqs: [
-        ...(prev.custom_faqs || []),
-        { id: Date.now().toString(), q: newFaqQ.trim(), a: newFaqA.trim() },
-      ],
-    }));
+    const newFaq = { id: Date.now().toString(), q: newFaqQ.trim(), a: newFaqA.trim() };
+    setDisplaySettings((prev) => {
+      const updated = {
+        ...prev,
+        custom_faqs: [...(prev.custom_faqs || []), newFaq],
+      };
+      if (activeSeason?.id) {
+        localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
     setNewFaqQ("");
     setNewFaqA("");
   };
 
   const removeCustomFaq = (id: string) => {
-    setDisplaySettings((prev) => ({
-      ...prev,
-      custom_faqs: (prev.custom_faqs || []).filter((f) => f.id !== id),
-    }));
+    setDisplaySettings((prev) => {
+      const updated = {
+        ...prev,
+        custom_faqs: (prev.custom_faqs || []).filter((f) => f.id !== id),
+      };
+      if (activeSeason?.id) {
+        localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   const clearAllFaqs = () => {
-    setDisplaySettings((prev) => ({
-      ...prev,
-      custom_faqs: [],
-    }));
+    setDisplaySettings((prev) => {
+      const updated = {
+        ...prev,
+        custom_faqs: [],
+      };
+      if (activeSeason?.id) {
+        localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   useEffect(() => {
@@ -690,8 +731,8 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground">عرض الوقت بجانب اسم الدور القادم</p>
                 </div>
                 <Switch
-                  checked={displaySettings.show_estimated_time}
-                  onCheckedChange={(val) => setDisplaySettings(p => ({ ...p, show_estimated_time: val }))}
+                  checked={Boolean(displaySettings.show_estimated_time)}
+                  onCheckedChange={(val) => updateDisplaySetting("show_estimated_time", val)}
                 />
               </div>
 
@@ -705,8 +746,8 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground">عرض شريط الأسعار أسفل الشاشة</p>
                 </div>
                 <Switch
-                  checked={displaySettings.show_oil_prices}
-                  onCheckedChange={(val) => setDisplaySettings(p => ({ ...p, show_oil_prices: val }))}
+                  checked={Boolean(displaySettings.show_oil_prices)}
+                  onCheckedChange={(val) => updateDisplaySetting("show_oil_prices", val)}
                 />
               </div>
 
@@ -720,8 +761,8 @@ export default function Settings() {
                 </div>
                 <Switch
                   disabled={!displaySettings.show_oil_prices}
-                  checked={displaySettings.show_sell_price}
-                  onCheckedChange={(val) => setDisplaySettings(p => ({ ...p, show_sell_price: val }))}
+                  checked={Boolean(displaySettings.show_sell_price)}
+                  onCheckedChange={(val) => updateDisplaySetting("show_sell_price", val)}
                 />
               </div>
 
@@ -735,8 +776,8 @@ export default function Settings() {
                 </div>
                 <Switch
                   disabled={!displaySettings.show_oil_prices}
-                  checked={displaySettings.show_buy_price}
-                  onCheckedChange={(val) => setDisplaySettings(p => ({ ...p, show_buy_price: val }))}
+                  checked={Boolean(displaySettings.show_buy_price)}
+                  onCheckedChange={(val) => updateDisplaySetting("show_buy_price", val)}
                 />
               </div>
 
@@ -749,8 +790,8 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground">عرض الساعة الكبيرة أعلى الشاشة</p>
                 </div>
                 <Switch
-                  checked={displaySettings.show_clock}
-                  onCheckedChange={(val) => setDisplaySettings(p => ({ ...p, show_clock: val }))}
+                  checked={Boolean(displaySettings.show_clock)}
+                  onCheckedChange={(val) => updateDisplaySetting("show_clock", val)}
                 />
               </div>
 
@@ -763,8 +804,8 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground">عرض كمية الشوالات للأدوار</p>
                 </div>
                 <Switch
-                  checked={displaySettings.show_bags_count}
-                  onCheckedChange={(val) => setDisplaySettings(p => ({ ...p, show_bags_count: val }))}
+                  checked={Boolean(displaySettings.show_bags_count)}
+                  onCheckedChange={(val) => updateDisplaySetting("show_bags_count", val)}
                 />
               </div>
 
@@ -777,8 +818,8 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground">عرض بطاقات المعلومات المتبدلة</p>
                 </div>
                 <Switch
-                  checked={displaySettings.show_faqs}
-                  onCheckedChange={(val) => setDisplaySettings(p => ({ ...p, show_faqs: val }))}
+                  checked={Boolean(displaySettings.show_faqs)}
+                  onCheckedChange={(val) => updateDisplaySetting("show_faqs", val)}
                 />
               </div>
             </div>
@@ -794,7 +835,7 @@ export default function Settings() {
             </Label>
             <Input
               value={displaySettings.ticker_text || ""}
-              onChange={(e) => setDisplaySettings(p => ({ ...p, ticker_text: e.target.value }))}
+              onChange={(e) => updateDisplaySetting("ticker_text", e.target.value)}
               placeholder="مثال: أهلاً وسهلاً بكم في معصرة النور... نرجو من الزبائن الكرام استلام كشوفات الحساب من الكاشير"
               className="bg-muted/20"
             />
