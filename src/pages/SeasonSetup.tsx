@@ -3,8 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { ArrowRight, Save, Copy, Sprout } from "lucide-react";
+import { ArrowRight, Save, Sprout } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
@@ -49,26 +48,19 @@ export default function SeasonSetup() {
           metal_container_price: String(season.metal_container_price),
         });
       }
+    } else if (!isEdit && seasons.length > 0) {
+      const last = seasons[0];
+      setForm((prev) => ({
+        ...prev,
+        return_percent: String(last.return_percent ?? 6),
+        oil_sell_price: String(last.oil_sell_price ?? 25),
+        oil_buy_price: String(last.oil_buy_price ?? 23),
+        cash_return_cost: String(last.cash_return_cost ?? 1.5),
+        plastic_container_price: String(last.plastic_container_price ?? 10),
+        metal_container_price: String(last.metal_container_price ?? 15),
+      }));
     }
   }, [isEdit, id, seasons]);
-
-  const copyFromLastSeason = () => {
-    if (seasons.length === 0) {
-      toast({ title: "لا يوجد مواسم سابقة", variant: "destructive" });
-      return;
-    }
-    const last = seasons[0];
-    setForm((prev) => ({
-      ...prev,
-      return_percent: String(last.return_percent),
-      oil_sell_price: String(last.oil_sell_price),
-      oil_buy_price: String(last.oil_buy_price),
-      cash_return_cost: String(last.cash_return_cost),
-      plastic_container_price: String(last.plastic_container_price),
-      metal_container_price: String(last.metal_container_price),
-    }));
-    toast({ title: "تم النسخ", description: "تم نسخ إعدادات الموسم السابق" });
-  };
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -168,49 +160,11 @@ export default function SeasonSetup() {
           </CardContent>
         </Card>
 
-        {/* Configuration */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-base">إعدادات الموسم</CardTitle>
-            {!isEdit && seasons.length > 0 && (
-              <Button variant="outline" size="sm" onClick={copyFromLastSeason} className="gap-1.5">
-                <Copy className="h-3.5 w-3.5" />
-                نسخ من السابق
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FieldNum label="نسبة الرد بالزيت (%)" value={form.return_percent} onChange={(v) => set("return_percent", v)} />
-              <FieldNum label="تكلفة الرد النقدي (شيكل/كغم)" value={form.cash_return_cost} onChange={(v) => set("cash_return_cost", v)} step="0.1" />
-            </div>
-            <Separator />
-            <div className="grid grid-cols-2 gap-4">
-              <FieldNum label="سعر بيع الزيت (شيكل/كغم)" value={form.oil_sell_price} onChange={(v) => set("oil_sell_price", v)} step="0.1" />
-              <FieldNum label="سعر شراء الزيت (شيكل/كغم)" value={form.oil_buy_price} onChange={(v) => set("oil_buy_price", v)} step="0.1" />
-            </div>
-            <Separator />
-            <div className="grid grid-cols-2 gap-4">
-              <FieldNum label="سعر التنكة البلاستيكية (شيكل)" value={form.plastic_container_price} onChange={(v) => set("plastic_container_price", v)} />
-              <FieldNum label="سعر التنكة المعدنية (شيكل)" value={form.metal_container_price} onChange={(v) => set("metal_container_price", v)} />
-            </div>
-          </CardContent>
-        </Card>
-
         <Button className="w-full text-lg py-6" size="lg" onClick={handleSave} disabled={saving}>
           <Save className="h-5 w-5 me-2" />
           {saving ? "جارٍ الحفظ..." : isEdit ? "حفظ التعديلات" : "إنشاء الموسم والدخول"}
         </Button>
       </main>
-    </div>
-  );
-}
-
-function FieldNum({ label, value, onChange, step }: { label: string; value: string; onChange: (v: string) => void; step?: string }) {
-  return (
-    <div>
-      <Label className="text-sm">{label}</Label>
-      <Input type="number" step={step} value={value} onChange={(e) => onChange(e.target.value)} className="mt-1" />
     </div>
   );
 }
