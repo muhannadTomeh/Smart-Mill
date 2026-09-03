@@ -181,10 +181,12 @@ export default function AdminIndex() {
 
           return {
             id: profile.user_id,
-            name: profile.display_name || "معصرة غير مسمى",
-            millName: profile.mill_name,
-            country: profile.country,
-            email: "---",
+            ownerName: profile.display_name || "غير محدد",
+            millName: profile.mill_name || "معصرة غير مسماة",
+            country: profile.country || "فلسطين",
+            millLocation: profile.mill_location || "غير محدد",
+            phone: profile.phone || "---",
+            secondaryPhone: profile.secondary_phone,
             createdAt: profile.created_at,
             isActive: activeUserIds.has(profile.user_id),
             subscriptionStatus: profile.subscription_status || 'pending',
@@ -555,37 +557,35 @@ export default function AdminIndex() {
             <TableHeader>
               <TableRow>
                 <TableHead className="text-right">اسم المعصرة</TableHead>
+                <TableHead className="text-right">المالك / المدير</TableHead>
+                <TableHead className="text-right">الموقع والدولة</TableHead>
+                <TableHead className="text-right">الهاتف</TableHead>
                 <TableHead className="text-right">تاريخ التسجيل</TableHead>
                 <TableHead className="text-right">حالة الاشتراك</TableHead>
-                <TableHead className="text-right">آخر دفعة</TableHead>
-                <TableHead className="text-right">موسم نشط</TableHead>
-                <TableHead className="text-right">عدد الفواتير</TableHead>
+                <TableHead className="text-right">الفواتير</TableHead>
                 <TableHead className="text-right">الإجراءات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredMills.map((mill) => (
                 <TableRow key={mill.id}>
-                  <TableCell className="font-medium">{mill.name}</TableCell>
-                  <TableCell>{new Date(mill.createdAt).toLocaleDateString("ar-EG")}</TableCell>
+                  <TableCell className="font-bold text-foreground">{mill.millName}</TableCell>
+                  <TableCell className="font-medium text-muted-foreground">{mill.ownerName}</TableCell>
+                  <TableCell>
+                    <div className="text-xs">
+                      <span className="font-medium text-foreground">{mill.millLocation}</span>
+                      <span className="text-muted-foreground me-1"> ({mill.country})</span>
+                    </div>
+                  </TableCell>
+                  <TableCell dir="ltr" className="text-right text-xs font-mono">
+                    <div>{mill.phone}</div>
+                    {mill.secondaryPhone && <div className="text-muted-foreground text-[10px]">{mill.secondaryPhone}</div>}
+                  </TableCell>
+                  <TableCell className="text-xs">{new Date(mill.createdAt).toLocaleDateString("ar-EG")}</TableCell>
                   <TableCell>
                     {getStatusBadge(mill.subscriptionStatus)}
                   </TableCell>
-                  <TableCell>
-                    {mill.lastPaymentDate ? (
-                      <span className="text-xs">{new Date(mill.lastPaymentDate).toLocaleDateString("ar-EG")}</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">لا يوجد</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {mill.isActive ? (
-                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">نعم</Badge>
-                    ) : (
-                      <Badge variant="secondary">لا</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>{mill.invoiceCount}</TableCell>
+                  <TableCell className="text-xs font-semibold">{mill.invoiceCount}</TableCell>
                   <TableCell>
                     <Button 
                       variant="outline" 

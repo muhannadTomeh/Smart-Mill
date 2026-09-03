@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/contexts/RoleContext";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import ContactForm from "@/components/contact/ContactForm";
@@ -75,11 +76,17 @@ const LandingPage = () => {
     fetchSettings();
   }, []);
 
+  const { isAdmin } = useRole();
+
   useEffect(() => {
     if (!loading && user) {
-      navigate("/dashboard", { replace: true });
+      if (isAdmin) {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, isAdmin, navigate]);
 
   if (loading) return null;
 

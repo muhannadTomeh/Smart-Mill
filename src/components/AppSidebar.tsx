@@ -16,9 +16,11 @@ import {
   Warehouse,
   ShieldCheck,
   MessageSquare,
+  Building2,
 } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useRole } from "@/contexts/RoleContext"
+import { useAuth } from "@/contexts/AuthContext"
 
 import {
   Sidebar,
@@ -33,6 +35,10 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar"
+
+const adminItems = [
+  { title: "إدارة المعاصر والاشتراكات", url: "/admin", icon: Building2 },
+]
 
 const mainItems = [
   { title: "الرئيسية", url: "/dashboard", icon: LayoutDashboard },
@@ -103,7 +109,16 @@ function MenuGroup({ label, items, isCollapsed }: { label: string; items: typeof
 export function AppSidebar() {
   const { state } = useSidebar()
   const { isAdmin, isEmployee } = useRole()
+  const { profile } = useAuth()
   const isCollapsed = state === "collapsed"
+
+  const brandTitle = isAdmin 
+    ? "لوحة الأدمن" 
+    : (profile?.mill_name || "المعصرة الذكية")
+    
+  const brandSubtitle = isAdmin 
+    ? "الإدارة العامة والتحكم" 
+    : (isEmployee ? "وضع الموظف" : (profile?.mill_location || "إدارة المعصرة"))
 
   return (
     <Sidebar
@@ -114,38 +129,48 @@ export function AppSidebar() {
       <SidebarHeader className="p-5 border-b border-sidebar-border/60">
         {!isCollapsed ? (
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-sidebar-primary flex items-center justify-center shadow-olive">
-              <Sprout className="h-5 w-5 text-sidebar-primary-foreground" />
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-olive ${isAdmin ? "bg-amber-600 text-white" : "bg-sidebar-primary text-sidebar-primary-foreground"}`}>
+              {isAdmin ? <ShieldCheck className="h-5 w-5" /> : <Sprout className="h-5 w-5" />}
             </div>
-            <div>
-              <h2 className="text-base font-bold text-sidebar-foreground tracking-tight leading-tight">معصرة الإيمان</h2>
-              <p className="text-[11px] text-sidebar-foreground/50">إدارة المعصرة</p>
+            <div className="overflow-hidden">
+              <h2 className="text-base font-bold text-sidebar-foreground tracking-tight leading-tight truncate" title={brandTitle}>
+                {brandTitle}
+              </h2>
+              <p className="text-[11px] text-sidebar-foreground/50 truncate">
+                {brandSubtitle}
+              </p>
             </div>
           </div>
         ) : (
-          <div className="w-10 h-10 rounded-2xl bg-sidebar-primary flex items-center justify-center mx-auto shadow-olive">
-            <Sprout className="h-5 w-5 text-sidebar-primary-foreground" />
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mx-auto shadow-olive ${isAdmin ? "bg-amber-600 text-white" : "bg-sidebar-primary text-sidebar-primary-foreground"}`}>
+            {isAdmin ? <ShieldCheck className="h-5 w-5" /> : <Sprout className="h-5 w-5" />}
           </div>
         )}
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-4 space-y-3">
-        <MenuGroup label="الرئيسية" items={isEmployee ? mainItems.filter(i => ['الطابور', 'حساب الرد'].includes(i.title)) : mainItems} isCollapsed={isCollapsed} />
-        {!isEmployee && (
-          <>
-            <MenuGroup label="العمليات" items={operationsItems} isCollapsed={isCollapsed} />
-            <MenuGroup label="التحليلات" items={analyticsItems} isCollapsed={isCollapsed} />
-            <MenuGroup label="النظام" items={systemItems} isCollapsed={isCollapsed} />
-          </>
-        )}
-        {isAdmin === true && (
+        {isAdmin ? (
           <MenuGroup 
-            label="الإشراف" 
-            items={[{ title: "لوحة المشرف", url: "/admin", icon: ShieldCheck }]} 
+            label="لوحة التحكم والإشراف" 
+            items={adminItems} 
             isCollapsed={isCollapsed} 
           />
+        ) : (
+          <>
+            <MenuGroup 
+              label="الرئيسية" 
+              items={isEmployee ? mainItems.filter(i => ['الطابور', 'حساب الرد'].includes(i.title)) : mainItems} 
+              isCollapsed={isCollapsed} 
+            />
+            {!isEmployee && (
+              <>
+                <MenuGroup label="العمليات" items={operationsItems} isCollapsed={isCollapsed} />
+                <MenuGroup label="التحليلات" items={analyticsItems} isCollapsed={isCollapsed} />
+                <MenuGroup label="النظام" items={systemItems} isCollapsed={isCollapsed} />
+              </>
+            )}
+          </>
         )}
-
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-sidebar-border/60">

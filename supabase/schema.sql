@@ -38,6 +38,7 @@ CREATE TABLE public.profiles (
   secondary_phone TEXT,
   country TEXT,
   mill_name TEXT,
+  mill_location TEXT,
   subscription_status public.subscription_status DEFAULT 'pending',
   subscription_notes TEXT,
   monthly_fee NUMERIC,
@@ -448,9 +449,31 @@ CREATE TRIGGER update_inventory_updated_at BEFORE UPDATE ON public.inventory FOR
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (user_id, display_name)
-  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.email))
-  ON CONFLICT (user_id) DO NOTHING;
+  INSERT INTO public.profiles (
+    user_id, 
+    display_name,
+    mill_name,
+    phone,
+    secondary_phone,
+    country,
+    mill_location
+  )
+  VALUES (
+    NEW.id, 
+    COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.email),
+    NEW.raw_user_meta_data->>'mill_name',
+    NEW.raw_user_meta_data->>'phone',
+    NEW.raw_user_meta_data->>'secondary_phone',
+    COALESCE(NEW.raw_user_meta_data->>'country', 'فلسطين'),
+    NEW.raw_user_meta_data->>'mill_location'
+  )
+  ON CONFLICT (user_id) DO UPDATE SET
+    display_name = EXCLUDED.display_name,
+    mill_name = COALESCE(EXCLUDED.mill_name, profiles.mill_name),
+    phone = COALESCE(EXCLUDED.phone, profiles.phone),
+    secondary_phone = COALESCE(EXCLUDED.secondary_phone, profiles.secondary_phone),
+    country = COALESCE(EXCLUDED.country, profiles.country),
+    mill_location = COALESCE(EXCLUDED.mill_location, profiles.mill_location);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

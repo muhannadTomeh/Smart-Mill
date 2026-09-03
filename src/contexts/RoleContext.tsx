@@ -21,57 +21,90 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkRole = async (userId: string) => {
       // Check for employee session in local storage first
       const employeeOwnerId = localStorage.getItem('employee_owner_id');
       if (employeeOwnerId) {
-        setIsEmployee(true);
-        setIsAdmin(false);
-        setLoading(false);
+        if (isMounted) {
+          setIsEmployee(true);
+          setIsAdmin(false);
+          setLoading(false);
+        }
         return;
       }
 
-      const { data, error } = await supabase.rpc('has_role', {
-        _user_id: userId,
-        _role: 'platform_admin'
-      });
+      try {
+        let adminStatus = false;
 
-      if (error) {
-        console.error("Error checking role:", error);
-        setIsAdmin(false);
-      } else {
-        // Explicitly cast to boolean so null/undefined → false
-        setIsAdmin(data === true);
+        // 1. Try RPC check
+        const { data: rpcData, error: rpcError } = await supabase.rpc('has_role', {
+          _user_id: userId,
+          _role: 'platform_admin'
+        });
+
+        if (!rpcError && rpcData === true) {
+          adminStatus = true;
+        } else {
+          // 2. Direct table query fallback
+          const { data: roleRow } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', userId)
+            .eq('role', 'platform_admin')
+            .maybeSingle();
+
+          if (roleRow && roleRow.role === 'platform_admin') {
+            adminStatus = true;
+          }
+        }
+
+        if (isMounted) {
+          setIsAdmin(adminStatus);
+          setIsEmployee(false);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error checking role:", err);
+        if (isMounted) {
+          setIsAdmin(false);
+          setIsEmployee(false);
+          setLoading(false);
+        }
       }
-      setIsEmployee(false);
-      setLoading(false);
     };
 
-    // Listen to auth state changes — single source of truth
+    // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session?.user) {
-        // User logged out or no session
-        setIsAdmin(false);
-        setIsEmployee(false);
-        setLoading(false);
+        if (isMounted) {
+          setIsAdmin(false);
+          setIsEmployee(false);
+          setLoading(false);
+        }
       } else {
-        setLoading(true);
         checkRole(session.user.id);
       }
     });
 
-    // Seed initial state from existing session
+    // Also check current session immediately on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.user) {
-        setIsAdmin(false);
-        setIsEmployee(false);
-        setLoading(false);
-      } else {
+      if (session?.user) {
         checkRole(session.user.id);
+      } else {
+        if (isMounted) {
+          setIsAdmin(false);
+          setIsEmployee(false);
+          setLoading(false);
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (

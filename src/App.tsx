@@ -54,7 +54,6 @@ const HeaderBar = () => {
   const navigate = useNavigate();
   const { isAdmin } = useRole();
 
-
   return (
     <header className="h-16 border-b glass-bar flex items-center justify-between px-4 md:px-6 sticky top-0 z-40">
       <div className="flex items-center gap-3">
@@ -62,7 +61,7 @@ const HeaderBar = () => {
           <Menu className="h-5 w-5" />
         </SidebarTrigger>
         
-        {activeSeason && (
+        {!isAdmin && activeSeason && (
           <Badge
             variant="secondary"
             className="cursor-pointer hover:bg-primary/10 text-xs font-medium px-3 py-1.5 rounded-full border border-primary/20 transition-colors"
@@ -72,39 +71,51 @@ const HeaderBar = () => {
             <span className="text-primary">{activeSeason.name}</span>
           </Badge>
         )}
+
+        {isAdmin && (
+          <Badge
+            variant="secondary"
+            className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-xs font-semibold px-3 py-1.5 rounded-full"
+          >
+            <ShieldCheck className="h-3.5 w-3.5 me-1.5 text-amber-600" />
+            <span>لوحة تحكم المشرف العام</span>
+          </Badge>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Quick Add */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" className="rounded-full gap-1.5 shadow-sm">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">إضافة سريعة</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
-            <DropdownMenuItem onClick={() => navigate("/customers")} className="gap-2 py-2.5">
-              <Users className="h-4 w-4 text-primary" />
-              إضافة زبون
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/invoices")} className="gap-2 py-2.5">
-              <Receipt className="h-4 w-4 text-primary" />
-              إنشاء فاتورة
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/expenses")} className="gap-2 py-2.5">
-              <Wallet className="h-4 w-4 text-primary" />
-              إضافة مصروف
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Quick Add - Only for Mill Owners/Employees */}
+        {!isAdmin && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="rounded-full gap-1.5 shadow-sm">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">إضافة سريعة</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={() => navigate("/customers")} className="gap-2 py-2.5">
+                <Users className="h-4 w-4 text-primary" />
+                إضافة زبون
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/invoices")} className="gap-2 py-2.5">
+                <Receipt className="h-4 w-4 text-primary" />
+                إنشاء فاتورة
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/expenses")} className="gap-2 py-2.5">
+                <Wallet className="h-4 w-4 text-primary" />
+                إضافة مصروف
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-1.5 rounded-full">
-              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-3.5 w-3.5 text-primary" />
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center ${isAdmin ? "bg-amber-500/15 text-amber-700" : "bg-primary/10 text-primary"}`}>
+                {isAdmin ? <ShieldCheck className="h-4 w-4" /> : <User className="h-3.5 w-3.5" />}
               </div>
               <ChevronDown className="h-3 w-3 text-muted-foreground hidden sm:block" />
             </Button>
@@ -112,20 +123,22 @@ const HeaderBar = () => {
           <DropdownMenuContent align="start" className="w-56">
             <div className="px-3 py-2">
               <p className="text-sm font-medium truncate">{user?.email}</p>
-              <p className="text-xs text-muted-foreground">مالك المعصرة</p>
+              <p className="text-xs text-muted-foreground">
+                {isAdmin ? "مشرف المنصة العام" : "مالك المعصرة"}
+              </p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2">
-              <User className="h-4 w-4" />
-              الإعدادات
-            </DropdownMenuItem>
-            {isAdmin === true && (
+            {!isAdmin ? (
+              <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2">
+                <User className="h-4 w-4" />
+                الإعدادات
+              </DropdownMenuItem>
+            ) : (
               <DropdownMenuItem onClick={() => navigate("/admin")} className="gap-2">
                 <ShieldCheck className="h-4 w-4 text-primary" />
                 لوحة المشرف
               </DropdownMenuItem>
             )}
-
 
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="gap-2 text-destructive focus:text-destructive">
@@ -221,7 +234,7 @@ const ProtectedLayout = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  const { isEmployee } = useRole();
+  const { isAdmin, isEmployee } = useRole();
 
   return (
     <SubscriptionProvider>
@@ -234,14 +247,14 @@ const ProtectedLayout = () => {
                 <HeaderBar />
                 <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
                   <Routes>
-                    {/* Admin Routes */}
-                    <Route element={<AdminRoute />}>
-                      <Route path="/admin" element={<AdminIndex />} />
-                      <Route path="/admin/mill/:id" element={<MillDetails />} />
-                    </Route>
-
-                    {/* Restricted routes for employees */}
-                    {!isEmployee ? (
+                    {/* Admin Dedicated Routes */}
+                    {isAdmin ? (
+                      <>
+                        <Route path="/admin" element={<AdminIndex />} />
+                        <Route path="/admin/mill/:id" element={<MillDetails />} />
+                        <Route path="*" element={<Navigate to="/admin" replace />} />
+                      </>
+                    ) : !isEmployee ? (
                       <>
                         <Route path="/seasons" element={<Seasons />} />
                         <Route path="/seasons/new" element={<SeasonSetup />} />

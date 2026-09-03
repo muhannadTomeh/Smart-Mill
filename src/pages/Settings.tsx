@@ -8,7 +8,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Settings as SettingsIcon, Save, Plus, Trash2, Key, Link as LinkIcon, LogOut, ShieldCheck } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Settings as SettingsIcon, Save, Plus, Trash2, Key, Link as LinkIcon, LogOut, ShieldCheck, Building2, MapPin, User, Phone, Globe } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
 import { useToast } from "@/hooks/use-toast";
@@ -23,12 +24,35 @@ interface ContainerType {
   price: number;
 }
 
+const COUNTRIES = [
+  "فلسطين",
+  "الأردن",
+  "سوريا",
+  "لبنان",
+  "تونس",
+  "المغرب",
+  "الجزائر",
+  "السعودية",
+  "تركيا",
+  "دولة أخرى"
+];
+
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { activeSeason, refetch: refetchSeasons } = useSeason();
   const { settings, loading } = useSettings();
   const { inventory, updateInventory } = useInventory();
   const { toast } = useToast();
+
+  const [profileForm, setProfileForm] = useState({
+    mill_name: "",
+    display_name: "",
+    country: "فلسطين",
+    mill_location: "",
+    phone: "",
+    secondary_phone: ""
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const [form, setForm] = useState({
     return_percent: "",
@@ -61,6 +85,50 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (profile) {
+      setProfileForm({
+        mill_name: profile.mill_name || "",
+        display_name: profile.display_name || "",
+        country: profile.country || "فلسطين",
+        mill_location: profile.mill_location || "",
+        phone: profile.phone || "",
+        secondary_phone: profile.secondary_phone || ""
+      });
+    }
+  }, [profile]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    if (!profileForm.mill_name.trim()) {
+      toast({ title: "خطأ", description: "اسم المعصرة مطلوب", variant: "destructive" });
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          mill_name: profileForm.mill_name.trim(),
+          display_name: profileForm.display_name.trim(),
+          country: profileForm.country,
+          mill_location: profileForm.mill_location.trim(),
+          phone: profileForm.phone.trim(),
+          secondary_phone: profileForm.secondary_phone.trim() || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      await refreshProfile();
+      toast({ title: "تم الحفظ بنجاح", description: "تم تحديث بيانات المعصرة بنجاح" });
+    } catch (err: any) {
+      toast({ title: "خطأ", description: err.message || "فشل حفظ بيانات المعصرة", variant: "destructive" });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -293,6 +361,87 @@ export default function Settings() {
           <h1 className="text-3xl font-bold text-foreground">الإعدادات</h1>
         </div>
       </div>
+
+      {/* Mill Profile Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" />
+            بيانات وملف المعصرة
+          </CardTitle>
+          <CardDescription>الاسم، الموقع، وأرقام التواصل التي تظهر في الفواتير والنظام</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>اسم المعصرة *</Label>
+              <Input 
+                value={profileForm.mill_name} 
+                onChange={(e) => setProfileForm(p => ({ ...p, mill_name: e.target.value }))} 
+                placeholder="اسم المعصرة..." 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>اسم المالك / المدير</Label>
+              <Input 
+                value={profileForm.display_name} 
+                onChange={(e) => setProfileForm(p => ({ ...p, display_name: e.target.value }))} 
+                placeholder="اسم المالك..." 
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>الدولة</Label>
+              <Select value={profileForm.country} onValueChange={(val) => setProfileForm(p => ({ ...p, country: val }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر الدولة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {COUNTRIES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>موقع / مدينة المعصرة</Label>
+              <Input 
+                value={profileForm.mill_location} 
+                onChange={(e) => setProfileForm(p => ({ ...p, mill_location: e.target.value }))} 
+                placeholder="مثال: نابلس - حوارة" 
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>رقم الهاتف الأساسي</Label>
+              <Input 
+                type="tel"
+                value={profileForm.phone} 
+                onChange={(e) => setProfileForm(p => ({ ...p, phone: e.target.value }))} 
+                placeholder="05XXXXXXXX" 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>رقم هاتف إضافي (اختياري)</Label>
+              <Input 
+                type="tel"
+                value={profileForm.secondary_phone} 
+                onChange={(e) => setProfileForm(p => ({ ...p, secondary_phone: e.target.value }))} 
+                placeholder="هاتف أرضي أو رقم آخر" 
+              />
+            </div>
+          </div>
+
+          <Button onClick={handleSaveProfile} disabled={savingProfile} className="gap-2">
+            <Save className="h-4 w-4" />
+            {savingProfile ? "جارٍ الحفظ..." : "حفظ بيانات المعصرة"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {userRole === 'mill_owner' && (
         <Card>

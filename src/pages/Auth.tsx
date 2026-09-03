@@ -33,15 +33,29 @@ const Auth = () => {
   const returnUrl = nextPath ? `${window.location.origin}${nextPath}` : window.location.origin;
 
   const handleLogin = async (email: string, password: string) => {
+    localStorage.removeItem('employee_owner_id');
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
       toast({ title: "خطأ في تسجيل الدخول", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "تم تسجيل الدخول بنجاح" });
-      if (nextPath) window.location.href = nextPath;
-      else navigate("/seasons");
+      if (nextPath) {
+        window.location.href = nextPath;
+      } else if (data?.user) {
+        const { data: isAdminRole } = await supabase.rpc('has_role', {
+          _user_id: data.user.id,
+          _role: 'platform_admin'
+        });
+        if (isAdminRole) {
+          navigate("/admin");
+        } else {
+          navigate("/seasons");
+        }
+      } else {
+        navigate("/seasons");
+      }
     }
   };
 
@@ -49,6 +63,9 @@ const Auth = () => {
     millName: string;
     ownerName: string;
     phone: string;
+    secondaryPhone?: string;
+    country: string;
+    millLocation: string;
     email: string;
     password: string;
   }) => {
@@ -61,6 +78,9 @@ const Auth = () => {
           display_name: data.ownerName,
           mill_name: data.millName,
           phone: data.phone,
+          secondary_phone: data.secondaryPhone,
+          country: data.country,
+          mill_location: data.millLocation,
         },
         emailRedirectTo: returnUrl,
       },

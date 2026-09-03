@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info, ArrowRight, Receipt, Package, Calendar, ShieldCheck, ShieldAlert, Save, Plus, History, Banknote } from "lucide-react";
+import { Info, ArrowRight, Receipt, Package, Calendar, ShieldCheck, ShieldAlert, Save, Plus, History, Banknote, Building2, MapPin, Phone, User, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -280,13 +280,71 @@ export default function MillDetails() {
         </AlertDescription>
       </Alert>
 
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
-          <ArrowRight className="ml-2 h-4 w-4" />
-          العودة للوحة المشرف
-        </Button>
-        <h1 className="text-2xl font-bold">{millData.profile?.display_name || 'تفاصيل المعصرة'}</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
+            <ArrowRight className="ml-2 h-4 w-4" />
+            العودة للوحة المشرف
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">{millData.profile?.mill_name || millData.profile?.display_name || 'تفاصيل المعصرة'}</h1>
+            <p className="text-sm text-muted-foreground">المالك: {millData.profile?.display_name || "غير محدد"}</p>
+          </div>
+        </div>
+        <div>
+          {getStatusBadge ? getStatusBadge(status) : <Badge>{status}</Badge>}
+        </div>
       </div>
+
+      {/* Mill & Owner Profile Info Card */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" />
+            بيانات المعصرة والتواصل
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+            <div className="space-y-1 bg-muted/40 p-3 rounded-xl">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                <Building2 className="h-3.5 w-3.5 text-primary" />
+                <span>اسم المعصرة</span>
+              </div>
+              <p className="font-bold text-foreground text-base">{millData.profile?.mill_name || "غير محدد"}</p>
+            </div>
+
+            <div className="space-y-1 bg-muted/40 p-3 rounded-xl">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                <User className="h-3.5 w-3.5 text-primary" />
+                <span>المالك / المدير</span>
+              </div>
+              <p className="font-bold text-foreground">{millData.profile?.display_name || "غير محدد"}</p>
+            </div>
+
+            <div className="space-y-1 bg-muted/40 p-3 rounded-xl">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                <MapPin className="h-3.5 w-3.5 text-primary" />
+                <span>الموقع والدولة</span>
+              </div>
+              <p className="font-bold text-foreground">{millData.profile?.mill_location || "غير محدد"} ({millData.profile?.country || "فلسطين"})</p>
+            </div>
+
+            <div className="space-y-1 bg-muted/40 p-3 rounded-xl">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                <Phone className="h-3.5 w-3.5 text-primary" />
+                <span>أرقام الهاتف</span>
+              </div>
+              <div dir="ltr" className="text-right font-mono font-bold text-foreground">
+                <div>{millData.profile?.phone || "---"}</div>
+                {millData.profile?.secondary_phone && (
+                  <div className="text-xs text-muted-foreground font-normal">{millData.profile?.secondary_phone}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-3">
         {/* Current Season */}
