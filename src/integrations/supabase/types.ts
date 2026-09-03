@@ -333,8 +333,11 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          mill_code: string | null
+          mill_location: string | null
           mill_name: string | null
           monthly_fee: number | null
+          parent_mill_id: string | null
           phone: string | null
           report_pin: string | null
           secondary_phone: string | null
@@ -351,8 +354,11 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          mill_code?: string | null
+          mill_location?: string | null
           mill_name?: string | null
           monthly_fee?: number | null
+          parent_mill_id?: string | null
           phone?: string | null
           report_pin?: string | null
           secondary_phone?: string | null
@@ -369,8 +375,11 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          mill_code?: string | null
+          mill_location?: string | null
           mill_name?: string | null
           monthly_fee?: number | null
+          parent_mill_id?: string | null
           phone?: string | null
           report_pin?: string | null
           secondary_phone?: string | null
@@ -486,6 +495,7 @@ export type Database = {
           amount: number
           created_at: string | null
           id: string
+          mill_id: string | null
           mill_user_id: string
           notes: string | null
           payment_date: string
@@ -495,19 +505,93 @@ export type Database = {
           amount: number
           created_at?: string | null
           id?: string
+          mill_id?: string | null
           mill_user_id: string
           notes?: string | null
           payment_date?: string
-          recorded_by: string
+          recorded_by?: string
         }
         Update: {
           amount?: number
           created_at?: string | null
           id?: string
+          mill_id?: string | null
           mill_user_id?: string
           notes?: string | null
           payment_date?: string
           recorded_by?: string
+        }
+        Relationships: []
+      }
+      mills: {
+        Row: {
+          country: string | null
+          created_at: string | null
+          id: string
+          location: string | null
+          mill_code: string | null
+          monthly_fee: number | null
+          name: string
+          owner_user_id: string | null
+          phone: string | null
+          secondary_phone: string | null
+          subscription_status: Database["public"]["Enums"]["subscription_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          location?: string | null
+          mill_code?: string | null
+          monthly_fee?: number | null
+          name: string
+          owner_user_id?: string | null
+          phone?: string | null
+          secondary_phone?: string | null
+          subscription_status?: Database["public"]["Enums"]["subscription_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          location?: string | null
+          mill_code?: string | null
+          monthly_fee?: number | null
+          name?: string
+          owner_user_id?: string | null
+          phone?: string | null
+          secondary_phone?: string | null
+          subscription_status?: Database["public"]["Enums"]["subscription_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      mill_memberships: {
+        Row: {
+          created_at: string | null
+          display_username: string | null
+          id: string
+          mill_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_username?: string | null
+          id?: string
+          mill_id: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_username?: string | null
+          id?: string
+          mill_id?: string
+          role?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -757,9 +841,43 @@ export type Database = {
       }
       set_report_pin: { Args: { new_pin: string }; Returns: undefined }
       verify_report_pin: { Args: { input_pin: string }; Returns: boolean }
+      admin_create_mill: {
+        Args: {
+          p_country: string
+          p_mill_name: string
+          p_owner_email?: string | null
+          p_owner_name: string
+          p_owner_phone: string
+          p_password: string
+          p_username: string
+        }
+        Returns: Json
+      }
+      admin_create_cashier: {
+        Args: {
+          p_country?: string
+          p_display_name: string
+          p_location?: string
+          p_parent_mill_id: string
+          p_password: string
+          p_username: string
+        }
+        Returns: Json
+      }
+      lookup_cashier_by_username: {
+        Args: { p_username: string }
+        Returns: {
+          ambiguous: boolean
+          found_email: string
+        }[]
+      }
+      verify_employee_pin: {
+        Args: { input_pin: string; owner_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      app_role: "platform_admin" | "mill_owner"
+      app_role: "platform_admin" | "mill_owner" | "mill_employee"
       subscription_status: "pending" | "active" | "suspended"
     }
     CompositeTypes: {

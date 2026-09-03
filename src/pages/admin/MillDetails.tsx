@@ -131,7 +131,7 @@ export default function MillDetails() {
         supabase.rpc('log_admin_access', {
           target_user_id: resolvedOwner,
           admin_action: 'viewed_mill_details'
-        }).then().catch(err => console.error("Audit log error:", err));
+        });
       } catch {}
 
       // 2. Fetch profile with multiple fallbacks (by user_id, by id, by name)
@@ -206,7 +206,7 @@ export default function MillDetails() {
       const currentSeason = seasons.find((s: any) => s.status === 'active' || s.status === 'open') || seasons[0] || null;
 
       // Merge membership-based employees with profiles-based employees
-      let combinedEmployees = employeesData || [];
+      let combinedEmployees: any[] = employeesData || [];
       if (membershipsData && membershipsData.length > 0) {
         const existingIds = new Set(combinedEmployees.map((e: any) => e.user_id));
         const membershipEmployees = membershipsData
@@ -312,8 +312,8 @@ export default function MillDetails() {
     setUpdating(true);
     try {
       if (currentMillRecord?.id) {
-        await supabase
-          .from("mills")
+        await (supabase
+          .from("mills") as any)
           .update({ subscription_notes: notes })
           .eq("id", currentMillRecord.id);
       }
