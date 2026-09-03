@@ -3,10 +3,13 @@
  *
  * Internal email schema:
  *   Mill owner  →  their real email (e.g. owner@gmail.com)
- *   Cashier     →  {millCode}_{username}@mill.local  (e.g. tomeh_ahmad@mill.local)
+ *   Cashier     →  {millCode}_{username}@smartmill.com  (e.g. tomeh_ahmad@smartmill.com)
  *
- * The mill_code is a short identifier assigned to each mill by the admin.
+ * The domain must be a valid public TLD (like .com) because Supabase Auth
+ * strictly validates that email domains have a recognized TLD (rejects .local).
  */
+
+export const CASHIER_DOMAIN = "smartmill.com";
 
 /**
  * Convert a plain username + mill code into the internal Supabase email.
@@ -26,25 +29,24 @@ export function normalizeUsernameToEmail(input: string, millCode?: string): stri
   // If a mill code is provided (cashier creation flow), prefix it
   if (millCode && millCode.trim()) {
     const code = millCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-    return `${code}_${lower}@mill.local`;
+    return `${code}_${lower}@${CASHIER_DOMAIN}`;
   }
 
-  // Plain username without mill code — used for legacy single-tenant users
-  // and as a fallback before lookup
+  // Plain username without mill code
   if (/^[a-z0-9_.-]+$/.test(lower)) {
-    return `${lower}@mill.local`;
+    return `${lower}@${CASHIER_DOMAIN}`;
   }
 
   // Unicode / Arabic characters safe encoding
   const encoded = encodeURIComponent(lower).replace(/%/g, "_").toLowerCase();
-  return `u_${encoded}@mill.local`;
+  return `u_${encoded}@${CASHIER_DOMAIN}`;
 }
 
 /**
  * Extract the human-readable username from an internal email.
- * tomeh_ahmad@mill.local  → ahmad
- * ahmad@mill.local        → ahmad
- * owner@gmail.com         → owner@gmail.com (unchanged)
+ * tomeh_ahmad@smartmill.com → ahmad
+ * ahmad@smartmill.com       → ahmad
+ * owner@gmail.com           → owner@gmail.com (unchanged)
  */
 export function getDisplayUsername(
   emailOrUsername?: string | null,
@@ -53,14 +55,13 @@ export function getDisplayUsername(
   if (displayName && displayName.trim()) return displayName;
   if (!emailOrUsername) return "";
 
-  if (emailOrUsername.endsWith("@mill.local")) {
-    const raw = emailOrUsername.replace("@mill.local", "");
+  if (emailOrUsername.endsWith("@smartmill.com") || emailOrUsername.endsWith("@mill.local")) {
+    const raw = emailOrUsername.replace(/@(smartmill\.com|mill\.local)$/, "");
 
     // Handle {millcode}_{username} pattern — extract username part
     const underscoreIdx = raw.indexOf("_");
     if (underscoreIdx !== -1) {
       const possibleUsername = raw.substring(underscoreIdx + 1);
-      // If there's another underscore it could be part of username — keep all after first _
       if (possibleUsername) return possibleUsername;
     }
 
@@ -81,12 +82,11 @@ export function getDisplayUsername(
 
 /**
  * Extract the mill code from an internal cashier email.
- * tomeh_ahmad@mill.local → tomeh
- * ahmad@mill.local → null (no mill code)
+ * tomeh_ahmad@smartmill.com → tomeh
  */
 export function getMillCodeFromEmail(email: string): string | null {
-  if (!email.endsWith("@mill.local")) return null;
-  const raw = email.replace("@mill.local", "");
+  if (!email.endsWith("@smartmill.com") && !email.endsWith("@mill.local")) return null;
+  const raw = email.replace(/@(smartmill\.com|mill\.local)$/, "");
   const underscoreIdx = raw.indexOf("_");
   if (underscoreIdx !== -1) {
     return raw.substring(0, underscoreIdx);
