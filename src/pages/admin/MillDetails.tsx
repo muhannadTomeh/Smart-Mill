@@ -52,6 +52,10 @@ export default function MillDetails() {
   const [oilTransactions, setOilTransactions] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   
+  // Mill Code management
+  const [millCode, setMillCode] = useState("");
+  const [savingMillCode, setSavingMillCode] = useState(false);
+
   // New Employee Modal
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ name: "", username: "", password: "" });
@@ -150,6 +154,7 @@ export default function MillDetails() {
       if (profile) {
         setNotes(profile.subscription_notes || "");
         setMonthlyFee(profile.monthly_fee?.toString() || "0");
+        setMillCode(profile.mill_code || "");
       }
     } catch (error) {
       console.error("Error fetching mill details:", error);
@@ -312,17 +317,50 @@ export default function MillDetails() {
     }
   };
 
+  // Save Mill Code
+  const saveMillCode = async () => {
+    if (!millId) return;
+    const code = millCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!code) {
+      toast({ title: "خطأ", description: "رمز المعصرة يجب أن يحتوي على أحرف أو أرقام إنجليزية فقط", variant: "destructive" });
+      return;
+    }
+    setSavingMillCode(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ mill_code: code })
+        .eq("user_id", millId);
+      if (error) throw error;
+      setMillCode(code);
+      toast({ title: "تم حفظ رمز المعصرة", description: `رمز المعصرة الآن: ${code}` });
+    } catch (err: any) {
+      toast({
+        title: "خطأ",
+        description: err.message?.includes("unique") ? "هذا الرمز مستخدم من معصرة أخرى، اختر رمزاً مختلفاً" : err.message || "فشل حفظ الرمز",
+        variant: "destructive"
+      });
+    } finally {
+      setSavingMillCode(false);
+    }
+  };
+
   // Create Employee Cashier Sub-account
   const handleCreateEmployee = async () => {
     if (!newEmployee.name.trim() || !newEmployee.username.trim() || !newEmployee.password.trim()) {
       toast({ title: "خطأ", description: "يرجى كتابة اسم الموظف، واسم المستخدم، وكلمة المرور", variant: "destructive" });
       return;
     }
+    if (!millCode.trim()) {
+      toast({ title: "يجب تعيين رمز المعصرة أولاً", description: "اذهب لتبويب 'رمز المعصرة' وأنشئ رمزاً فريداً للمعصرة قبل إضافة كاشير", variant: "destructive" });
+      return;
+    }
 
     setCreatingEmployee(true);
     try {
-      const email = normalizeUsernameToEmail(newEmployee.username);
-      const { data, error } = await supabase.auth.signUp({
+      // Username is prefixed with mill_code to ensure global uniqueness
+      const email = normalizeUsernameToEmail(newEmployee.username, millCode);
+      const { error } = await supabase.auth.signUp({
         email,
         password: newEmployee.password,
         options: {
@@ -331,6 +369,7 @@ export default function MillDetails() {
             username: newEmployee.username.trim(),
             parent_mill_id: millId,
             mill_name: millData?.profile?.mill_name,
+            mill_code: millCode.trim(),
           }
         }
       });
@@ -339,7 +378,7 @@ export default function MillDetails() {
 
       toast({
         title: "تم إنشاء حساب الكاشير بنجاح",
-        description: `اسم المستخدم: ${newEmployee.username.trim()} (كلمة المرور: ${newEmployee.password})`
+        description: `اسم الدخول: ${newEmployee.username.trim()} | كلمة المرور: ${newEmployee.password}`
       });
 
       setIsEmployeeModalOpen(false);
@@ -348,7 +387,7 @@ export default function MillDetails() {
     } catch (err: any) {
       toast({
         title: "خطأ في إنشاء الحساب",
-        description: err.message || "تعذر إنشاء حساب الكاشير",
+        description: err.message?.includes("already registered") ? "اسم المستخدم هذا موجود مسبقاً في هذه المعصرة" : err.message || "تعذر إنشاء حساب الكاشير",
         variant: "destructive"
       });
     } finally {
@@ -643,6 +682,44 @@ export default function MillDetails() {
 
         {/* TAB 3: Cashier Sub-Accounts */}
         <TabsContent value="employees">
+          {/* Mill Code Section */}
+          <Card className="mb-4 border-primary/20 bg-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Lock className="h-4 w-4 text-primary" />
+                رمز المعصرة (Mill Code) — ضروري للتمييز بين المعاصر
+              </CardTitle>
+              <CardDescription className="text-xs">
+                رمز فريد عالمياً يُضاف تلقائياً لأسماء مستخدمي الكاشير عند إنشائهم.
+                مثال: إذا كان الرمز <strong>tomeh</strong> وأنشأت كاشيراً باسم <strong>ahmad</strong>، يدخل الكاشير بكتابة <strong>ahmad</strong> فقط في شاشة الدخول.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={millCode}
+                  onChange={(e) => setMillCode(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
+                  placeholder="مثال: tomeh أو iman أو alali"
+                  dir="ltr"
+                  className="max-w-xs font-mono"
+                />
+                <Button onClick={saveMillCode} disabled={savingMillCode} size="sm">
+                  {savingMillCode ? "جارٍ الحفظ..." : "حفظ الرمز"}
+                </Button>
+                {millCode && (
+                  <span className="text-xs text-muted-foreground">
+                    الكاشيرون يدخلون باسم مستخدم بسيط (مثل: <code className="font-mono bg-muted px-1 rounded">ahmad</code>)
+                  </span>
+                )}
+              </div>
+              {!millCode && (
+                <p className="text-xs text-destructive mt-2">
+                  ⚠️ يجب تعيين رمز المعصرة قبل إنشاء حسابات الكاشير لضمان عدم التعارض مع معاصر أخرى.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -654,6 +731,7 @@ export default function MillDetails() {
                   حسابات دخول مستقلة (اسم مستخدم/بريد وكلمة مرور) بصلاحيات محصورة في: الطابور، الفوترة، وطباعة الفواتير فقط.
                 </CardDescription>
               </div>
+
 
               {/* Add Employee Dialog */}
               <Dialog open={isEmployeeModalOpen} onOpenChange={setIsEmployeeModalOpen}>
@@ -725,7 +803,7 @@ export default function MillDetails() {
                     <TableRow key={emp.id}>
                       <TableCell className="font-bold text-foreground">{emp.display_name || 'موظف كاشير'}</TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-primary">
-                        {getDisplayUsername(emp.display_name, emp.display_name)}
+                        {emp.phone || getDisplayUsername(emp.display_name, null)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-xs">

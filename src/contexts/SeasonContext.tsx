@@ -67,18 +67,19 @@ export const SeasonProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const enterSeason = async (seasonId: string) => {
-    if (!user) return;
-    // Deactivate all seasons first
+    if (!targetUserId) return;
+    // Deactivate all seasons for this mill first
     await supabase
       .from("seasons")
       .update({ status: "closed" })
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("status", "active");
     // Activate selected season
     await supabase
       .from("seasons")
       .update({ status: "active" })
-      .eq("id", seasonId);
+      .eq("id", seasonId)
+      .eq("user_id", targetUserId);
     await fetchSeasons();
   };
 

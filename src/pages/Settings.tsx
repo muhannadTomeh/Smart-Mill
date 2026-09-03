@@ -17,7 +17,6 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
-import { normalizeUsernameToEmail, getDisplayUsername } from "@/lib/authUtils";
 
 interface ContainerType {
   id: string;
@@ -78,13 +77,20 @@ export default function Settings() {
   const [containerDeleteTarget, setContainerDeleteTarget] = useState<ContainerType | null>(null);
   const [expenseDeleteTarget, setExpenseDeleteTarget] = useState<{ id: string, name: string } | null>(null);
   const [reportPin, setReportPin] = useState("");
-  const [isUpdatingPin, setIsUpdatingPin] = useState(false);
-  
-  // Cashier Sub-Accounts
+  const [isUpdatingPin, setIsUpdatingPin] = useState(false);  // Cashier Sub-Accounts (read-only — management done by Admin panel)
   const [employees, setEmployees] = useState<any[]>([]);
-  const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({ name: "", username: "", password: "" });
-  const [creatingEmployee, setCreatingEmployee] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from("profiles")
+        .select("id, display_name, phone, created_at")
+        .eq("parent_mill_id", user.id)
+        .order("created_at", { ascending: false })
+        .then(({ data }) => setEmployees(data || []));
+    }
+  }, [user]);
+
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -286,62 +292,6 @@ export default function Settings() {
     }
   };
 
-  const fetchEmployees = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("parent_mill_id", user.id)
-      .order("created_at", { ascending: false });
-    setEmployees(data || []);
-  };
-
-  useEffect(() => {
-    if (user) fetchEmployees();
-  }, [user]);
-
-  const handleCreateEmployee = async () => {
-    if (!newEmployee.name.trim() || !newEmployee.username.trim() || !newEmployee.password.trim()) {
-      toast({ title: "خطأ", description: "يرجى كتابة اسم الموظف، واسم المستخدم، وكلمة المرور", variant: "destructive" });
-      return;
-    }
-
-    setCreatingEmployee(true);
-    try {
-      const email = normalizeUsernameToEmail(newEmployee.username);
-      const { error } = await supabase.auth.signUp({
-        email,
-        password: newEmployee.password,
-        options: {
-          data: {
-            display_name: newEmployee.name.trim(),
-            username: newEmployee.username.trim(),
-            parent_mill_id: user?.id,
-            mill_name: profileForm.mill_name,
-          }
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "تم إنشاء حساب الكاشير بنجاح",
-        description: `اسم المستخدم: ${newEmployee.username.trim()} (كلمة المرور: ${newEmployee.password})`
-      });
-
-      setIsEmployeeModalOpen(false);
-      setNewEmployee({ name: "", username: "", password: "" });
-      fetchEmployees();
-    } catch (err: any) {
-      toast({
-        title: "خطأ في إنشاء الحساب",
-        description: err.message || "تعذر إنشاء الحساب",
-        variant: "destructive"
-      });
-    } finally {
-      setCreatingEmployee(false);
-    }
-  };
 
   const updatePassword = async () => {
     if (newPassword !== confirmPassword) {
@@ -681,64 +631,14 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <UserCheck className="h-5 w-5 text-primary" />
-              حسابات موظفي الكاشير (Cashier Sub-Accounts)
-            </CardTitle>
-            <CardDescription>
-              إنشاء حسابات دخول مستقلة لموظفي المعصرة (اسم مستخدم وكلمة مرور) بصلاحيات محددة في: الطابور، الفوترة، وطباعة الفواتير فقط.
-            </CardDescription>
-          </div>
-
-          <Dialog open={isEmployeeModalOpen} onOpenChange={setIsEmployeeModalOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-1.5" size="sm">
-                <Plus className="h-4 w-4" />
-                إضافة كاشير جديد
-              </Button>
-            </DialogTrigger>
-            <DialogContent dir="rtl">
-              <DialogHeader>
-                <DialogTitle>إنشاء حساب موظف / كاشير جديد</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-3">
-                <div className="space-y-2">
-                  <Label>اسم الموظف *</Label>
-                  <Input 
-                    value={newEmployee.name} 
-                    onChange={(e) => setNewEmployee(p => ({ ...p, name: e.target.value }))} 
-                    placeholder="مثال: أحمد الكاشير" 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>اسم المستخدم (Username) *</Label>
-                  <Input 
-                    type="text"
-                    value={newEmployee.username} 
-                    onChange={(e) => setNewEmployee(p => ({ ...p, username: e.target.value }))} 
-                    placeholder="مثال: ahmad أو cashier1" 
-                    dir="ltr"
-                  />
-                  <p className="text-[11px] text-muted-foreground">نص عادي بسيط بدون قيود أو بريد إلكتروني</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>كلمة المرور *</Label>
-                  <Input 
-                    type="text"
-                    value={newEmployee.password} 
-                    onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))} 
-                    placeholder="أدخل كلمة المرور (مثال: 123456)" 
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-              <Button onClick={handleCreateEmployee} disabled={creatingEmployee} className="w-full">
-                {creatingEmployee ? "جارٍ إنشاء الحساب..." : "تأكيد وإنشاء حساب الكاشير"}
-              </Button>
-            </DialogContent>
-          </Dialog>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <UserCheck className="h-5 w-5 text-primary" />
+            حسابات موظفي الكاشير (Cashier Sub-Accounts)
+          </CardTitle>
+          <CardDescription>
+            إنشاء وإدارة حسابات الكاشير يتم من خلال مسؤول النظام (Admin) لضمان أمان وتفرد أسماء المستخدمين عبر جميع المعاصر.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -747,7 +647,7 @@ export default function Settings() {
                 <div className="space-y-0.5">
                   <p className="font-bold text-sm text-foreground">{emp.display_name || "موظف كاشير"}</p>
                   <p className="text-xs text-primary font-mono font-medium">
-                    {getDisplayUsername(emp.display_name, emp.display_name)}
+                    {emp.phone || emp.display_name}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -759,7 +659,7 @@ export default function Settings() {
             ))}
             {employees.length === 0 && (
               <p className="text-xs text-center text-muted-foreground py-4">
-                لا توجد حسابات كاشير مسجلة بعد. اضغط "إضافة كاشير جديد" لإنشاء حساب مستقل لموظفك.
+                لا توجد حسابات كاشير حتى الآن. تواصل مع مسؤول النظام لإنشاء حسابات الكاشير الخاصة بمعصرتك.
               </p>
             )}
           </div>

@@ -7,7 +7,7 @@ import AuthBranding from "@/components/auth/AuthBranding";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
 import ForgotPasswordForm from "@/components/auth/ForgotPasswordForm";
-import { normalizeUsernameToEmail } from "@/lib/authUtils";
+import { lookupCashierEmail } from "@/lib/authUtils";
 
 export type AuthView = "login" | "register" | "forgot-password";
 
@@ -36,8 +36,40 @@ const Auth = () => {
   const handleLogin = async (usernameOrEmail: string, password: string) => {
     localStorage.removeItem('employee_owner_id');
     setLoading(true);
-    const email = normalizeUsernameToEmail(usernameOrEmail);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    let emailToUse: string;
+
+    // If the input contains @ it's a real email (mill owner) — use directly
+    if (usernameOrEmail.trim().includes("@")) {
+      emailToUse = usernameOrEmail.trim().toLowerCase();
+    } else {
+      // Plain username → look up via RPC to find correct mill
+      const result = await lookupCashierEmail(supabase, usernameOrEmail.trim());
+
+      if ("ambiguous" in result) {
+        setLoading(false);
+        toast({
+          title: "يوجد أكثر من حساب بهذا الاسم",
+          description: "يرجى التواصل مع مسؤول النظام لتوضيح رمز المعصرة الخاص بك.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if ("notFound" in result) {
+        setLoading(false);
+        toast({
+          title: "خطأ في تسجيل الدخول",
+          description: "اسم المستخدم أو كلمة المرور غير صحيحة",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      emailToUse = result.email;
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
     setLoading(false);
     if (error) {
       toast({ title: "خطأ في تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة", variant: "destructive" });
@@ -70,6 +102,7 @@ const Auth = () => {
       }
     }
   };
+
 
   const handleRegister = async (data: {
     millName: string;
