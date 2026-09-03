@@ -417,12 +417,12 @@ export default function MillDetails() {
   const status = millData.profile?.subscription_status || 'pending';
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6 text-right" dir="rtl">
       {/* Top Banner Alert */}
-      <Alert className="bg-blue-50/70 border-blue-200">
-        <Info className="h-4 w-4 text-blue-600" />
-        <AlertTitle className="text-blue-800 font-bold">وضع الإدارة والإشراف العام</AlertTitle>
-        <AlertDescription className="text-blue-700 text-xs mt-0.5">
+      <Alert className="bg-blue-50/70 border-blue-200 text-right" dir="rtl">
+        <Info className="h-4 w-4 text-blue-600 shrink-0" />
+        <AlertTitle className="text-blue-800 font-bold text-right">وضع الإدارة والإشراف العام</AlertTitle>
+        <AlertDescription className="text-blue-700 text-xs mt-0.5 text-right">
           أنت تشاهد وتدير بيانات وحركات <strong>[{millData.profile?.mill_name || millData.profile?.display_name}]</strong> بصلاحيات المشرف الكاملة.
         </AlertDescription>
       </Alert>
@@ -430,15 +430,15 @@ export default function MillDetails() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
-            <ArrowRight className="ml-2 h-4 w-4" />
-            العودة للوحة المشرف
+          <Button variant="ghost" size="sm" onClick={() => navigate("/admin")} className="gap-2">
+            <ArrowRight className="h-4 w-4" />
+            <span>العودة للوحة المشرف</span>
           </Button>
-          <div>
+          <div className="text-right">
             <h1 className="text-2xl font-bold text-foreground">
               {millData.profile?.mill_name || millData.profile?.display_name || 'تفاصيل المعصرة'}
             </h1>
-            <p className="text-xs text-muted-foreground">المالك: {millData.profile?.display_name || "غير محدد"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">المالك: {millData.profile?.display_name || "غير محدد"}</p>
           </div>
         </div>
         <div>
@@ -447,41 +447,41 @@ export default function MillDetails() {
       </div>
 
       {/* Mill & Owner Profile Info Card */}
-      <Card>
+      <Card className="text-right">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="text-base flex items-center gap-2 text-right">
             <Building2 className="h-5 w-5 text-primary" />
-            بيانات المعصرة والتواصل
+            <span>بيانات المعصرة والتواصل</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-            <div className="space-y-1 bg-muted/40 p-3 rounded-xl">
-              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <div className="space-y-1 bg-muted/40 p-3 rounded-xl text-right">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs justify-start">
                 <Building2 className="h-3.5 w-3.5 text-primary" />
                 <span>اسم المعصرة</span>
               </div>
               <p className="font-bold text-foreground text-base">{millData.profile?.mill_name || "غير محدد"}</p>
             </div>
 
-            <div className="space-y-1 bg-muted/40 p-3 rounded-xl">
-              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <div className="space-y-1 bg-muted/40 p-3 rounded-xl text-right">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs justify-start">
                 <User className="h-3.5 w-3.5 text-primary" />
                 <span>المالك / المدير</span>
               </div>
               <p className="font-bold text-foreground">{millData.profile?.display_name || "غير محدد"}</p>
             </div>
 
-            <div className="space-y-1 bg-muted/40 p-3 rounded-xl">
-              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <div className="space-y-1 bg-muted/40 p-3 rounded-xl text-right">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs justify-start">
                 <MapPin className="h-3.5 w-3.5 text-primary" />
                 <span>الموقع والدولة</span>
               </div>
               <p className="font-bold text-foreground">{millData.profile?.mill_location || "غير محدد"} ({millData.profile?.country || "فلسطين"})</p>
             </div>
 
-            <div className="space-y-1 bg-muted/40 p-3 rounded-xl">
-              <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <div className="space-y-1 bg-muted/40 p-3 rounded-xl text-right">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs justify-start">
                 <Phone className="h-3.5 w-3.5 text-primary" />
                 <span>أرقام الهاتف</span>
               </div>
@@ -498,16 +498,16 @@ export default function MillDetails() {
 
       {/* Overview Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">الموسم النشط</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">الموسم النشط</CardTitle>
             <Calendar className="h-4 w-4 text-primary" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             {millData.currentSeason ? (
               <div>
                 <p className="font-bold text-base">{millData.currentSeason.name}</p>
-                <p className="text-xs text-muted-foreground">نسبة الرد: {millData.currentSeason.return_percent}%</p>
+                <p className="text-xs text-muted-foreground mt-0.5">نسبة الرد: {millData.currentSeason.return_percent}%</p>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">لا يوجد موسم نشط</p>
@@ -515,77 +515,77 @@ export default function MillDetails() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الفواتير الصادرة</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">إجمالي الفواتير الصادرة</CardTitle>
             <Receipt className="h-4 w-4 text-primary" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             <p className="text-2xl font-bold">{millData.invoices.length}</p>
-            <p className="text-xs text-muted-foreground">فاتورة معصرة مسجلة</p>
+            <p className="text-xs text-muted-foreground mt-0.5">فاتورة معصرة مسجلة</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">حركات الطابور</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">حركات الطابور</CardTitle>
             <Clock className="h-4 w-4 text-primary" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             <p className="text-2xl font-bold">{queueItems.length}</p>
-            <p className="text-xs text-muted-foreground">زبون في سجل الطابور</p>
+            <p className="text-xs text-muted-foreground mt-0.5">زبون في سجل الطابور</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">حسابات الموظفين (الكاشير)</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">حسابات الموظفين (الكاشير)</CardTitle>
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             <p className="text-2xl font-bold">{employees.length}</p>
-            <p className="text-xs text-muted-foreground">حسابات كاشير فرعية</p>
+            <p className="text-xs text-muted-foreground mt-0.5">حسابات كاشير فرعية</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Core Tabs: Operations Activity Log & Cashier Employees Management */}
-      <Tabs defaultValue="invoices" className="space-y-4">
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
-          <TabsTrigger value="invoices" className="gap-1.5">
-            <Receipt className="h-4 w-4" />
+      <Tabs defaultValue="invoices" className="space-y-4" dir="rtl">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 w-full bg-muted/80 p-1.5 rounded-2xl gap-1" dir="rtl">
+          <TabsTrigger value="invoices" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
+            <Receipt className="h-4 w-4 shrink-0" />
             <span>سجل الفواتير ({millData.invoices.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="queue" className="gap-1.5">
-            <Clock className="h-4 w-4" />
+          <TabsTrigger value="queue" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
+            <Clock className="h-4 w-4 shrink-0" />
             <span>حركات الطابور ({queueItems.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="employees" className="gap-1.5">
-            <UserCheck className="h-4 w-4" />
+          <TabsTrigger value="employees" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
+            <UserCheck className="h-4 w-4 shrink-0" />
             <span>حسابات الكاشير ({employees.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="finance" className="gap-1.5">
-            <Wallet className="h-4 w-4" />
+          <TabsTrigger value="finance" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
+            <Wallet className="h-4 w-4 shrink-0" />
             <span>المصاريف والزيت ({expenses.length + oilTransactions.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="subscription" className="gap-1.5">
-            <ShieldCheck className="h-4 w-4" />
+          <TabsTrigger value="subscription" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
+            <ShieldCheck className="h-4 w-4 shrink-0" />
             <span>الاشتراك والتحكم</span>
           </TabsTrigger>
         </TabsList>
 
         {/* TAB 1: Invoices Log */}
         <TabsContent value="invoices">
-          <Card>
+          <Card className="text-right">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+              <CardTitle className="flex items-center gap-2 text-lg text-right">
                 <Receipt className="h-5 w-5 text-primary" />
-                سجل فواتير المعصرة الكاملة
+                <span>سجل فواتير المعصرة الكاملة</span>
               </CardTitle>
-              <CardDescription>عرض تفاصيل كافة الفواتير المصدرة من قبل المعصرة والمزارعين والكميات</CardDescription>
+              <CardDescription className="text-right">عرض تفاصيل كافة الفواتير المصدرة من قبل المعصرة والمزارعين والكميات</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table dir="rtl">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">اسم المزارع / الزبون</TableHead>
@@ -600,9 +600,9 @@ export default function MillDetails() {
                 <TableBody>
                   {millData.invoices.map((inv: any) => (
                     <TableRow key={inv.id}>
-                      <TableCell className="font-bold text-foreground">{inv.customer_name}</TableCell>
-                      <TableCell className="font-medium text-emerald-700">{inv.oil_produced} كغم</TableCell>
-                      <TableCell>
+                      <TableCell className="font-bold text-foreground text-right">{inv.customer_name}</TableCell>
+                      <TableCell className="font-medium text-emerald-700 text-right">{inv.oil_produced} كغم</TableCell>
+                      <TableCell className="text-right">
                         <Badge variant="outline">
                           {inv.payment_type === 'oil' ? 'بالزيت' : inv.payment_type === 'cash' ? 'نقداً' : 'مختلط'}
                         </Badge>
@@ -630,16 +630,16 @@ export default function MillDetails() {
 
         {/* TAB 2: Queue Activity */}
         <TabsContent value="queue">
-          <Card>
+          <Card className="text-right">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+              <CardTitle className="flex items-center gap-2 text-lg text-right">
                 <Clock className="h-5 w-5 text-primary" />
-                سجل حركات وأدوار الطابور
+                <span>سجل حركات وأدوار الطابور</span>
               </CardTitle>
-              <CardDescription>الزبائن المسجلون والشوالات وحالة كل عصرة</CardDescription>
+              <CardDescription className="text-right">الزبائن المسجلون والشوالات وحالة كل عصرة</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table dir="rtl">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">الاسم</TableHead>
@@ -653,16 +653,16 @@ export default function MillDetails() {
                 <TableBody>
                   {queueItems.map((q: any) => (
                     <TableRow key={q.id}>
-                      <TableCell className="font-bold">{q.name}</TableCell>
+                      <TableCell className="font-bold text-right">{q.name}</TableCell>
                       <TableCell dir="ltr" className="text-right font-mono text-xs">{q.phone || '---'}</TableCell>
-                      <TableCell className="font-medium">{q.bags} شوال</TableCell>
-                      <TableCell>
+                      <TableCell className="font-medium text-right">{q.bags} شوال</TableCell>
+                      <TableCell className="text-right">
                         <Badge variant={q.status === 'processing' ? 'default' : q.status === 'completed' ? 'secondary' : 'outline'}>
                           {q.status === 'processing' ? 'قيد العصر ⚙️' : q.status === 'completed' ? 'تم العصر ✅' : 'في الانتظار ⏳'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{q.notes || '-'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="text-xs text-muted-foreground text-right">{q.notes || '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground text-right">
                         {new Date(q.created_at).toLocaleString("ar-EG")}
                       </TableCell>
                     </TableRow>
@@ -683,99 +683,101 @@ export default function MillDetails() {
         {/* TAB 3: Cashier Sub-Accounts */}
         <TabsContent value="employees">
           {/* Mill Code Section */}
-          <Card className="mb-4 border-primary/20 bg-primary/5">
+          <Card className="mb-4 border-primary/20 bg-primary/5 text-right">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
+              <CardTitle className="flex items-center gap-2 text-base text-right">
                 <Lock className="h-4 w-4 text-primary" />
-                رمز المعصرة (Mill Code) — ضروري للتمييز بين المعاصر
+                <span>رمز المعصرة (Mill Code) — ضروري للتمييز بين المعاصر</span>
               </CardTitle>
-              <CardDescription className="text-xs">
+              <CardDescription className="text-xs text-right">
                 رمز فريد عالمياً يُضاف تلقائياً لأسماء مستخدمي الكاشير عند إنشائهم.
                 مثال: إذا كان الرمز <strong>tomeh</strong> وأنشأت كاشيراً باسم <strong>ahmad</strong>، يدخل الكاشير بكتابة <strong>ahmad</strong> فقط في شاشة الدخول.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 justify-start">
                 <Input
                   value={millCode}
                   onChange={(e) => setMillCode(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
                   placeholder="مثال: tomeh أو iman أو alali"
                   dir="ltr"
-                  className="max-w-xs font-mono"
+                  className="max-w-xs font-mono text-left"
                 />
                 <Button onClick={saveMillCode} disabled={savingMillCode} size="sm">
                   {savingMillCode ? "جارٍ الحفظ..." : "حفظ الرمز"}
                 </Button>
                 {millCode && (
                   <span className="text-xs text-muted-foreground">
-                    الكاشيرون يدخلون باسم مستخدم بسيط (مثل: <code className="font-mono bg-muted px-1 rounded">ahmad</code>)
+                    الكاشيرون يدخلون باسم مستخدم بسيط (مثل: <code className="font-mono bg-muted px-1.5 py-0.5 rounded">ahmad</code>)
                   </span>
                 )}
               </div>
               {!millCode && (
-                <p className="text-xs text-destructive mt-2">
+                <p className="text-xs text-destructive mt-2 text-right">
                   ⚠️ يجب تعيين رمز المعصرة قبل إنشاء حسابات الكاشير لضمان عدم التعارض مع معاصر أخرى.
                 </p>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="text-right">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2 text-lg">
+                <CardTitle className="flex items-center gap-2 text-lg text-right">
                   <UserCheck className="h-5 w-5 text-primary" />
-                  حسابات الموظفين والكاشير (Sub-Accounts)
+                  <span>حسابات الموظفين والكاشير (Sub-Accounts)</span>
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-right">
                   حسابات دخول مستقلة (اسم مستخدم/بريد وكلمة مرور) بصلاحيات محصورة في: الطابور، الفوترة، وطباعة الفواتير فقط.
                 </CardDescription>
               </div>
 
-
               {/* Add Employee Dialog */}
               <Dialog open={isEmployeeModalOpen} onOpenChange={setIsEmployeeModalOpen}>
                 <DialogTrigger asChild>
-                  <Button className="gap-1.5">
+                  <Button className="gap-2">
                     <Plus className="h-4 w-4" />
-                    إنشاء حساب كاشير جديد
+                    <span>إنشاء حساب كاشير جديد</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent dir="rtl">
-                  <DialogHeader>
-                    <DialogTitle>إنشاء حساب موظف / كاشير جديد</DialogTitle>
-                    <DialogDescription>
+                <DialogContent dir="rtl" className="text-right sm:max-w-[450px]">
+                  <DialogHeader className="text-right sm:text-right">
+                    <DialogTitle className="text-right">إنشاء حساب موظف / كاشير جديد</DialogTitle>
+                    <DialogDescription className="text-right">
                       سيحصل هذا الحساب على صلاحيات الطابور، إصدار الفواتير، وطباعة الفواتير فقط الخاصة بهذه المعصرة.
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4 py-3">
+                  <div className="space-y-4 py-3 text-right">
                     <div className="space-y-2">
-                      <Label>اسم الموظف / الكاشير *</Label>
+                      <Label className="text-right block">اسم الموظف / الكاشير *</Label>
                       <Input 
                         value={newEmployee.name} 
                         onChange={(e) => setNewEmployee(p => ({ ...p, name: e.target.value }))} 
                         placeholder="مثال: أحمد الكاشير" 
+                        className="text-right"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>اسم المستخدم (Username) *</Label>
+                      <Label className="text-right block">اسم المستخدم (Username) *</Label>
                       <Input 
                         type="text"
                         value={newEmployee.username} 
                         onChange={(e) => setNewEmployee(p => ({ ...p, username: e.target.value }))} 
                         placeholder="مثال: ahmad أو cashier1" 
                         dir="ltr"
+                        className="text-left font-mono"
                       />
-                      <p className="text-[11px] text-muted-foreground">نص عادي بسيط بدون قيود أو بريد إلكتروني</p>
+                      <p className="text-[11px] text-muted-foreground text-right">نص عادي بسيط بدون قيود أو بريد إلكتروني</p>
                     </div>
                     <div className="space-y-2">
-                      <Label>كلمة المرور *</Label>
+                      <Label className="text-right block">كلمة المرور *</Label>
                       <Input 
                         type="text"
                         value={newEmployee.password} 
                         onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))} 
                         placeholder="أدخل كلمة المرور (مثال: 123456)" 
                         dir="ltr"
+                        className="text-left font-mono"
                       />
                     </div>
                   </div>
@@ -788,7 +790,7 @@ export default function MillDetails() {
               </Dialog>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table dir="rtl">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">اسم الموظف</TableHead>
@@ -801,19 +803,19 @@ export default function MillDetails() {
                 <TableBody>
                   {employees.map((emp: any) => (
                     <TableRow key={emp.id}>
-                      <TableCell className="font-bold text-foreground">{emp.display_name || 'موظف كاشير'}</TableCell>
-                      <TableCell className="font-mono text-xs font-semibold text-primary">
+                      <TableCell className="font-bold text-foreground text-right">{emp.display_name || 'موظف كاشير'}</TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-primary text-right">
                         {emp.phone || getDisplayUsername(emp.display_name, null)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Badge variant="secondary" className="text-xs">
                           الطابور + الفوترة + طباعة الفواتير
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="text-xs text-muted-foreground text-right">
                         {new Date(emp.created_at).toLocaleDateString("ar-EG")}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Badge className="bg-green-100 text-green-700">مفعّل</Badge>
                       </TableCell>
                     </TableRow>
@@ -834,15 +836,15 @@ export default function MillDetails() {
         {/* TAB 4: Expenses & Oil Trading */}
         <TabsContent value="finance">
           <div className="grid gap-6 md:grid-cols-2">
-            <Card>
+            <Card className="text-right">
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-base flex items-center gap-2 text-right">
                   <Wallet className="h-4 w-4 text-primary" />
-                  سجل المصاريف المسجلة
+                  <span>سجل المصاريف المسجلة</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
+                <Table dir="rtl">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">الفئة</TableHead>
@@ -853,9 +855,9 @@ export default function MillDetails() {
                   <TableBody>
                     {expenses.map((exp: any) => (
                       <TableRow key={exp.id}>
-                        <TableCell className="font-medium">{exp.category}</TableCell>
-                        <TableCell className="font-bold text-red-600">{exp.amount} ₪</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{new Date(exp.created_at).toLocaleDateString("ar-EG")}</TableCell>
+                        <TableCell className="font-medium text-right">{exp.category}</TableCell>
+                        <TableCell className="font-bold text-red-600 text-right">{exp.amount} ₪</TableCell>
+                        <TableCell className="text-xs text-muted-foreground text-right">{new Date(exp.created_at).toLocaleDateString("ar-EG")}</TableCell>
                       </TableRow>
                     ))}
                     {expenses.length === 0 && (
@@ -870,15 +872,15 @@ export default function MillDetails() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="text-right">
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-base flex items-center gap-2 text-right">
                   <ShoppingCart className="h-4 w-4 text-primary" />
-                  حركات بيع وشراء الزيت
+                  <span>حركات بيع وشراء الزيت</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
+                <Table dir="rtl">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">النوع</TableHead>
@@ -890,14 +892,14 @@ export default function MillDetails() {
                   <TableBody>
                     {oilTransactions.map((tx: any) => (
                       <TableRow key={tx.id}>
-                        <TableCell>
+                        <TableCell className="text-right">
                           <Badge variant={tx.type === 'sell' ? 'default' : 'secondary'}>
                             {tx.type === 'sell' ? 'بيع' : 'شراء'}
                           </Badge>
                         </TableCell>
-                        <TableCell>{tx.amount} كغم</TableCell>
-                        <TableCell className="font-bold">{tx.total_price} ₪</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleDateString("ar-EG")}</TableCell>
+                        <TableCell className="text-right">{tx.amount} كغم</TableCell>
+                        <TableCell className="font-bold text-right">{tx.total_price} ₪</TableCell>
+                        <TableCell className="text-xs text-muted-foreground text-right">{new Date(tx.created_at).toLocaleDateString("ar-EG")}</TableCell>
                       </TableRow>
                     ))}
                     {oilTransactions.length === 0 && (
@@ -918,101 +920,106 @@ export default function MillDetails() {
         <TabsContent value="subscription">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Subscription Status Card */}
-            <Card className="border-t-4 border-t-primary">
+            <Card className="border-t-4 border-t-primary text-right">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-lg">حالة الاشتراك والتحكم</CardTitle>
+                  <CardTitle className="text-lg text-right">حالة الاشتراك والتحكم</CardTitle>
                 </div>
                 {getStatusBadge(status)}
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 text-right">
                 <div className="flex gap-2">
                   <Button 
                     onClick={() => updateSubscription('active')} 
                     disabled={updating || status === 'active'}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
                   >
-                    <ShieldCheck className="ml-2 h-4 w-4" />
-                    تفعيل الحساب
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>تفعيل الحساب</span>
                   </Button>
                   <Button 
                     variant="destructive"
                     onClick={() => updateSubscription('suspended')} 
                     disabled={updating || status === 'suspended'}
-                    className="flex-1"
+                    className="flex-1 gap-2"
                   >
-                    <ShieldAlert className="ml-2 h-4 w-4" />
-                    إيقاف الحساب
+                    <ShieldAlert className="h-4 w-4" />
+                    <span>إيقاف الحساب</span>
                   </Button>
                 </div>
                 
                 <div className="space-y-2 pt-2">
-                  <Label className="text-sm font-medium">ملاحظات الاشتراك (خاصة بالإدارة)</Label>
+                  <Label className="text-sm font-medium text-right block">ملاحظات الاشتراك (خاصة بالإدارة)</Label>
                   <Textarea 
                     placeholder="سجل هنا أي ملاحظات إدارية أو اتفاقات..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="min-h-[90px]"
+                    className="min-h-[90px] text-right"
                   />
                 </div>
               </CardContent>
               <CardFooter>
                 <Button 
                   variant="outline" 
-                  className="w-full" 
+                  className="w-full gap-2" 
                   onClick={saveNotes}
                   disabled={updating}
                 >
-                  <Save className="ml-2 h-4 w-4" />
-                  {updating ? "جارٍ الحفظ..." : "حفظ الملاحظات"}
+                  <Save className="h-4 w-4" />
+                  <span>{updating ? "جارٍ الحفظ..." : "حفظ الملاحظات"}</span>
                 </Button>
               </CardFooter>
             </Card>
 
             {/* Monthly Fee & Subscription Payments */}
-            <Card className="border-t-4 border-t-green-500">
+            <Card className="border-t-4 border-t-green-500 text-right">
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <div className="flex items-center gap-2">
                   <Banknote className="h-5 w-5 text-green-600" />
-                  <CardTitle className="text-lg">الرسوم والمدفوعات</CardTitle>
+                  <CardTitle className="text-lg text-right">الرسوم والمدفوعات</CardTitle>
                 </div>
 
                 <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                      <Plus className="ml-1.5 h-3.5 w-3.5" />
-                      تسجيل دفعة
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1.5">
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>تسجيل دفعة</span>
                     </Button>
                   </DialogTrigger>
-                  <DialogContent dir="rtl">
-                    <DialogHeader>
-                      <DialogTitle>تسجيل دفعة اشتراك جديدة</DialogTitle>
+                  <DialogContent dir="rtl" className="text-right sm:max-w-[425px]">
+                    <DialogHeader className="text-right sm:text-right">
+                      <DialogTitle className="text-right">تسجيل دفعة اشتراك جديدة</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4 py-3">
+                    <div className="space-y-4 py-3 text-right">
                       <div className="space-y-2">
-                        <Label>المبلغ (₪)</Label>
+                        <Label className="text-right block">المبلغ (₪) *</Label>
                         <Input 
                           type="number" 
                           value={newPayment.amount}
                           onChange={e => setNewPayment({...newPayment, amount: e.target.value})}
                           placeholder="0.00"
+                          dir="ltr"
+                          className="text-left font-mono"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>تاريخ الدفع</Label>
+                        <Label className="text-right block">تاريخ الدفع *</Label>
                         <Input 
                           type="date" 
                           value={newPayment.date}
                           onChange={e => setNewPayment({...newPayment, date: e.target.value})}
+                          dir="ltr"
+                          className="text-left font-mono"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>ملاحظات الدفعة</Label>
+                        <Label className="text-right block">ملاحظات الدفعة</Label>
                         <Textarea 
                           value={newPayment.notes}
                           onChange={e => setNewPayment({...newPayment, notes: e.target.value})}
                           placeholder="تفاصيل الحوالة أو السداد..."
+                          className="text-right"
                         />
                       </div>
                     </div>
@@ -1024,32 +1031,33 @@ export default function MillDetails() {
                   </DialogContent>
                 </Dialog>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 text-right">
                 <div className="flex items-center justify-between bg-muted/40 p-3 rounded-xl">
-                  <Label htmlFor="monthlyFee" className="text-xs">الاشتراك الشهري المتفق عليه:</Label>
+                  <Label htmlFor="monthlyFee" className="text-xs font-semibold">الاشتراك الشهري المتفق عليه:</Label>
                   <div className="flex items-center gap-1.5">
                     <Input 
                       id="monthlyFee"
                       type="number" 
                       value={monthlyFee} 
                       onChange={e => setMonthlyFee(e.target.value)}
-                      className="w-24 h-8 text-xs font-bold"
+                      className="w-24 h-8 text-xs font-bold text-left font-mono"
+                      dir="ltr"
                     />
-                    <span className="text-xs">₪</span>
+                    <span className="text-xs font-bold">₪</span>
                     <Button size="sm" variant="outline" onClick={saveMonthlyFee} disabled={updating} className="h-8 text-xs">
                       حفظ
                     </Button>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground">سجل الدفعات الأخيرة:</p>
+                <div className="space-y-2 text-right">
+                  <p className="text-xs font-semibold text-muted-foreground text-right">سجل الدفعات الأخيرة:</p>
                   <div className="max-h-[160px] overflow-auto space-y-1.5">
                     {payments.map(p => (
                       <div key={p.id} className="flex items-center justify-between text-xs p-2 bg-muted/30 rounded-lg border">
-                        <div>
+                        <div className="flex items-center gap-2">
                           <span className="font-bold text-green-700">{p.amount} ₪</span>
-                          <span className="text-muted-foreground mr-2">({new Date(p.payment_date).toLocaleDateString("ar-EG")})</span>
+                          <span className="text-muted-foreground">({new Date(p.payment_date).toLocaleDateString("ar-EG")})</span>
                         </div>
                         <span className="text-muted-foreground truncate max-w-[150px]">{p.notes || '-'}</span>
                       </div>

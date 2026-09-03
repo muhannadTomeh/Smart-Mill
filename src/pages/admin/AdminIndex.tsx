@@ -278,93 +278,105 @@ export default function AdminIndex() {
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">لوحة تحكم المشرف</h1>
-        <div className="flex gap-2">
+    <div className="space-y-6 text-right" dir="rtl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">لوحة تحكم المشرف</h1>
+          <p className="text-xs text-muted-foreground mt-1">إدارة المعاصر، الاشتراكات، وإعدادات النظام العامة</p>
+        </div>
+        <div className="flex items-center gap-2">
           <Dialog open={isCreateModalOpen} onOpenChange={(open) => {
             setIsCreateModalOpen(open);
             if (!open) setCreatedCredentials(null);
           }}>
             <DialogTrigger asChild>
-              <Button className="bg-green-600 hover:bg-green-700 text-white">
-                <UserPlus className="ml-2 h-4 w-4" />
-                إنشاء حساب معصرة جديد
+              <Button className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                <UserPlus className="h-4 w-4" />
+                <span>إنشاء حساب معصرة جديد</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] text-right" dir="rtl">
-              <DialogHeader>
+            <DialogContent className="sm:max-w-[440px] text-right" dir="rtl">
+              <DialogHeader className="text-right sm:text-right">
                 <DialogTitle className="text-right">إنشاء حساب معصرة جديد</DialogTitle>
               </DialogHeader>
               
               {!createdCredentials ? (
-                <form onSubmit={handleCreateAccount} className="space-y-4 py-4">
+                <form onSubmit={handleCreateAccount} className="space-y-4 py-4 text-right">
                   <div className="space-y-2">
-                    <Label htmlFor="mill_name">اسم المعصرة</Label>
+                    <Label htmlFor="mill_name" className="text-right block">اسم المعصرة *</Label>
                     <Input 
                       id="mill_name" 
                       required 
+                      className="text-right"
                       value={newAccountData.mill_name}
                       onChange={e => setNewAccountData(prev => ({...prev, mill_name: e.target.value}))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="owner_name">اسم صاحب المعصرة</Label>
+                    <Label htmlFor="owner_name" className="text-right block">اسم صاحب المعصرة *</Label>
                     <Input 
                       id="owner_name" 
                       required 
+                      className="text-right"
                       value={newAccountData.owner_name}
                       onChange={e => setNewAccountData(prev => ({...prev, owner_name: e.target.value}))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">البريد الإلكتروني (للتسجيل)</Label>
+                    <Label htmlFor="email" className="text-right block">البريد الإلكتروني (للتسجيل) *</Label>
                     <Input 
                       id="email" 
                       type="email" 
                       required 
                       dir="ltr"
+                      className="text-left font-mono"
                       value={newAccountData.email}
                       onChange={e => setNewAccountData(prev => ({...prev, email: e.target.value}))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">رقم الهاتف الأساسي</Label>
+                    <Label htmlFor="phone" className="text-right block">رقم الهاتف الأساسي</Label>
                     <Input 
                       id="phone" 
+                      dir="ltr"
+                      className="text-left font-mono"
                       value={newAccountData.phone}
                       onChange={e => setNewAccountData(prev => ({...prev, phone: e.target.value}))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="secondary_phone">رقم هاتف إضافي (اختياري)</Label>
+                    <Label htmlFor="secondary_phone" className="text-right block">رقم هاتف إضافي (اختياري)</Label>
                     <Input 
                       id="secondary_phone" 
+                      dir="ltr"
+                      className="text-left font-mono"
                       value={newAccountData.secondary_phone}
                       onChange={e => setNewAccountData(prev => ({...prev, secondary_phone: e.target.value}))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="country">البلد / المدينة</Label>
+                    <Label htmlFor="country" className="text-right block">البلد / المدينة</Label>
                     <Input 
                       id="country" 
+                      className="text-right"
                       value={newAccountData.country}
                       placeholder="مثال: فلسطين - جنين"
                       onChange={e => setNewAccountData(prev => ({...prev, country: e.target.value}))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">كلمة المرور</Label>
+                    <Label htmlFor="password" className="text-right block">كلمة المرور *</Label>
                     <div className="flex gap-2">
                       <Input 
                         id="password" 
                         type="text" 
                         required 
                         dir="ltr"
+                        className="text-left font-mono"
                         value={newAccountData.password}
                         onChange={e => setNewAccountData(prev => ({...prev, password: e.target.value}))}
                       />
-                      <Button type="button" variant="outline" onClick={generatePassword}>
+                      <Button type="button" variant="outline" onClick={generatePassword} title="توليد كلمة مرور عشوائية">
                         <RefreshCw className="h-4 w-4" />
                       </Button>
                     </div>
@@ -374,30 +386,30 @@ export default function AdminIndex() {
                   </Button>
                 </form>
               ) : (
-                <div className="space-y-6 py-4">
+                <div className="space-y-6 py-4 text-right">
                   <div className="flex flex-col items-center justify-center text-green-600 gap-2 mb-4">
                     <CheckCircle2 className="h-12 w-12" />
                     <h3 className="text-xl font-bold">تم إنشاء الحساب بنجاح!</h3>
                   </div>
                   
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm mb-4">
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm mb-4 text-right">
                     ⚠️ <strong>هام:</strong> احفظ هذه البيانات الآن، لن تظهر مرة أخرى.
                   </div>
 
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>البريد الإلكتروني</Label>
+                      <Label className="text-right block">البريد الإلكتروني</Label>
                       <div className="flex gap-2">
-                        <Input value={createdCredentials.email} readOnly dir="ltr" />
+                        <Input value={createdCredentials.email} readOnly dir="ltr" className="text-left font-mono" />
                         <Button variant="outline" onClick={() => copyToClipboard(createdCredentials.email, "البريد الإلكتروني")}>
                           <Copy className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>كلمة المرور</Label>
+                      <Label className="text-right block">كلمة المرور</Label>
                       <div className="flex gap-2">
-                        <Input value={createdCredentials.password} readOnly dir="ltr" />
+                        <Input value={createdCredentials.password} readOnly dir="ltr" className="text-left font-mono" />
                         <Button variant="outline" onClick={() => copyToClipboard(createdCredentials.password, "كلمة المرور")}>
                           <Copy className="h-4 w-4" />
                         </Button>
@@ -415,58 +427,62 @@ export default function AdminIndex() {
               )}
             </DialogContent>
           </Dialog>
-          <Button variant="outline" onClick={() => navigate("/dashboard")}>
-            العودة للرئيسية
+          <Button variant="outline" onClick={() => navigate("/dashboard")} className="gap-2">
+            <span>العودة للرئيسية</span>
           </Button>
         </div>
       </div>
 
       {/* Global Settings */}
-      <Card>
+      <Card className="text-right">
         <CardHeader>
-          <CardTitle className="text-right">إعدادات النظام العالمية</CardTitle>
+          <CardTitle className="text-right text-lg">إعدادات النظام العامة</CardTitle>
         </CardHeader>
         <CardContent className="text-right">
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">رابط التواصل العام (زر اطلب اشتراكك)</label>
+                <label className="text-sm font-medium block text-right">رابط التواصل العام (زر اطلب اشتراكك)</label>
                 <Input
                   type="text"
                   value={contactLink}
                   onChange={(e) => setContactLink(e.target.value)}
                   placeholder="https://wa.me/..."
                   dir="ltr"
+                  className="text-left font-mono"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">البريد الإلكتروني للدعم</label>
+                <label className="text-sm font-medium block text-right">البريد الإلكتروني للدعم</label>
                 <Input
                   type="email"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   placeholder="email@example.com"
                   dir="ltr"
+                  className="text-left font-mono"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">رقم الهاتف للتواصل</label>
+                <label className="text-sm font-medium block text-right">رقم الهاتف للتواصل</label>
                 <Input
                   type="text"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
                   placeholder="05xxxxxxx"
                   dir="ltr"
+                  className="text-left font-mono"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">رقم واتساب (مع رمز الدولة)</label>
+                <label className="text-sm font-medium block text-right">رقم واتساب (مع رمز الدولة)</label>
                 <Input
                   type="text"
                   value={contactWhatsapp}
                   onChange={(e) => setContactWhatsapp(e.target.value)}
                   placeholder="+972xxxxxxxxx"
                   dir="ltr"
+                  className="text-left font-mono"
                 />
               </div>
             </div>
@@ -482,68 +498,71 @@ export default function AdminIndex() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي المعاصر</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">إجمالي المعاصر</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             <div className="text-2xl font-bold">{stats.totalMills}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               {stats.newThisWeek} جديد هذا الأسبوع
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">معاصر نشطة</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">معاصر نشطة</CardTitle>
             <CalendarCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             <div className="text-2xl font-bold">{stats.activeMills}</div>
-            <p className="text-xs text-muted-foreground">بمواسم مفتوحة حالياً</p>
+            <p className="text-xs text-muted-foreground mt-1">بمواسم مفتوحة حالياً</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الفواتير</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">إجمالي الفواتير</CardTitle>
             <Receipt className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             <div className="text-2xl font-bold">{stats.totalInvoices}</div>
+            <p className="text-xs text-muted-foreground mt-1">فاتورة صادرة</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الزيت المعالج</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">إجمالي الزيت المعالج</CardTitle>
             <Droplets className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             <div className="text-2xl font-bold">{stats.totalOil.toLocaleString()} كغم</div>
+            <p className="text-xs text-muted-foreground mt-1">إنتاج إجمالي</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">تسجيلات الشهر</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">تسجيلات الشهر</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-right">
             <div className="text-2xl font-bold">{stats.newThisMonth}</div>
+            <p className="text-xs text-muted-foreground mt-1">معصرة مسجلة</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Mills Table */}
-      <Card>
+      <Card className="text-right">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>كل المعاصر</CardTitle>
+          <CardTitle className="text-right text-lg">سجل المعاصر المشتركة</CardTitle>
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] text-right" dir="rtl">
                 <SelectValue placeholder="تصفية حسب الحالة" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent dir="rtl" className="text-right">
                 <SelectItem value="all">كل الحالات</SelectItem>
                 <SelectItem value="active">نشط</SelectItem>
                 <SelectItem value="pending">قيد الانتظار</SelectItem>
@@ -553,7 +572,7 @@ export default function AdminIndex() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table dir="rtl">
             <TableHeader>
               <TableRow>
                 <TableHead className="text-right">اسم المعصرة</TableHead>
@@ -569,9 +588,9 @@ export default function AdminIndex() {
             <TableBody>
               {filteredMills.map((mill) => (
                 <TableRow key={mill.id}>
-                  <TableCell className="font-bold text-foreground">{mill.millName}</TableCell>
-                  <TableCell className="font-medium text-muted-foreground">{mill.ownerName}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-bold text-foreground text-right">{mill.millName}</TableCell>
+                  <TableCell className="font-medium text-muted-foreground text-right">{mill.ownerName}</TableCell>
+                  <TableCell className="text-right">
                     <div className="text-xs">
                       <span className="font-medium text-foreground">{mill.millLocation}</span>
                       <span className="text-muted-foreground me-1"> ({mill.country})</span>
@@ -581,12 +600,12 @@ export default function AdminIndex() {
                     <div>{mill.phone}</div>
                     {mill.secondaryPhone && <div className="text-muted-foreground text-[10px]">{mill.secondaryPhone}</div>}
                   </TableCell>
-                  <TableCell className="text-xs">{new Date(mill.createdAt).toLocaleDateString("ar-EG")}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-xs text-right">{new Date(mill.createdAt).toLocaleDateString("ar-EG")}</TableCell>
+                  <TableCell className="text-right">
                     {getStatusBadge(mill.subscriptionStatus)}
                   </TableCell>
-                  <TableCell className="text-xs font-semibold">{mill.invoiceCount}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-xs font-semibold text-right">{mill.invoiceCount}</TableCell>
+                  <TableCell className="text-right">
                     <Button 
                       variant="outline" 
                       size="sm"
