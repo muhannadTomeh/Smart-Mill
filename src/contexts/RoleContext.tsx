@@ -24,7 +24,7 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
     let isMounted = true;
 
     const checkRole = async (userId: string) => {
-      // Check for employee session in local storage first
+      // 1. Check for legacy employee session in local storage first
       const employeeOwnerId = localStorage.getItem('employee_owner_id');
       if (employeeOwnerId) {
         if (isMounted) {
@@ -36,9 +36,24 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
       }
 
       try {
-        let adminStatus = false;
+        // 2. Check if this user is a sub-account / cashier employee of a mill
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('parent_mill_id')
+          .eq('user_id', userId)
+          .maybeSingle();
 
-        // 1. Try RPC check
+        if (profileRow?.parent_mill_id) {
+          if (isMounted) {
+            setIsEmployee(true);
+            setIsAdmin(false);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // 3. Check for Admin role (RPC or Table)
+        let adminStatus = false;
         const { data: rpcData, error: rpcError } = await supabase.rpc('has_role', {
           _user_id: userId,
           _role: 'platform_admin'
@@ -47,7 +62,6 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
         if (!rpcError && rpcData === true) {
           adminStatus = true;
         } else {
-          // 2. Direct table query fallback
           const { data: roleRow } = await supabase
             .from('user_roles')
             .select('role')

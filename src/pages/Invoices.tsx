@@ -51,12 +51,14 @@ const paymentLabel = (type: string) => {
 };
 
 const Invoices = () => {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
   const { refetch: refetchInventory } = useInventory();
   const location = useLocation();
   const { toast } = useToast();
+
+  const targetUserId = effectiveUserId || user?.id;
 
   const [invoiceData, setInvoiceData] = useState({
     customerName: "",
@@ -83,12 +85,12 @@ const Invoices = () => {
   }, [location.state]);
 
   useEffect(() => {
-    if (user) {
+    if (targetUserId && activeSeason) {
       fetchInvoices();
       fetchQueueCustomers();
       fetchContainerTypes();
     }
-  }, [user]);
+  }, [targetUserId, activeSeason]);
 
   // Auto-calculate payment methods whenever oil or containers change
   useEffect(() => {
@@ -114,11 +116,12 @@ const Invoices = () => {
   }, [invoiceData.oilProduced, containerCounts, settings]);
 
   const fetchContainerTypes = async () => {
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase
       .from("container_types")
       .select("*")
-      .eq("user_id", user!.id)
-      .eq("season_id", activeSeason!.id)
+      .eq("user_id", targetUserId)
+      .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: true });
     const types = (data as ContainerType[]) || [];
     setContainerTypes(types);
@@ -132,22 +135,24 @@ const Invoices = () => {
   };
 
   const fetchQueueCustomers = async () => {
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase
       .from("queue")
       .select("id, name, phone, position")
-      .eq("user_id", user!.id)
-      .eq("season_id", activeSeason!.id)
+      .eq("user_id", targetUserId)
+      .eq("season_id", activeSeason.id)
       .eq("status", "waiting")
       .order("position", { ascending: true });
     setQueueCustomers(data || []);
   };
 
   const fetchInvoices = async () => {
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase
       .from("invoices")
       .select("*")
-      .eq("user_id", user!.id)
-      .eq("season_id", activeSeason!.id)
+      .eq("user_id", targetUserId)
+      .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: false });
     setInvoices((data as InvoiceRecord[]) || []);
   };
@@ -183,7 +188,7 @@ const Invoices = () => {
     const { data: existing } = await supabase
       .from("customers")
       .select("id")
-      .eq("user_id", user!.id)
+      .eq("user_id", targetUserId!)
       .eq("season_id", activeSeason!.id)
       .eq("name", invoiceData.customerName)
       .maybeSingle();
@@ -193,7 +198,7 @@ const Invoices = () => {
     } else {
       const { data: newCust } = await supabase
         .from("customers")
-        .insert({ user_id: user!.id, season_id: activeSeason!.id, name: invoiceData.customerName, phone: invoiceData.customerPhone || null })
+        .insert({ user_id: targetUserId!, season_id: activeSeason!.id, name: invoiceData.customerName, phone: invoiceData.customerPhone || null })
         .select("id")
         .single();
       if (newCust) customerId = newCust.id;

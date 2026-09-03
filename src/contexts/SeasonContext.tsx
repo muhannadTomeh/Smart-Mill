@@ -40,25 +40,27 @@ const SeasonContext = createContext<SeasonContextType>({
 export const useSeason = () => useContext(SeasonContext);
 
 export const SeasonProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const targetUserId = effectiveUserId || user?.id;
+
   useEffect(() => {
-    if (user) {
+    if (targetUserId) {
       fetchSeasons();
     } else {
       setSeasons([]);
       setLoading(false);
     }
-  }, [user]);
+  }, [targetUserId]);
 
   const fetchSeasons = async () => {
-    if (!user) return;
+    if (!targetUserId) return;
     const { data } = await supabase
       .from("seasons")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .order("created_at", { ascending: false });
     setSeasons((data as Season[]) || []);
     setLoading(false);

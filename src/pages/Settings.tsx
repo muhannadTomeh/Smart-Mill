@@ -9,7 +9,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings as SettingsIcon, Save, Plus, Trash2, Key, Link as LinkIcon, LogOut, ShieldCheck, Building2, MapPin, User, Phone, Globe } from "lucide-react";
+import { Settings as SettingsIcon, Save, Plus, Trash2, Key, Link as LinkIcon, LogOut, ShieldCheck, Building2, MapPin, User, Phone, Globe, UserCheck } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
 import { useToast } from "@/hooks/use-toast";
@@ -78,9 +78,13 @@ export default function Settings() {
   const [expenseDeleteTarget, setExpenseDeleteTarget] = useState<{ id: string, name: string } | null>(null);
   const [reportPin, setReportPin] = useState("");
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
-  const [employeePin, setEmployeePin] = useState("");
-  const [isUpdatingEmployeePin, setIsUpdatingEmployeePin] = useState(false);
-  const [employeeLoginUrl, setEmployeeLoginUrl] = useState("");
+  
+  // Cashier Sub-Accounts
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({ name: "", email: "", password: "" });
+  const [creatingEmployee, setCreatingEmployee] = useState(false);
+
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
@@ -281,24 +285,62 @@ export default function Settings() {
     }
   };
 
-  const updateEmployeePin = async () => {
-    if (!employeePin || employeePin.length < 4) {
-      toast({ title: "خطأ", description: "يجب أن يكون الرمز 4 أرقام على الأقل", variant: "destructive" });
+  const fetchEmployees = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("parent_mill_id", user.id)
+      .order("created_at", { ascending: false });
+    setEmployees(data || []);
+  };
+
+  useEffect(() => {
+    if (user) fetchEmployees();
+  }, [user]);
+
+  const handleCreateEmployee = async () => {
+    if (!newEmployee.name.trim() || !newEmployee.email.trim() || !newEmployee.password.trim()) {
+      toast({ title: "خطأ", description: "يرجى ملء كافة الحقول", variant: "destructive" });
       return;
     }
-    setIsUpdatingEmployeePin(true);
+    if (newEmployee.password.length < 6) {
+      toast({ title: "خطأ", description: "كلمة المرور يجب أن تكون 6 أحرف على الأقل", variant: "destructive" });
+      return;
+    }
+
+    setCreatingEmployee(true);
     try {
-      const { error } = await supabase.rpc("set_employee_pin" as any, {
-        new_pin: employeePin
+      const { error } = await supabase.auth.signUp({
+        email: newEmployee.email.trim(),
+        password: newEmployee.password,
+        options: {
+          data: {
+            display_name: newEmployee.name.trim(),
+            parent_mill_id: user?.id,
+            mill_name: profileForm.mill_name,
+          }
+        }
       });
+
       if (error) throw error;
-      toast({ title: "تم التحديث", description: "تم تحديث رمز دخول الموظف" });
-      setEmployeePin("");
-    } catch (error) {
-      console.error("Error:", error);
-      toast({ title: "خطأ", description: "فشل تحديث الرمز", variant: "destructive" });
+
+      toast({
+        title: "تم إنشاء حساب الكاشير",
+        description: `تم إنشاء حساب (${newEmployee.email}) بصلاحيات الطابور والفوترة فقط.`
+      });
+
+      setIsEmployeeModalOpen(false);
+      setNewEmployee({ name: "", email: "", password: "" });
+      fetchEmployees();
+    } catch (err: any) {
+      toast({
+        title: "خطأ في إنشاء الحساب",
+        description: err.message || "تعذر إنشاء الحساب",
+        variant: "destructive"
+      });
     } finally {
-      setIsUpdatingEmployeePin(false);
+      setCreatingEmployee(false);
     }
   };
 
@@ -337,13 +379,6 @@ export default function Settings() {
     } finally {
       setIsUpdatingPassword(false);
     }
-  };
-
-  const generateEmployeeUrl = () => {
-    if (!user) return;
-    const url = `${window.location.origin}/auth?employee=${user.id}`;
-    setEmployeeLoginUrl(url);
-    toast({ title: "تم التوليد", description: "تم توليد رابط دخول الموظف" });
   };
 
   const copyToClipboard = (text: string) => {
@@ -647,50 +682,84 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>دخول الموظفين (Employee Login)</CardTitle>
-          <CardDescription>إنشاء رمز ورابط لدخول الموظفين بصلاحيات محدودة (الطابور والفواتير فقط)</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" />
+              حسابات موظفي الكاشير (Cashier Sub-Accounts)
+            </CardTitle>
+            <CardDescription>
+              إنشاء حسابات دخول مستقلة لموظفي المعصرة (اسم مستخدم وكلمة مرور) بصلاحيات محددة في: الطابور، الفوترة، وطباعة الفواتير فقط.
+            </CardDescription>
+          </div>
+
+          <Dialog open={isEmployeeModalOpen} onOpenChange={setIsEmployeeModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-1.5" size="sm">
+                <Plus className="h-4 w-4" />
+                إضافة كاشير جديد
+              </Button>
+            </DialogTrigger>
+            <DialogContent dir="rtl">
+              <DialogHeader>
+                <DialogTitle>إنشاء حساب موظف / كاشير جديد</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-3">
+                <div className="space-y-2">
+                  <Label>اسم الموظف *</Label>
+                  <Input 
+                    value={newEmployee.name} 
+                    onChange={(e) => setNewEmployee(p => ({ ...p, name: e.target.value }))} 
+                    placeholder="مثال: أحمد الكاشير" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>البريد الإلكتروني / اسم الدخول *</Label>
+                  <Input 
+                    type="email"
+                    value={newEmployee.email} 
+                    onChange={(e) => setNewEmployee(p => ({ ...p, email: e.target.value }))} 
+                    placeholder="cashier@example.com" 
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>كلمة المرور *</Label>
+                  <Input 
+                    type="password"
+                    value={newEmployee.password} 
+                    onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))} 
+                    placeholder="6 أحرف أو أرقام على الأقل" 
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+              <Button onClick={handleCreateEmployee} disabled={creatingEmployee} className="w-full">
+                {creatingEmployee ? "جارٍ إنشاء الحساب..." : "تأكيد وإنشاء حساب الكاشير"}
+              </Button>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>تعيين رمز دخول جديد (PIN)</Label>
-              <div className="flex gap-2">
-                <Input 
-                  type="password" 
-                  maxLength={6} 
-                  value={employeePin} 
-                  onChange={(e) => setEmployeePin(e.target.value.replace(/\D/g, ""))} 
-                  placeholder="أدخل رمز الموظف..."
-                  className="max-w-[200px]"
-                />
-                <Button onClick={updateEmployeePin} disabled={isUpdatingEmployeePin} size="sm">
-                  {isUpdatingEmployeePin ? "جارٍ التحديث..." : "تحديث الرمز"}
-                </Button>
+        <CardContent>
+          <div className="space-y-3">
+            {employees.map((emp: any) => (
+              <div key={emp.id} className="flex items-center justify-between p-3 border rounded-xl bg-muted/20">
+                <div className="space-y-0.5">
+                  <p className="font-bold text-sm text-foreground">{emp.display_name || "موظف كاشير"}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{emp.phone || emp.user_id.substring(0, 8)}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium">
+                    طابور + فواتير فقط
+                  </span>
+                </div>
               </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label>رابط دخول الموظف</Label>
-              <div className="flex flex-col gap-3">
-                <Button onClick={generateEmployeeUrl} variant="outline" className="w-fit gap-2">
-                  <LinkIcon className="h-4 w-4" />
-                  توليد رابط الدخول
-                </Button>
-                
-                {employeeLoginUrl && (
-                  <div className="p-3 bg-muted rounded-lg flex items-center justify-between gap-4">
-                    <code className="text-xs break-all text-primary font-mono">{employeeLoginUrl}</code>
-                    <Button size="sm" variant="secondary" onClick={() => copyToClipboard(employeeLoginUrl)}>نسخ</Button>
-                  </div>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                شارك هذا الرابط مع الموظف ليتمكن من الدخول باستخدام الرمز (PIN) الذي حددته أعلاه.
+            ))}
+            {employees.length === 0 && (
+              <p className="text-xs text-center text-muted-foreground py-4">
+                لا توجد حسابات كاشير مسجلة بعد. اضغط "إضافة كاشير جديد" لإنشاء حساب مستقل لموظفك.
               </p>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>

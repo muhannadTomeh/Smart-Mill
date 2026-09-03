@@ -12,6 +12,7 @@ export interface Profile {
   country?: string | null;
   mill_name?: string | null;
   mill_location?: string | null;
+  parent_mill_id?: string | null;
   subscription_status?: string | null;
   subscription_notes?: string | null;
   monthly_fee?: number | null;
@@ -23,6 +24,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  effectiveUserId: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -32,6 +34,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   profile: null,
+  effectiveUserId: null,
   loading: true,
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -54,6 +57,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .maybeSingle();
 
       if (data && !error) {
+        if (data.parent_mill_id) {
+          // Fetch parent mill's branding details for the employee
+          const { data: parentProfile } = await supabase
+            .from('profiles')
+            .select('mill_name, mill_location, country')
+            .eq('user_id', data.parent_mill_id)
+            .maybeSingle();
+          if (parentProfile) {
+            data.mill_name = parentProfile.mill_name || data.mill_name;
+            data.mill_location = parentProfile.mill_location || data.mill_location;
+            data.country = parentProfile.country || data.country;
+          }
+        }
         setProfile(data);
       } else {
         // Fallback to user metadata if database profile is not yet ready
@@ -64,6 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           secondary_phone: currentUser.user_metadata?.secondary_phone,
           country: currentUser.user_metadata?.country || "فلسطين",
           mill_location: currentUser.user_metadata?.mill_location,
+          parent_mill_id: currentUser.user_metadata?.parent_mill_id,
         });
       }
     } catch (err) {
@@ -114,8 +131,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
   };
 
+  const effectiveUserId = profile?.parent_mill_id || user?.id || null;
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, effectiveUserId, loading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

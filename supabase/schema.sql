@@ -39,6 +39,7 @@ CREATE TABLE public.profiles (
   country TEXT,
   mill_name TEXT,
   mill_location TEXT,
+  parent_mill_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   subscription_status public.subscription_status DEFAULT 'pending',
   subscription_notes TEXT,
   monthly_fee NUMERIC,
@@ -456,7 +457,8 @@ BEGIN
     phone,
     secondary_phone,
     country,
-    mill_location
+    mill_location,
+    parent_mill_id
   )
   VALUES (
     NEW.id, 
@@ -465,7 +467,8 @@ BEGIN
     NEW.raw_user_meta_data->>'phone',
     NEW.raw_user_meta_data->>'secondary_phone',
     COALESCE(NEW.raw_user_meta_data->>'country', 'فلسطين'),
-    NEW.raw_user_meta_data->>'mill_location'
+    NEW.raw_user_meta_data->>'mill_location',
+    (NEW.raw_user_meta_data->>'parent_mill_id')::UUID
   )
   ON CONFLICT (user_id) DO UPDATE SET
     display_name = EXCLUDED.display_name,
@@ -473,7 +476,8 @@ BEGIN
     phone = COALESCE(EXCLUDED.phone, profiles.phone),
     secondary_phone = COALESCE(EXCLUDED.secondary_phone, profiles.secondary_phone),
     country = COALESCE(EXCLUDED.country, profiles.country),
-    mill_location = COALESCE(EXCLUDED.mill_location, profiles.mill_location);
+    mill_location = COALESCE(EXCLUDED.mill_location, profiles.mill_location),
+    parent_mill_id = COALESCE(EXCLUDED.parent_mill_id, profiles.parent_mill_id);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

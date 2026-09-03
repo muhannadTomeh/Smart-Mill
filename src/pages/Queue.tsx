@@ -46,20 +46,21 @@ const Queue = () => {
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [selectedForInvoice, setSelectedForInvoice] = useState<QueueItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QueueItem | null>(null);
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
   const { activeSeason } = useSeason();
+  const targetUserId = effectiveUserId || user?.id;
 
   const processing = allItems.filter((i) => i.status === "processing");
   const waiting = allItems.filter((i) => i.status === "waiting");
   const completed = allItems.filter((i) => i.status === "completed");
 
   useEffect(() => {
-    if (user && activeSeason) fetchQueue();
-  }, [user, activeSeason]);
+    if (targetUserId && activeSeason) fetchQueue();
+  }, [targetUserId, activeSeason]);
 
   // Realtime subscription
   useEffect(() => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const channel = supabase
       .channel("queue-live")
       .on(
@@ -71,14 +72,14 @@ const Queue = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, activeSeason]);
+  }, [targetUserId, activeSeason]);
 
   const fetchQueue = async () => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase
       .from("queue")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
       .order("position", { ascending: true });
     setAllItems((data as QueueItem[]) || []);
@@ -91,7 +92,7 @@ const Queue = () => {
       return;
     }
     const { error } = await supabase.from("queue").insert({
-      user_id: user!.id,
+      user_id: targetUserId!,
       season_id: activeSeason!.id,
       name: newCustomer.name,
       phone: newCustomer.phone || null,
