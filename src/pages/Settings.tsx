@@ -692,11 +692,18 @@ export default function Settings() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open(`/display/${activeSeason.id}`, "_blank")}
+                  asChild
                   className="gap-1.5 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                 >
-                  <ExternalLink className="h-4 w-4" />
-                  معاينة الشاشة
+                  <a
+                    href={`/display/${activeSeason.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center"
+                  >
+                    <ExternalLink className="h-4 w-4 me-1" />
+                    معاينة الشاشة
+                  </a>
                 </Button>
                 <Button
                   variant="outline"

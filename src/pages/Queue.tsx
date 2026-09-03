@@ -34,13 +34,22 @@ interface QueueItem {
   started_at?: string | null;
 }
 
-export function parseEstimatedMinutes(item: { estimated_minutes?: number | null; notes?: string | null }): number | null {
+export function parseEstimatedMinutes(item: { estimated_minutes?: number | null; notes?: string | null; id?: string }): number | null {
   if (item.estimated_minutes != null && !isNaN(Number(item.estimated_minutes))) {
     return Number(item.estimated_minutes);
   }
-  if (!item.notes) return null;
-  const match = item.notes.match(/\[(?:وقت_تقديري|الوقت|est):?\s*(\d+)/i);
-  return match ? parseInt(match[1]) : null;
+  if (item.notes) {
+    const match = item.notes.match(/\[(?:وقت_تقديري|الوقت|est):?\s*(\d+)/i);
+    if (match) return parseInt(match[1]);
+  }
+  if (item.id) {
+    const local = localStorage.getItem(`queue_est_${item.id}`);
+    if (local) {
+      const n = parseInt(local, 10);
+      if (!isNaN(n) && n > 0) return n;
+    }
+  }
+  return null;
 }
 
 export function parseStartedAt(item: { started_at?: string | null; notes?: string | null; id?: string }): number | null {
@@ -70,7 +79,14 @@ export function parseStartedAt(item: { started_at?: string | null; notes?: strin
 export function getRemainingSeconds(item: QueueItem, nowMs: number): number | null {
   const estMin = parseEstimatedMinutes(item);
   if (!estMin || estMin <= 0) return null;
-  const startedAt = parseStartedAt(item) || new Date(item.created_at).getTime();
+  let startedAt = parseStartedAt(item);
+  if (!startedAt && item.id) {
+    if (item.status === "processing") {
+      startedAt = Date.now();
+      localStorage.setItem(`processing_started_${item.id}`, new Date(startedAt).toISOString());
+    }
+  }
+  if (!startedAt) return null;
   const elapsed = Math.max(0, Math.floor((nowMs - startedAt) / 1000));
   return Math.max(0, estMin * 60 - elapsed);
 }
@@ -138,8 +154,12 @@ const Queue = () => {
       .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
       .order("position", { ascending: true });
-    setAllItems((data as QueueItem[]) || []);
+    const items = (data as QueueItem[]) || [];
+    setAllItems(items);
     setLoading(false);
+    try {
+      localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(items));
+    } catch {}
   };
 
   const addToQueue = async () => {
@@ -149,35 +169,40 @@ const Queue = () => {
     }
 
     const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes) : null;
+    const fallbackNotes = estMin 
+      ? `[وقت_تقديري:${estMin}] ${newCustomer.notes?.trim() || ""}`.trim()
+      : (newCustomer.notes?.trim() || null);
+
     const basePayload: any = {
       user_id: targetUserId!,
       season_id: activeSeason!.id,
       name: newCustomer.name.trim(),
       phone: newCustomer.phone?.trim() || null,
       bags: parseInt(newCustomer.bags),
-      notes: newCustomer.notes?.trim() || null,
+      notes: fallbackNotes,
       status: "waiting",
     };
 
     // Try inserting with estimated_minutes column
-    let { error } = await supabase.from("queue").insert({
+    let { data: insertedData, error } = await supabase.from("queue").insert({
       ...basePayload,
       ...(estMin ? { estimated_minutes: estMin } : {}),
-    });
+    }).select().single();
 
     // Fallback if estimated_minutes column is not yet migrated in Supabase
     if (error && (error.message?.includes("estimated_minutes") || error.code === "PGRST204")) {
-      const fallbackNotes = estMin 
-        ? `[وقت_تقديري:${estMin}] ${basePayload.notes || ""}`.trim()
-        : basePayload.notes;
       const retry = await supabase.from("queue").insert({
         ...basePayload,
         notes: fallbackNotes || null,
-      });
+      }).select().single();
       error = retry.error;
+      insertedData = retry.data;
     }
 
     if (!error) {
+      if (insertedData?.id && estMin) {
+        localStorage.setItem(`queue_est_${insertedData.id}`, String(estMin));
+      }
       setNewCustomer({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
       setShowExtra(false);
       setDialogOpen(false);
@@ -199,7 +224,15 @@ const Queue = () => {
 
   const startProcessing = async (id: string) => {
     const startedAt = new Date().toISOString();
-    setAllItems((prev) => prev.map((i) => (i.id === id ? { ...i, status: "processing", started_at: startedAt } : i)));
+    setAllItems((prev) => {
+      const updated = prev.map((i) => (i.id === id ? { ...i, status: "processing", started_at: startedAt } : i));
+      if (activeSeason) {
+        try {
+          localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
 
     // Save locally for instant cross-tab sync
     localStorage.setItem(`processing_started_${id}`, startedAt);
@@ -229,12 +262,6 @@ const Queue = () => {
   const openInvoiceFor = (customer: QueueItem) => {
     setSelectedForInvoice(customer);
     setInvoiceSheetOpen(true);
-  };
-
-  const openDisplay = () => {
-    if (activeSeason) {
-      window.open(`/display/${activeSeason.id}`, "_blank");
-    }
   };
 
   return (
@@ -334,9 +361,16 @@ const Queue = () => {
             </DialogContent>
           </Dialog>
           {activeSeason && (
-            <Button variant="outline" onClick={openDisplay}>
-              <Monitor className="h-4 w-4 me-2" />
-              شاشة العرض
+            <Button variant="outline" asChild>
+              <a
+                href={`/display/${activeSeason.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center"
+              >
+                <Monitor className="h-4 w-4 me-2" />
+                شاشة العرض
+              </a>
             </Button>
           )}
         </div>

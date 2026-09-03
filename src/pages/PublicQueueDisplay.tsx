@@ -72,38 +72,67 @@ export default function PublicQueueDisplay() {
     if (!seasonId) return;
 
     // Load from local storage cache first for instant response
+    let localItems: any[] = [];
     try {
-      const cached = localStorage.getItem(`display_settings_${seasonId}`);
-      if (cached) {
-        setDisplaySettings({ ...defaultDisplaySettings, ...JSON.parse(cached) });
+      const cachedSettings = localStorage.getItem(`display_settings_${seasonId}`);
+      if (cachedSettings) {
+        setDisplaySettings({ ...defaultDisplaySettings, ...JSON.parse(cachedSettings) });
+      }
+      const cachedQueue = localStorage.getItem(`active_queue_${seasonId}`);
+      if (cachedQueue) {
+        localItems = JSON.parse(cachedQueue);
       }
     } catch {}
 
-    const [queueRes, seasonRes] = await Promise.all([
+    // Multi-source fetching: Try direct select first (contains all columns if accessible), fallback to RPC
+    let rawQueue: any[] = [];
+    const [tableRes, queueRes, seasonRes] = await Promise.all([
+      supabase
+        .from("queue")
+        .select("*")
+        .eq("season_id", seasonId)
+        .order("position", { ascending: true }),
       supabase.rpc("get_public_queue", { p_season_id: seasonId }),
       supabase.rpc("get_public_season_display", { p_season_id: seasonId }),
     ]);
 
+    if (tableRes.data && Array.isArray(tableRes.data) && tableRes.data.length > 0) {
+      rawQueue = tableRes.data;
+    } else if (queueRes.data && Array.isArray(queueRes.data)) {
+      rawQueue = queueRes.data;
+    } else if (localItems.length > 0) {
+      rawQueue = localItems;
+    }
+
     // Map queue items and ensure estimated_minutes & started_at are extracted accurately
-    const rawQueue = (queueRes.data as any[]) || [];
     const mappedItems: QueueItem[] = rawQueue.map((i) => {
+      // Find any cached metadata for this item
+      const localMatch = localItems.find((l) => l.id === i.id);
+      const merged = { ...localMatch, ...i };
+
       const item: QueueItem = {
-        id: i.id,
-        name: i.name,
-        position: i.queue_position ?? i.position,
-        status: i.status,
-        bags: i.bags,
-        notes: i.notes || null,
-        started_at: i.started_at || null,
-        estimated_minutes: parseEstimatedMinutes(i),
+        id: merged.id,
+        name: merged.name,
+        position: merged.queue_position ?? merged.position,
+        status: merged.status,
+        bags: merged.bags,
+        notes: merged.notes || null,
+        started_at: merged.started_at || null,
+        estimated_minutes: parseEstimatedMinutes(merged),
       };
+
       // If it's processing and has no started_at stored, record locally so timer starts immediately
-      if (item.status === "processing" && !parseStartedAt(item)) {
-        const nowIso = new Date().toISOString();
-        localStorage.setItem(`processing_started_${item.id}`, nowIso);
+      if (item.status === "processing") {
+        const existingStart = parseStartedAt(item);
+        if (!existingStart && item.id) {
+          const nowIso = new Date().toISOString();
+          localStorage.setItem(`processing_started_${item.id}`, nowIso);
+          item.started_at = nowIso;
+        }
       }
       return item;
     });
+
     setItems(mappedItems);
 
     const seasonRow = (seasonRes.data as any[] | null)?.[0];
@@ -139,8 +168,25 @@ export default function PublicQueueDisplay() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchData, 4000);
+
+    // Cross-tab instant synchronization
+    const handleStorage = (e: StorageEvent) => {
+      if (
+        e.key?.includes("display_settings") ||
+        e.key?.includes("active_queue") ||
+        e.key?.includes("processing_started") ||
+        e.key?.includes("queue_est")
+      ) {
+        fetchData();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("storage", handleStorage);
+    };
   }, [seasonId]);
 
   // Realtime changes on both queue and seasons table
@@ -192,7 +238,20 @@ export default function PublicQueueDisplay() {
   let remainingText = "";
 
   if (currentItem && currentEstMin && currentEstMin > 0) {
-    const startMs = currentStartedAt || nowMs;
+    let startMs = currentStartedAt;
+    if (!startMs && currentItem.id) {
+      const localKey = `processing_started_${currentItem.id}`;
+      const saved = localStorage.getItem(localKey);
+      if (saved) {
+        const parsed = new Date(saved).getTime();
+        if (!isNaN(parsed)) startMs = parsed;
+      }
+      if (!startMs) {
+        startMs = Date.now();
+        localStorage.setItem(localKey, new Date(startMs).toISOString());
+      }
+    }
+    startMs = startMs || nowMs;
     const totalSec = currentEstMin * 60;
     const elapsedSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
     currentRemainingSeconds = Math.max(0, totalSec - elapsedSec);
