@@ -317,23 +317,37 @@ export default function MillDetails() {
 
     setCreatingEmployee(true);
     try {
-      // Username is prefixed with mill_code to ensure global uniqueness
-      const email = normalizeUsernameToEmail(newEmployee.username, millCode);
-      const { error } = await supabase.auth.signUp({
-        email,
-        password: newEmployee.password,
-        options: {
-          data: {
-            display_name: newEmployee.name.trim(),
-            username: newEmployee.username.trim(),
-            parent_mill_id: millId,
-            mill_name: millData?.profile?.mill_name,
-            mill_code: millCode.trim(),
-          }
-        }
+      // Call admin_create_cashier RPC to create account without sending confirmation email (bypassing email rate limit)
+      const { data, error } = await supabase.rpc('admin_create_cashier', {
+        p_parent_mill_id: millId,
+        p_display_name: newEmployee.name.trim(),
+        p_username: newEmployee.username.trim(),
+        p_password: newEmployee.password,
+        p_mill_code: millCode.trim()
       });
 
-      if (error) throw error;
+      if (error) {
+        // If the RPC is not yet created in DB, fallback to signUp
+        if (error.message?.includes('admin_create_cashier') || error.message?.includes('function') && error.message?.includes('does not exist')) {
+          const email = normalizeUsernameToEmail(newEmployee.username, millCode);
+          const { error: signUpError } = await supabase.auth.signUp({
+            email,
+            password: newEmployee.password,
+            options: {
+              data: {
+                display_name: newEmployee.name.trim(),
+                username: newEmployee.username.trim(),
+                parent_mill_id: millId,
+                mill_name: millData?.profile?.mill_name,
+                mill_code: millCode.trim(),
+              }
+            }
+          });
+          if (signUpError) throw signUpError;
+        } else {
+          throw error;
+        }
+      }
 
       toast({
         title: "تم إنشاء حساب الكاشير بنجاح",
@@ -346,7 +360,9 @@ export default function MillDetails() {
     } catch (err: any) {
       toast({
         title: "خطأ في إنشاء الحساب",
-        description: err.message?.includes("already registered") ? "اسم المستخدم هذا موجود مسبقاً في هذه المعصرة" : err.message || "تعذر إنشاء حساب الكاشير",
+        description: err.message?.includes("already registered") || err.message?.includes("مستخدم مسبقاً") 
+          ? "اسم المستخدم هذا موجود مسبقاً في هذه المعصرة" 
+          : err.message || "تعذر إنشاء حساب الكاشير",
         variant: "destructive"
       });
     } finally {
