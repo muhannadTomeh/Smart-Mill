@@ -240,8 +240,43 @@ const ProtectedLayout = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  const { isAdmin, isEmployee } = useRole();
+  const { isAdmin, isEmployee, loading: roleLoading } = useRole();
 
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">جارٍ التحميل...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Admin layout: never enters SubscriptionProvider or SubscriptionGate
+  if (isAdmin) {
+    return (
+      <SeasonProvider>
+        <SidebarProvider>
+          <div className="min-h-screen flex w-full bg-background" dir="rtl">
+            <AppSidebar />
+            <div className="flex-1 flex flex-col min-w-0">
+              <HeaderBar />
+              <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+                <Routes>
+                  <Route path="/admin" element={<AdminIndex />} />
+                  <Route path="/admin/mill/:id" element={<MillDetails />} />
+                  <Route path="*" element={<Navigate to="/admin" replace />} />
+                </Routes>
+              </main>
+            </div>
+          </div>
+        </SidebarProvider>
+      </SeasonProvider>
+    );
+  }
+
+  // Regular Mill Owners & Cashier Employees
   return (
     <SubscriptionProvider>
       <SubscriptionGate>
@@ -253,14 +288,7 @@ const ProtectedLayout = () => {
                 <HeaderBar />
                 <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
                   <Routes>
-                    {/* Admin Dedicated Routes */}
-                    {isAdmin ? (
-                      <>
-                        <Route path="/admin" element={<AdminIndex />} />
-                        <Route path="/admin/mill/:id" element={<MillDetails />} />
-                        <Route path="*" element={<Navigate to="/admin" replace />} />
-                      </>
-                    ) : !isEmployee ? (
+                    {!isEmployee ? (
                       <>
                         <Route path="/seasons" element={<Seasons />} />
                         <Route path="/seasons/new" element={<SeasonSetup />} />

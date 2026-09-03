@@ -16,9 +16,10 @@ const RoleContext = createContext<RoleContextType>({
 export const useRole = () => useContext(RoleContext);
 
 export const RoleProvider = ({ children }: { children: ReactNode }) => {
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const cachedIsAdmin = typeof window !== 'undefined' && localStorage.getItem('is_platform_admin') === 'true';
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(cachedIsAdmin ? true : null);
   const [isEmployee, setIsEmployee] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(!cachedIsAdmin);
 
   useEffect(() => {
     let isMounted = true;
@@ -74,6 +75,12 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
+        if (adminStatus) {
+          localStorage.setItem('is_platform_admin', 'true');
+        } else {
+          localStorage.removeItem('is_platform_admin');
+        }
+
         if (isMounted) {
           setIsAdmin(adminStatus);
           setIsEmployee(false);
@@ -81,6 +88,7 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (err) {
         console.error("Error checking role:", err);
+        localStorage.removeItem('is_platform_admin');
         if (isMounted) {
           setIsAdmin(false);
           setIsEmployee(false);
@@ -92,6 +100,7 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
     // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session?.user) {
+        localStorage.removeItem('is_platform_admin');
         if (isMounted) {
           setIsAdmin(false);
           setIsEmployee(false);
