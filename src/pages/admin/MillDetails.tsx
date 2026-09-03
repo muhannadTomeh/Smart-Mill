@@ -63,15 +63,48 @@ export default function MillDetails() {
 
   const [resolvedOwnerId, setResolvedOwnerId] = useState<string>(millId || "");
   const [currentMillRecord, setCurrentMillRecord] = useState<any>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Safe Date formatters to prevent RangeError: Invalid time value on any engine
+  const formatDate = (dateStr: any) => {
+    if (!dateStr) return '---';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '---';
+      return d.toLocaleDateString("ar-EG");
+    } catch {
+      return '---';
+    }
+  };
+
+  const formatDateTime = (dateStr: any) => {
+    if (!dateStr) return '---';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '---';
+      return d.toLocaleString("ar-EG");
+    } catch {
+      return '---';
+    }
+  };
+
+  const safeText = (val: any, fallback = '---') => {
+    if (val === null || val === undefined) return fallback;
+    if (typeof val === 'object') {
+      try { return JSON.stringify(val); } catch { return fallback; }
+    }
+    return String(val);
+  };
 
   const fetchData = async () => {
     if (!millId) return;
     setLoading(true);
+    setFetchError(null);
     try {
-      // 1. Resolve mill entity from mills table first
       let resolvedOwner = millId;
       let millObj: any = null;
 
+      // 1. Try finding in mills table
       try {
         const { data: m1 } = await supabase.from("mills").select("*").eq("id", millId).maybeSingle();
         if (m1) {
@@ -91,15 +124,39 @@ export default function MillDetails() {
       setResolvedOwnerId(resolvedOwner);
       setCurrentMillRecord(millObj);
 
-      // Log administrative access in background
-      supabase.rpc('log_admin_access', {
-        target_user_id: resolvedOwner,
-        admin_action: 'viewed_mill_details'
-      }).then().catch(err => console.error("Audit log error:", err));
+      // Log administrative access in background (fire-and-forget)
+      try {
+        supabase.rpc('log_admin_access', {
+          target_user_id: resolvedOwner,
+          admin_action: 'viewed_mill_details'
+        }).then().catch(err => console.error("Audit log error:", err));
+      } catch {}
 
-      // Fetch all required mill records in parallel using Promise.all for super-fast loading
+      // 2. Fetch profile with multiple fallbacks (by user_id, by id, by name)
+      let profile: any = null;
+      try {
+        const { data: pByUser } = await supabase.from("profiles").select("*").eq("user_id", resolvedOwner).limit(1);
+        if (pByUser && pByUser.length > 0) {
+          profile = pByUser[0];
+        } else {
+          const { data: pById } = await supabase.from("profiles").select("*").eq("id", resolvedOwner).limit(1);
+          if (pById && pById.length > 0) {
+            profile = pById[0];
+            resolvedOwner = profile.user_id || resolvedOwner;
+          } else if (millObj?.name) {
+            const { data: pByName } = await supabase.from("profiles").select("*").eq("mill_name", millObj.name).limit(1);
+            if (pByName && pByName.length > 0) {
+              profile = pByName[0];
+              resolvedOwner = profile.user_id || resolvedOwner;
+            }
+          }
+        }
+      } catch (pErr) {
+        console.warn("Profile fetch fallback:", pErr);
+      }
+
+      // 3. Fetch all related records safely
       const [
-        profileRes,
         seasonsRes,
         invoicesRes,
         queueRes,
@@ -109,8 +166,7 @@ export default function MillDetails() {
         inventoryRes,
         paymentsRes
       ] = await Promise.all([
-        supabase.from("profiles").select("*").eq("user_id", resolvedOwner).maybeSingle(),
-        supabase.from("seasons").select("*").eq("user_id", resolvedOwner).eq("status", "active").limit(1),
+        supabase.from("seasons").select("*").eq("user_id", resolvedOwner).limit(5),
         supabase.from("invoices").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
         supabase.from("queue").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
         supabase.from("expenses").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
@@ -119,15 +175,6 @@ export default function MillDetails() {
         supabase.from("inventory").select("*").eq("user_id", resolvedOwner).limit(1),
         supabase.from("subscription_payments").select("*").eq("mill_user_id", resolvedOwner).order("payment_date", { ascending: false })
       ]);
-
-      let profile = profileRes.data || null;
-      // Fallback: if not found by user_id, check by profile id
-      if (!profile) {
-        const { data: pById } = await supabase.from("profiles").select("*").eq("id", resolvedOwner).maybeSingle();
-        if (pById) {
-          profile = pById;
-        }
-      }
 
       const seasons = seasonsRes.data || [];
       const invoices = invoicesRes.data || [];
@@ -153,12 +200,13 @@ export default function MillDetails() {
         }
       }
 
-      const currentSeason = seasons?.[0] || null;
+      // Find active or open season
+      const currentSeason = seasons.find((s: any) => s.status === 'active' || s.status === 'open') || seasons[0] || null;
 
       // Merge membership-based employees with profiles-based employees
       let combinedEmployees = employeesData || [];
       if (membershipsData && membershipsData.length > 0) {
-        const existingIds = new Set(combinedEmployees.map(e => e.user_id));
+        const existingIds = new Set(combinedEmployees.map((e: any) => e.user_id));
         const membershipEmployees = membershipsData
           .filter((m: any) => !existingIds.has(m.user_id))
           .map((m: any) => ({
@@ -172,16 +220,22 @@ export default function MillDetails() {
         combinedEmployees = [...combinedEmployees, ...membershipEmployees];
       }
 
+      // Safe Profile guarantees strings for all required fields
+      const safeProfile = {
+        mill_name: profile?.mill_name || millObj?.name || "معصرة غير مسماة",
+        display_name: profile?.display_name || millObj?.name || "صاحب المعصرة",
+        country: profile?.country || millObj?.country || "فلسطين",
+        mill_location: profile?.mill_location || millObj?.location || "غير محدد",
+        subscription_status: profile?.subscription_status || millObj?.subscription_status || "active",
+        subscription_notes: profile?.subscription_notes || millObj?.subscription_notes || "",
+        monthly_fee: profile?.monthly_fee ?? millObj?.monthly_fee ?? 0,
+        mill_code: profile?.mill_code || millObj?.mill_code || "",
+        phone: profile?.phone || millObj?.phone || "---",
+        secondary_phone: profile?.secondary_phone || millObj?.secondary_phone || null,
+      };
+
       setMillData({
-        profile: profile || {
-          mill_name: millObj?.name,
-          country: millObj?.country,
-          mill_location: millObj?.location,
-          subscription_status: millObj?.subscription_status,
-          subscription_notes: millObj?.subscription_notes,
-          monthly_fee: millObj?.monthly_fee,
-          mill_code: millObj?.mill_code,
-        },
+        profile: safeProfile,
         currentSeason,
         invoices: invoices || [],
         inventory: inventory?.[0] || null
@@ -192,15 +246,12 @@ export default function MillDetails() {
       setEmployees(combinedEmployees);
       setPayments(paymentsData || []);
 
-      const effectiveNotes = millObj?.subscription_notes ?? profile?.subscription_notes ?? "";
-      const effectiveFee = millObj?.monthly_fee ?? profile?.monthly_fee ?? 0;
-      const effectiveCode = millObj?.mill_code ?? profile?.mill_code ?? "";
-
-      setNotes(effectiveNotes);
-      setMonthlyFee(effectiveFee.toString());
-      setMillCode(effectiveCode);
-    } catch (error) {
+      setNotes(safeProfile.subscription_notes);
+      setMonthlyFee(String(safeProfile.monthly_fee || "0"));
+      setMillCode(safeProfile.mill_code);
+    } catch (error: any) {
       console.error("Error fetching mill details:", error);
+      setFetchError(error.message || "حدث خطأ غير متوقع أثناء جلب بيانات المعصرة");
     } finally {
       setLoading(false);
     }
@@ -497,12 +548,41 @@ export default function MillDetails() {
   };
 
   const lastPayment = payments.length > 0 ? payments[0] : null;
-  const monthsSinceLastPayment = lastPayment 
+  const monthsSinceLastPayment = (lastPayment && lastPayment.payment_date)
     ? Math.floor((new Date().getTime() - new Date(lastPayment.payment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44))
     : null;
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">جارٍ تحميل بيانات وسجلات المعصرة...</div>;
-  if (!millData) return <div className="p-8 text-center text-destructive">لم يتم العثور على بيانات المعصرة.</div>;
+
+  if (fetchError || !millData) {
+    return (
+      <div className="p-6 max-w-2xl mx-auto text-right" dir="rtl">
+        <Card className="border-destructive/30 bg-destructive/5 text-right">
+          <CardHeader>
+            <CardTitle className="text-destructive flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5" />
+              <span>تعذر العثور على بيانات المعصرة</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-foreground">
+              {fetchError || `لم يتم العثور على أي سجل مطابق للمعرف (${millId}). قد يكون الحساب قد تم تعديله أو نقله.`}
+            </p>
+          </CardContent>
+          <CardFooter className="flex gap-2 justify-start">
+            <Button variant="outline" onClick={() => fetchData()} className="gap-2">
+              <RotateCcw className="h-4 w-4" />
+              <span>إعادة المحاولة</span>
+            </Button>
+            <Button variant="default" onClick={() => navigate("/admin")} className="gap-2">
+              <ArrowRight className="h-4 w-4" />
+              <span>العودة للوحة المشرف</span>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   const status = millData.profile?.subscription_status || 'pending';
 
@@ -513,7 +593,7 @@ export default function MillDetails() {
         <Info className="h-4 w-4 text-blue-600 shrink-0" />
         <AlertTitle className="text-blue-800 font-bold text-right">وضع الإدارة والإشراف العام</AlertTitle>
         <AlertDescription className="text-blue-700 text-xs mt-0.5 text-right">
-          أنت تشاهد وتدير بيانات وحركات <strong>[{millData.profile?.mill_name || millData.profile?.display_name}]</strong> بصلاحيات المشرف الكاملة.
+          أنت تشاهد وتدير بيانات وحركات <strong>[{safeText(millData.profile?.mill_name, safeText(millData.profile?.display_name, "المعصرة"))}]</strong> بصلاحيات المشرف الكاملة.
         </AlertDescription>
       </Alert>
 
@@ -526,9 +606,9 @@ export default function MillDetails() {
           </Button>
           <div className="text-right">
             <h1 className="text-2xl font-bold text-foreground">
-              {millData.profile?.mill_name || millData.profile?.display_name || 'تفاصيل المعصرة'}
+              {safeText(millData.profile?.mill_name, safeText(millData.profile?.display_name, 'تفاصيل المعصرة'))}
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">المالك: {millData.profile?.display_name || "غير محدد"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">المالك: {safeText(millData.profile?.display_name, "غير محدد")}</p>
           </div>
         </div>
         <div>
@@ -551,7 +631,7 @@ export default function MillDetails() {
                 <Building2 className="h-3.5 w-3.5 text-primary" />
                 <span>اسم المعصرة</span>
               </div>
-              <p className="font-bold text-foreground text-base">{millData.profile?.mill_name || "غير محدد"}</p>
+              <p className="font-bold text-foreground text-base">{safeText(millData.profile?.mill_name, "غير محدد")}</p>
             </div>
 
             <div className="space-y-1 bg-muted/40 p-3 rounded-xl text-right">
@@ -559,7 +639,7 @@ export default function MillDetails() {
                 <User className="h-3.5 w-3.5 text-primary" />
                 <span>المالك / المدير</span>
               </div>
-              <p className="font-bold text-foreground">{millData.profile?.display_name || "غير محدد"}</p>
+              <p className="font-bold text-foreground">{safeText(millData.profile?.display_name, "غير محدد")}</p>
             </div>
 
             <div className="space-y-1 bg-muted/40 p-3 rounded-xl text-right">
@@ -567,7 +647,7 @@ export default function MillDetails() {
                 <MapPin className="h-3.5 w-3.5 text-primary" />
                 <span>الموقع والدولة</span>
               </div>
-              <p className="font-bold text-foreground">{millData.profile?.mill_location || "غير محدد"} ({millData.profile?.country || "فلسطين"})</p>
+              <p className="font-bold text-foreground">{safeText(millData.profile?.mill_location, "غير محدد")} ({safeText(millData.profile?.country, "فلسطين")})</p>
             </div>
 
             <div className="space-y-1 bg-muted/40 p-3 rounded-xl text-right">
@@ -576,9 +656,9 @@ export default function MillDetails() {
                 <span>أرقام الهاتف</span>
               </div>
               <div dir="ltr" className="text-right font-mono font-bold text-foreground">
-                <div>{millData.profile?.phone || "---"}</div>
+                <div>{safeText(millData.profile?.phone, "---")}</div>
                 {millData.profile?.secondary_phone && (
-                  <div className="text-xs text-muted-foreground font-normal">{millData.profile?.secondary_phone}</div>
+                  <div className="text-xs text-muted-foreground font-normal">{safeText(millData.profile?.secondary_phone)}</div>
                 )}
               </div>
             </div>
@@ -701,7 +781,7 @@ export default function MillDetails() {
                       <TableCell className="font-bold">{inv.cash_amount > 0 ? `${inv.cash_amount} ₪` : '-'}</TableCell>
                       <TableCell className="text-xs">{inv.container_type || 'بدون'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {new Date(inv.created_at).toLocaleString("ar-EG")}
+                        {formatDateTime(inv.created_at)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -743,17 +823,17 @@ export default function MillDetails() {
                 <TableBody>
                   {queueItems.map((q: any) => (
                     <TableRow key={q.id}>
-                      <TableCell className="font-bold text-right">{q.name}</TableCell>
-                      <TableCell dir="ltr" className="text-right font-mono text-xs">{q.phone || '---'}</TableCell>
+                      <TableCell className="font-bold text-right">{safeText(q.name)}</TableCell>
+                      <TableCell dir="ltr" className="text-right font-mono text-xs">{safeText(q.phone)}</TableCell>
                       <TableCell className="font-medium text-right">{q.bags} شوال</TableCell>
                       <TableCell className="text-right">
                         <Badge variant={q.status === 'processing' ? 'default' : q.status === 'completed' ? 'secondary' : 'outline'}>
                           {q.status === 'processing' ? 'قيد العصر ⚙️' : q.status === 'completed' ? 'تم العصر ✅' : 'في الانتظار ⏳'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground text-right">{q.notes || '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground text-right">{safeText(q.notes, '-')}</TableCell>
                       <TableCell className="text-xs text-muted-foreground text-right">
-                        {new Date(q.created_at).toLocaleString("ar-EG")}
+                        {formatDateTime(q.created_at)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -892,60 +972,64 @@ export default function MillDetails() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map((emp: any) => (
-                    <TableRow key={emp.id}>
-                      <TableCell className="font-bold text-foreground text-right">{emp.display_name || 'موظف كاشير'}</TableCell>
-                      <TableCell className="font-mono text-xs font-semibold text-primary text-right">
-                        <div className="flex items-center gap-1 justify-start">
-                          <span>{emp.phone || getDisplayUsername(emp.display_name, null)}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                            title="نسخ اسم المستخدم"
-                            onClick={() => {
-                              navigator.clipboard.writeText(emp.phone || getDisplayUsername(emp.display_name, null));
-                              toast({ title: "تم النسخ", description: "تم نسخ اسم المستخدم" });
-                            }}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center gap-1.5 justify-start">
-                          <code className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-mono font-bold px-2 py-0.5 rounded text-xs">
-                            {emp.employee_pin || "••••••"}
-                          </code>
-                          {emp.employee_pin && (
+                  {employees.map((emp: any) => {
+                    const displayUser = safeText(emp.phone, safeText(getDisplayUsername(emp.display_name, null), 'موظف'));
+                    const displayPass = safeText(emp.employee_pin, "••••••");
+                    return (
+                      <TableRow key={emp.id}>
+                        <TableCell className="font-bold text-foreground text-right">{safeText(emp.display_name, 'موظف كاشير')}</TableCell>
+                        <TableCell className="font-mono text-xs font-semibold text-primary text-right">
+                          <div className="flex items-center gap-1 justify-start">
+                            <span>{displayUser}</span>
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                              title="نسخ كلمة المرور"
+                              title="نسخ اسم المستخدم"
                               onClick={() => {
-                                navigator.clipboard.writeText(emp.employee_pin);
-                                toast({ title: "تم النسخ", description: "تم نسخ كلمة المرور إلى الحافظة" });
+                                navigator.clipboard.writeText(displayUser);
+                                toast({ title: "تم النسخ", description: "تم نسخ اسم المستخدم" });
                               }}
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="secondary" className="text-xs">
-                          الطابور + الفوترة + طباعة الفواتير
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground text-right">
-                        {new Date(emp.created_at).toLocaleDateString("ar-EG")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge className="bg-green-100 text-green-700">مفعّل</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center gap-1.5 justify-start">
+                            <code className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-mono font-bold px-2 py-0.5 rounded text-xs">
+                              {displayPass}
+                            </code>
+                            {emp.employee_pin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                title="نسخ كلمة المرور"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(displayPass);
+                                  toast({ title: "تم النسخ", description: "تم نسخ كلمة المرور إلى الحافظة" });
+                                }}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary" className="text-xs">
+                            الطابور + الفوترة + طباعة الفواتير
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground text-right">
+                          {formatDate(emp.created_at)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge className="bg-green-100 text-green-700">مفعّل</Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                   {employees.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
@@ -981,9 +1065,9 @@ export default function MillDetails() {
                   <TableBody>
                     {expenses.map((exp: any) => (
                       <TableRow key={exp.id}>
-                        <TableCell className="font-medium text-right">{exp.category}</TableCell>
+                        <TableCell className="font-medium text-right">{safeText(exp.category)}</TableCell>
                         <TableCell className="font-bold text-red-600 text-right">{exp.amount} ₪</TableCell>
-                        <TableCell className="text-xs text-muted-foreground text-right">{new Date(exp.created_at).toLocaleDateString("ar-EG")}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground text-right">{formatDate(exp.created_at)}</TableCell>
                       </TableRow>
                     ))}
                     {expenses.length === 0 && (
@@ -1025,7 +1109,7 @@ export default function MillDetails() {
                         </TableCell>
                         <TableCell className="text-right">{tx.amount} كغم</TableCell>
                         <TableCell className="font-bold text-right">{tx.total_price} ₪</TableCell>
-                        <TableCell className="text-xs text-muted-foreground text-right">{new Date(tx.created_at).toLocaleDateString("ar-EG")}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground text-right">{formatDate(tx.created_at)}</TableCell>
                       </TableRow>
                     ))}
                     {oilTransactions.length === 0 && (
@@ -1183,9 +1267,9 @@ export default function MillDetails() {
                       <div key={p.id} className="flex items-center justify-between text-xs p-2 bg-muted/30 rounded-lg border">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-green-700">{p.amount} ₪</span>
-                          <span className="text-muted-foreground">({new Date(p.payment_date).toLocaleDateString("ar-EG")})</span>
+                          <span className="text-muted-foreground">({formatDate(p.payment_date)})</span>
                         </div>
-                        <span className="text-muted-foreground truncate max-w-[150px]">{p.notes || '-'}</span>
+                        <span className="text-muted-foreground truncate max-w-[150px]">{safeText(p.notes, '-')}</span>
                       </div>
                     ))}
                     {payments.length === 0 && (

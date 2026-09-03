@@ -43,6 +43,7 @@ import OAuthConsent from "./pages/OAuthConsent";
 import AdminIndex from "./pages/admin/AdminIndex";
 import MillDetails from "./pages/admin/MillDetails";
 import { AdminRoute } from "./components/AdminRoute";
+import { AdminErrorBoundary } from "./components/AdminErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -265,7 +266,7 @@ const ProtectedLayout = () => {
               <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
                 <Routes>
                   <Route path="/admin" element={<AdminIndex />} />
-                  <Route path="/admin/mill/:id" element={<MillDetails />} />
+                  <Route path="/admin/mill/:id" element={<AdminErrorBoundary><MillDetails /></AdminErrorBoundary>} />
                   <Route path="*" element={<Navigate to="/admin" replace />} />
                 </Routes>
               </main>
