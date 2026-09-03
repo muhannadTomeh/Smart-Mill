@@ -32,7 +32,8 @@ interface QuickInvoiceSheetProps {
 type PaymentType = "oil" | "cash" | "mixed";
 
 export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }: QuickInvoiceSheetProps) {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
   const { refetch: refetchInventory } = useInventory();
@@ -45,21 +46,22 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
-    if (open && user && activeSeason) {
+    if (open && targetUserId && activeSeason) {
       fetchContainerTypes();
       // reset
       setOilProduced(0);
       setContainerCounts({});
       setPaymentType(null);
     }
-  }, [open, user, activeSeason]);
+  }, [open, targetUserId, activeSeason]);
 
   const fetchContainerTypes = async () => {
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase
       .from("container_types")
       .select("*")
-      .eq("user_id", user!.id)
-      .eq("season_id", activeSeason!.id)
+      .eq("user_id", targetUserId)
+      .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: true });
     const types = (data as ContainerType[]) || [];
     setContainerTypes(types);
@@ -124,7 +126,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
     } else {
       const { data: newCust } = await supabase
         .from("customers")
-        .insert({ user_id: user!.id, season_id: activeSeason!.id, name: customer.name, phone: customer.phone })
+        .insert({ user_id: targetUserId!, season_id: activeSeason!.id, name: customer.name, phone: customer.phone })
         .select("id")
         .single();
       if (newCust) customerId = newCust.id;
