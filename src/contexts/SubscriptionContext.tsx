@@ -40,15 +40,23 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('subscription_status')
+        .select('subscription_status, parent_mill_id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) {
+      if (error || !data) {
         console.error("Error fetching subscription status:", error);
         setStatus('pending');
+      } else if (data.parent_mill_id) {
+        // If employee/cashier, inherit subscription status from parent mill
+        const { data: parentData } = await supabase
+          .from('profiles')
+          .select('subscription_status')
+          .eq('user_id', data.parent_mill_id)
+          .maybeSingle();
+        setStatus((parentData?.subscription_status || data.subscription_status || 'active') as SubscriptionStatus);
       } else {
-        setStatus(data.subscription_status as SubscriptionStatus);
+        setStatus((data.subscription_status || 'pending') as SubscriptionStatus);
       }
       setLoading(false);
     };
