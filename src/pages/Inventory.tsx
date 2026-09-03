@@ -46,7 +46,8 @@ const kindMeta: Record<MovementKind, { label: string; icon: any; color: string }
 const Inventory = () => {
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const { inventory, loading: invLoading } = useInventory();
   const { dailyInv, loading: dailyLoading, updateDailyInv } = useDailyInventory();
@@ -73,21 +74,21 @@ const Inventory = () => {
   }, [dailyInv]);
 
   useEffect(() => {
-    if (user && activeSeason) fetchAll();
-  }, [user, activeSeason]);
+    if (targetUserId && activeSeason) fetchAll();
+  }, [targetUserId, activeSeason]);
 
   const fetchAll = async () => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     setLoading(true);
 
     const [invoicesRes, oilTxRes, expensesRes, workerPayRes] = await Promise.all([
-      supabase.from("invoices").select("*").eq("user_id", user.id).eq("season_id", activeSeason.id),
-      supabase.from("oil_transactions").select("*").eq("user_id", user.id).eq("season_id", activeSeason.id),
-      supabase.from("expenses").select("*").eq("user_id", user.id).eq("season_id", activeSeason.id),
+      supabase.from("invoices").select("*").eq("user_id", targetUserId).eq("season_id", activeSeason.id),
+      supabase.from("oil_transactions").select("*").eq("user_id", targetUserId).eq("season_id", activeSeason.id),
+      supabase.from("expenses").select("*").eq("user_id", targetUserId).eq("season_id", activeSeason.id),
       supabase
         .from("worker_payments")
         .select("*, workers(name)")
-        .eq("user_id", user.id)
+        .eq("user_id", targetUserId)
         .eq("season_id", activeSeason.id),
     ]);
 

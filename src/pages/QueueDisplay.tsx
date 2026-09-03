@@ -21,7 +21,8 @@ function useClock() {
 }
 
 export default function QueueDisplay() {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [prevProcessingId, setPrevProcessingId] = useState<string | null>(null);
@@ -30,11 +31,11 @@ export default function QueueDisplay() {
   const clock = useClock();
 
   const fetchQueue = async () => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase
       .from("queue")
       .select("id, name, position, status, bags")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
       .in("status", ["waiting", "processing"])
       .order("position", { ascending: true });
@@ -45,10 +46,10 @@ export default function QueueDisplay() {
     fetchQueue();
     const interval = setInterval(fetchQueue, 5000);
     return () => clearInterval(interval);
-  }, [user, activeSeason]);
+  }, [targetUserId, activeSeason]);
 
   useEffect(() => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const channel = supabase
       .channel("queue-display")
       .on("postgres_changes", { event: "*", schema: "public", table: "queue" }, () => {

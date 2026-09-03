@@ -27,7 +27,8 @@ interface InvoiceRecord {
 }
 
 const Customers = () => {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
@@ -36,20 +37,20 @@ const Customers = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    if (targetUserId) {
       fetchCustomers();
       fetchInvoices();
     }
-  }, [user]);
+  }, [targetUserId, activeSeason]);
 
   const fetchCustomers = async () => {
-    const { data } = await supabase.from("customers").select("*").eq("user_id", user!.id).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("customers").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
     setCustomers((data as Customer[]) || []);
     setLoading(false);
   };
 
   const fetchInvoices = async () => {
-    const { data } = await supabase.from("invoices").select("*").eq("user_id", user!.id).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("invoices").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
     setInvoices((data as InvoiceRecord[]) || []);
   };
 

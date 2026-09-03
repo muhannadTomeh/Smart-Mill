@@ -38,7 +38,8 @@ const COUNTRIES = [
 ];
 
 export default function Settings() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason, refetch: refetchSeasons } = useSeason();
   const { settings, loading } = useSettings();
   const { inventory, updateInventory } = useInventory();
@@ -85,11 +86,11 @@ export default function Settings() {
       supabase
         .from("profiles")
         .select("id, display_name, phone, created_at")
-        .eq("parent_mill_id", user.id)
+        .eq("parent_mill_id", targetUserId)
         .order("created_at", { ascending: false })
         .then(({ data }) => setEmployees(data || []));
     }
-  }, [user]);
+  }, [user, targetUserId]);
 
 
   const [newPassword, setNewPassword] = useState("");
@@ -170,27 +171,27 @@ export default function Settings() {
   }, [loading, settings, inventory]);
 
   useEffect(() => {
-    if (user && activeSeason) {
+    if (targetUserId && activeSeason) {
       fetchContainerTypes();
       fetchExpenseCategories();
     }
-  }, [user, activeSeason]);
+  }, [targetUserId, activeSeason]);
 
   const fetchExpenseCategories = async () => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase
       .from("expense_categories")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
       .order("name", { ascending: true });
     setExpenseCategories(data || []);
   };
 
   const addExpenseCategory = async () => {
-    if (!user || !activeSeason || !newExpenseCategoryName.trim()) return;
+    if (!targetUserId || !activeSeason || !newExpenseCategoryName.trim()) return;
     const { error } = await supabase.from("expense_categories").insert({
-      user_id: user.id,
+      user_id: targetUserId,
       season_id: activeSeason.id,
       name: newExpenseCategoryName.trim()
     });
@@ -210,20 +211,20 @@ export default function Settings() {
   };
 
   const fetchContainerTypes = async () => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase.
     from("container_types").
     select("*").
-    eq("user_id", user.id).
+    eq("user_id", targetUserId).
     eq("season_id", activeSeason.id).
     order("created_at", { ascending: true });
     setContainerTypes(data as ContainerType[] || []);
   };
 
   const addContainerType = async () => {
-    if (!user || !activeSeason || !newContainerName.trim() || !newContainerPrice) return;
+    if (!targetUserId || !activeSeason || !newContainerName.trim() || !newContainerPrice) return;
     const { error } = await supabase.from("container_types").insert({
-      user_id: user.id,
+      user_id: targetUserId,
       season_id: activeSeason.id,
       name: newContainerName.trim(),
       price: parseFloat(newContainerPrice)

@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function SeasonSetup() {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { seasons, refetch } = useSeason();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -77,7 +78,7 @@ export default function SeasonSetup() {
     setSaving(true);
 
     const payload = {
-      user_id: user!.id,
+      user_id: targetUserId!,
       name: form.name.trim(),
       start_date: form.start_date || null,
       end_date: form.end_date || null,
@@ -103,14 +104,14 @@ export default function SeasonSetup() {
       await supabase
         .from("seasons")
         .update({ status: "closed" })
-        .eq("user_id", user!.id)
+        .eq("user_id", targetUserId!)
         .eq("status", "active");
 
       const { data, error } = await supabase.from("seasons").insert({ ...payload, status: "active" }).select().single();
       if (error) {
         toast({ title: "خطأ", description: error.message, variant: "destructive" });
       } else {
-        await supabase.from("inventory").insert({ user_id: user!.id, season_id: data.id });
+        await supabase.from("inventory").insert({ user_id: targetUserId!, season_id: data.id });
         toast({ title: "تم الإنشاء", description: `تم إنشاء ${form.name} وتفعيله` });
         await refetch();
         navigate("/dashboard");

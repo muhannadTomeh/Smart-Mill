@@ -47,7 +47,8 @@ const periodLabels: Record<Period, string> = {
 };
 
 export default function Reports() {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
   const { activeSeason } = useSeason();
@@ -72,19 +73,19 @@ export default function Reports() {
   });
 
   useEffect(() => {
-    if (user && activeSeason && isUnlocked) fetchReports();
-  }, [user, activeSeason, period, isUnlocked]);
+    if (targetUserId && activeSeason && isUnlocked) fetchReports();
+  }, [targetUserId, activeSeason, period, isUnlocked]);
 
   const fetchReports = async () => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const dateFrom = getDateRange(period);
 
     const [invoicesRes, expensesRes, salesRes, purchasesRes, workerPaymentsRes] = await Promise.all([
-      supabase.from("invoices").select("*").eq("user_id", user.id).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
-      supabase.from("expenses").select("amount").eq("user_id", user.id).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
-      supabase.from("oil_transactions").select("total_price,amount").eq("user_id", user.id).eq("season_id", activeSeason.id).eq("type", "sell").gte("created_at", dateFrom),
-      supabase.from("oil_transactions").select("total_price,amount").eq("user_id", user.id).eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),
-      supabase.from("worker_payments").select("amount").eq("user_id", user.id).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
+      supabase.from("invoices").select("*").eq("user_id", targetUserId).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
+      supabase.from("expenses").select("amount").eq("user_id", targetUserId).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
+      supabase.from("oil_transactions").select("total_price,amount").eq("user_id", targetUserId).eq("season_id", activeSeason.id).eq("type", "sell").gte("created_at", dateFrom),
+      supabase.from("oil_transactions").select("total_price,amount").eq("user_id", targetUserId).eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),
+      supabase.from("worker_payments").select("amount").eq("user_id", targetUserId).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
     ]);
 
     const invoices = invoicesRes.data || [];

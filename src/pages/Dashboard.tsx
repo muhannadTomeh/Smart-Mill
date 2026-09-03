@@ -19,7 +19,8 @@ import { Navigate } from "react-router-dom";
 export default function Dashboard() {
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
   const navigate = useNavigate();
@@ -33,19 +34,19 @@ export default function Dashboard() {
   const [showSensitive, setShowSensitive] = useState(false);
 
   useEffect(() => {
-    if (user && activeSeason) {
+    if (targetUserId && activeSeason) {
       fetchStats();
       fetchQueuePreview();
     }
-  }, [user, activeSeason]);
+  }, [targetUserId, activeSeason]);
 
   const fetchStats = async () => {
     const today = new Date().toISOString().split("T")[0];
     const [waitingRes, doneRes, expenseRes, customerRes] = await Promise.all([
-      supabase.from("queue").select("id", { count: "exact", head: true }).eq("user_id", user!.id).eq("season_id", activeSeason!.id).neq("status", "completed"),
-      supabase.from("queue").select("id", { count: "exact", head: true }).eq("user_id", user!.id).eq("season_id", activeSeason!.id).eq("status", "completed"),
-      supabase.from("expenses").select("amount").eq("user_id", user!.id).eq("season_id", activeSeason!.id).gte("created_at", today),
-      supabase.from("customers").select("id", { count: "exact", head: true }).eq("user_id", user!.id).eq("season_id", activeSeason!.id),
+      supabase.from("queue").select("id", { count: "exact", head: true }).eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).neq("status", "completed"),
+      supabase.from("queue").select("id", { count: "exact", head: true }).eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).eq("status", "completed"),
+      supabase.from("expenses").select("amount").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).gte("created_at", today),
+      supabase.from("customers").select("id", { count: "exact", head: true }).eq("user_id", targetUserId!).eq("season_id", activeSeason!.id),
     ]);
     setStats({
       waitingCount: waitingRes.count || 0,
@@ -59,7 +60,7 @@ export default function Dashboard() {
     const { data } = await supabase
       .from("queue")
       .select("id, name, position")
-      .eq("user_id", user!.id)
+      .eq("user_id", targetUserId!)
       .eq("season_id", activeSeason!.id)
       .neq("status", "completed")
       .order("position", { ascending: true })
@@ -192,7 +193,7 @@ export default function Dashboard() {
                   const { data: existingProcessing } = await supabase
                     .from("queue")
                     .select("id")
-                    .eq("user_id", user!.id)
+                    .eq("user_id", targetUserId!)
                     .eq("season_id", activeSeason!.id)
                     .eq("status", "processing")
                     .maybeSingle();

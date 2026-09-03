@@ -25,22 +25,23 @@ interface SeasonStats {
 
 export default function Seasons() {
   const { seasons, loading, enterSeason, closeSeason, refetch } = useSeason();
-  const { user, signOut } = useAuth();
+  const { user, signOut, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const navigate = useNavigate();
   const { toast } = useToast();
   const [statsMap, setStatsMap] = useState<Record<string, SeasonStats>>({});
   const [closingSeasonId, setClosingSeasonId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (seasons.length > 0 && user) fetchAllStats();
-  }, [seasons, user]);
+    if (seasons.length > 0 && targetUserId) fetchAllStats();
+  }, [seasons, targetUserId]);
 
   const fetchAllStats = async () => {
     const map: Record<string, SeasonStats> = {};
     for (const season of seasons) {
       const [custRes, invRes] = await Promise.all([
-        supabase.from("customers").select("id", { count: "exact", head: true }).eq("user_id", user!.id).eq("season_id", season.id),
-        supabase.from("invoices").select("oil_produced, cash_amount").eq("user_id", user!.id).eq("season_id", season.id),
+        supabase.from("customers").select("id", { count: "exact", head: true }).eq("user_id", targetUserId!).eq("season_id", season.id),
+        supabase.from("invoices").select("oil_produced, cash_amount").eq("user_id", targetUserId!).eq("season_id", season.id),
       ]);
       const invoices = invRes.data || [];
       map[season.id] = {

@@ -31,7 +31,8 @@ interface ExpenseCategory {
 }
 
 const Expenses = () => {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
@@ -43,24 +44,24 @@ const Expenses = () => {
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
 
   useEffect(() => {
-    if (user && activeSeason) {
+    if (targetUserId && activeSeason) {
       fetchExpenses();
       fetchCategories();
     }
-  }, [user, activeSeason]);
+  }, [targetUserId, activeSeason]);
 
   const fetchCategories = async () => {
     const { data } = await supabase
       .from("expense_categories")
       .select("*")
-      .eq("user_id", user!.id)
+      .eq("user_id", targetUserId!)
       .eq("season_id", activeSeason!.id)
       .order("name", { ascending: true });
     setCategories((data as ExpenseCategory[]) || []);
   };
 
   const fetchExpenses = async () => {
-    const { data } = await supabase.from("expenses").select("*").eq("user_id", user!.id).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("expenses").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
     setExpenses((data as Expense[]) || []);
     setLoading(false);
   };
@@ -73,7 +74,7 @@ const Expenses = () => {
     const amount = parseFloat(newExpense.amount);
 
     const { error } = await supabase.from("expenses").insert({
-      user_id: user!.id, season_id: activeSeason!.id, category: newExpense.category, amount,
+      user_id: targetUserId!, season_id: activeSeason!.id, category: newExpense.category, amount,
       description: newExpense.description || null,
     });
 

@@ -9,39 +9,40 @@ export interface Inventory {
 }
 
 export function useInventory() {
-  const { user } = useAuth();
+  const { user, effectiveUserId } = useAuth();
+  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const [inventory, setInventory] = useState<Inventory>({ total_oil: 0, total_cash: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     fetchInventory();
-  }, [user, activeSeason]);
+  }, [targetUserId, activeSeason]);
 
   const fetchInventory = async () => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const { data } = await supabase
       .from("inventory")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
       .maybeSingle();
 
     if (data) {
       setInventory({ total_oil: Number(data.total_oil), total_cash: Number(data.total_cash) });
     } else {
-      await supabase.from("inventory").insert({ user_id: user.id, season_id: activeSeason.id });
+      await supabase.from("inventory").insert({ user_id: targetUserId, season_id: activeSeason.id });
     }
     setLoading(false);
   };
 
   const updateInventory = async (changes: Partial<Inventory>) => {
-    if (!user || !activeSeason) return;
+    if (!targetUserId || !activeSeason) return;
     const { error } = await supabase
       .from("inventory")
       .update(changes)
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id);
     if (!error) {
       setInventory((prev) => ({ ...prev, ...changes }));
