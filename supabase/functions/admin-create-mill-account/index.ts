@@ -89,7 +89,6 @@ serve(async (req) => {
     console.log(`User created: ${newUserId}`);
 
     // 2. Profile and Role
-    // We'll perform multiple operations in parallel where possible
     const [profileResult, roleResult] = await Promise.all([
       supabaseAdmin.from('profiles').upsert({
         user_id: newUserId,
@@ -109,6 +108,35 @@ serve(async (req) => {
 
     if (profileResult.error) console.error('Profile upsert error:', profileResult.error);
     if (roleResult.error) console.error('Role assign error:', roleResult.error);
+
+    // 3. Create independent Mill record and Mill Membership
+    try {
+      const { data: newMill, error: millError } = await supabaseAdmin
+        .from('mills')
+        .insert({
+          name: mill_name,
+          owner_user_id: newUserId,
+          country: country || 'فلسطين',
+          phone: phone || null,
+          secondary_phone: secondary_phone || null,
+          subscription_status: 'active',
+        })
+        .select('id')
+        .single();
+
+      if (!millError && newMill) {
+        await supabaseAdmin.from('mill_memberships').insert({
+          mill_id: newMill.id,
+          user_id: newUserId,
+          role: 'mill_owner',
+          display_username: owner_name,
+        });
+      } else if (millError) {
+        console.warn('Note: mills table insert skipped or not yet available:', millError.message);
+      }
+    } catch (millEx) {
+      console.warn('Error inserting into mills table:', millEx);
+    }
 
     return new Response(
       JSON.stringify({ message: 'Account created successfully', user: newUser.user }),

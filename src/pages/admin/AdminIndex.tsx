@@ -119,94 +119,139 @@ export default function AdminIndex() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch all required data in parallel using Promise.all
+        // ============================================================
+        // الاستعلام الجديد: من جدول mills مع بيانات المالك عبر mill_memberships
+        // كل صف = معصرة واحدة فقط
+        // ============================================================
         const [
-          { data: profiles, error: profilesError },
+          { data: millsData, error: millsError },
           { data: lastPayments },
-          { data: seasons, error: seasonsError },
-          { data: invoices, error: invoicesError }
+          { data: seasons },
+          { data: invoices }
         ] = await Promise.all([
-          supabase.from("profiles").select("*"),
-          supabase.from("subscription_payments").select("mill_user_id, payment_date").order("payment_date", { ascending: false }),
+          supabase.from("mills").select(`
+            id, name, location, country, phone, secondary_phone,
+            mill_code, subscription_status, monthly_fee, owner_user_id, created_at,
+            mill_memberships(id, user_id, role, display_username)
+          `).order("created_at", { ascending: false }),
+          supabase.from("subscription_payments").select("mill_user_id, payment_date, mill_id").order("payment_date", { ascending: false }),
           supabase.from("seasons").select("user_id, status"),
           supabase.from("invoices").select("oil_produced, created_at, user_id")
         ]);
 
-        if (profilesError) throw profilesError;
-        if (seasonsError) throw seasonsError;
-        if (invoicesError) throw invoicesError;
+        // إذا لم يكن جدول mills موجوداً بعد، Fallback لجدول profiles
+        if (millsError || !millsData) {
+          await fetchFromProfiles(lastPayments, seasons, invoices);
+          return;
+        }
 
-        // Calculate stats
         const now = new Date();
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const oneMonthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
-
-        const totalOil = invoices.reduce((sum, inv) => sum + (inv.oil_produced || 0), 0);
-        
-        const activeUserIds = new Set(seasons.filter(s => s.status === 'open').map(s => s.user_id));
-        
-        const newThisWeek = profiles.filter(p => new Date(p.created_at) >= oneWeekAgo).length;
-        const newThisMonth = profiles.filter(p => new Date(p.created_at) >= oneMonthAgo).length;
+        const totalOil = (invoices || []).reduce((sum: number, inv: any) => sum + (inv.oil_produced || 0), 0);
+        const activeUserIds = new Set((seasons || []).filter((s: any) => s.status === 'open').map((s: any) => s.user_id));
 
         setStats({
-          totalMills: profiles.length,
-          activeMills: activeUserIds.size,
-          newThisWeek,
-          newThisMonth,
-          totalInvoices: invoices.length,
+          totalMills: millsData.length,
+          activeMills: millsData.filter((m: any) => activeUserIds.has(m.owner_user_id)).length,
+          newThisWeek: millsData.filter((m: any) => new Date(m.created_at) >= oneWeekAgo).length,
+          newThisMonth: millsData.filter((m: any) => new Date(m.created_at) >= oneMonthAgo).length,
+          totalInvoices: (invoices || []).length,
           totalOil,
         });
 
-        // Prepare mill list
-        // Note: For email, we might need a more complex join or just use what's in profile if stored
-        // Since we can't easily join auth.users in public schema, we rely on profiles
-        const millList = profiles.map(profile => {
-          const userInvoices = invoices.filter(inv => inv.user_id === profile.user_id);
-          const lastActivity = userInvoices.length > 0 
-            ? new Date(Math.max(...userInvoices.map(inv => new Date(inv.created_at).getTime())))
-            : new Date(profile.created_at);
-
-          const millPayments = lastPayments?.filter(p => p.mill_user_id === profile.user_id) || [];
-          const lastPaymentDate = millPayments.length > 0 ? millPayments[0].payment_date : null;
-
+        const millList = millsData.map((mill: any) => {
+          const ownerMembership = (mill.mill_memberships || []).find((mm: any) => mm.role === 'mill_owner');
+          const employeeCount = (mill.mill_memberships || []).filter((mm: any) => mm.role === 'mill_employee').length;
+          const millInvoices = (invoices || []).filter((inv: any) => inv.user_id === mill.owner_user_id);
+          const millPayments = (lastPayments || []).filter((p: any) => p.mill_id === mill.id || p.mill_user_id === mill.owner_user_id);
           return {
-            id: profile.user_id,
-            ownerName: profile.display_name || "غير محدد",
-            millName: profile.mill_name || "معصرة غير مسماة",
-            country: profile.country || "فلسطين",
-            millLocation: profile.mill_location || "غير محدد",
-            phone: profile.phone || "---",
-            secondaryPhone: profile.secondary_phone,
-            createdAt: profile.created_at,
-            isActive: activeUserIds.has(profile.user_id),
-            subscriptionStatus: profile.subscription_status || 'pending',
-            invoiceCount: userInvoices.length,
-            lastActivity,
-            lastPaymentDate,
+            id: mill.id,
+            ownerUserId: mill.owner_user_id,
+            millName: mill.name,
+            ownerName: ownerMembership?.display_username || "غير محدد",
+            country: mill.country || "فلسطين",
+            millLocation: mill.location || "غير محدد",
+            phone: mill.phone || "---",
+            secondaryPhone: mill.secondary_phone,
+            createdAt: mill.created_at,
+            isActive: activeUserIds.has(mill.owner_user_id),
+            subscriptionStatus: mill.subscription_status || 'pending',
+            invoiceCount: millInvoices.length,
+            employeeCount,
+            lastPaymentDate: millPayments.length > 0 ? millPayments[0].payment_date : null,
           };
         });
 
-        // Sort by Country then Name
-        millList.sort((a, b) => {
-          const countryA = a.country || "";
-          const countryB = b.country || "";
-          if (countryA !== countryB) return countryA.localeCompare(countryB, 'ar');
+        millList.sort((a: any, b: any) => {
+          if (a.country !== b.country) return (a.country || "").localeCompare(b.country || "", 'ar');
           return (a.millName || "").localeCompare(b.millName || "", 'ar');
         });
 
         setMills(millList);
-      } catch (error) {
-        console.error("Admin data fetch error:", error);
+      } catch (error: any) {
+        console.error("Admin data fetch error (mills):", error);
+        // Fallback
+        const [{ data: lastPayments }, { data: seasons }, { data: invoices }] = await Promise.all([
+          supabase.from("subscription_payments").select("mill_user_id, payment_date").order("payment_date", { ascending: false }),
+          supabase.from("seasons").select("user_id, status"),
+          supabase.from("invoices").select("oil_produced, created_at, user_id")
+        ]);
+        await fetchFromProfiles(lastPayments, seasons, invoices);
       } finally {
         setLoading(false);
       }
     };
 
+    // Fallback: إذا لم يكتمل migration بعد، اقرأ من profiles (ملاك فقط بدون parent_mill_id)
+    const fetchFromProfiles = async (lastPayments: any, seasons: any, invoices: any) => {
+      const { data: profiles } = await supabase.from("profiles").select("*").is("parent_mill_id", null);
+      const activeUserIds = new Set((seasons || []).filter((s: any) => s.status === 'open').map((s: any) => s.user_id));
+      const totalOil = (invoices || []).reduce((sum: number, inv: any) => sum + (inv.oil_produced || 0), 0);
+      const now = new Date();
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const oneMonthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      setStats({
+        totalMills: (profiles || []).length,
+        activeMills: (profiles || []).filter((p: any) => activeUserIds.has(p.user_id)).length,
+        newThisWeek: (profiles || []).filter((p: any) => new Date(p.created_at) >= oneWeekAgo).length,
+        newThisMonth: (profiles || []).filter((p: any) => new Date(p.created_at) >= oneMonthAgo).length,
+        totalInvoices: (invoices || []).length,
+        totalOil,
+      });
+
+      const millList = (profiles || []).map((profile: any) => {
+        const userInvoices = (invoices || []).filter((inv: any) => inv.user_id === profile.user_id);
+        const millPayments = (lastPayments || []).filter((p: any) => p.mill_user_id === profile.user_id);
+        return {
+          id: profile.user_id,
+          ownerUserId: profile.user_id,
+          ownerName: profile.display_name || "غير محدد",
+          millName: profile.mill_name || "معصرة غير مسماة",
+          country: profile.country || "فلسطين",
+          millLocation: profile.mill_location || "غير محدد",
+          phone: profile.phone || "---",
+          secondaryPhone: profile.secondary_phone,
+          createdAt: profile.created_at,
+          isActive: activeUserIds.has(profile.user_id),
+          subscriptionStatus: profile.subscription_status || 'pending',
+          invoiceCount: userInvoices.length,
+          employeeCount: 0,
+          lastPaymentDate: millPayments.length > 0 ? millPayments[0].payment_date : null,
+        };
+      });
+
+      millList.sort((a: any, b: any) => {
+        if (a.country !== b.country) return (a.country || "").localeCompare(b.country || "", 'ar');
+        return (a.millName || "").localeCompare(b.millName || "", 'ar');
+      });
+
+      setMills(millList);
+    };
+
     const fetchContactSettings = async () => {
-      const { data } = await supabase
-        .from("system_settings")
-        .select("key, value");
-      
+      const { data } = await supabase.from("system_settings").select("key, value");
       if (data) {
         data.forEach(setting => {
           if (setting.key === "contact_link") setContactLink(setting.value);
@@ -572,6 +617,7 @@ export default function AdminIndex() {
                 <TableHead className="text-right">تاريخ التسجيل</TableHead>
                 <TableHead className="text-right">حالة الاشتراك</TableHead>
                 <TableHead className="text-right">الفواتير</TableHead>
+                <TableHead className="text-right">الحسابات</TableHead>
                 <TableHead className="text-right">الإجراءات</TableHead>
               </TableRow>
             </TableHeader>
@@ -596,6 +642,16 @@ export default function AdminIndex() {
                   </TableCell>
                   <TableCell className="text-xs font-semibold text-right">{mill.invoiceCount}</TableCell>
                   <TableCell className="text-right">
+                    {mill.employeeCount > 0 ? (
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Users className="h-3 w-3" />
+                        {mill.employeeCount + 1} حساب
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">مالك فقط</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -606,6 +662,13 @@ export default function AdminIndex() {
                   </TableCell>
                 </TableRow>
               ))}
+              {filteredMills.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    لا توجد معاصر مسجلة بعد
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

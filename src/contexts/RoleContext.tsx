@@ -37,14 +37,36 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
       }
 
       try {
-        // 2. Check if this user is a sub-account / cashier employee of a mill
-        const { data: profileRow } = await supabase
-          .from('profiles')
-          .select('parent_mill_id')
-          .eq('user_id', userId)
-          .maybeSingle();
+        // 2. Check if this user is a cashier / employee via mill_memberships or profile
+        let isMillEmployee = false;
+        try {
+          const { data: memberRow } = await supabase
+            .from('mill_memberships')
+            .select('role')
+            .eq('user_id', userId)
+            .eq('role', 'mill_employee')
+            .maybeSingle();
 
-        if (profileRow?.parent_mill_id) {
+          if (memberRow) {
+            isMillEmployee = true;
+          }
+        } catch {
+          // Table might not be queried or available yet, fallback to profileRow
+        }
+
+        if (!isMillEmployee) {
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('parent_mill_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (profileRow?.parent_mill_id) {
+            isMillEmployee = true;
+          }
+        }
+
+        if (isMillEmployee) {
           if (isMounted) {
             setIsEmployee(true);
             setIsAdmin(false);

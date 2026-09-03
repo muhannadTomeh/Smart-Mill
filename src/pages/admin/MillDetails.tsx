@@ -61,45 +61,127 @@ export default function MillDetails() {
   const [newEmployee, setNewEmployee] = useState({ name: "", username: "", password: "" });
   const [creatingEmployee, setCreatingEmployee] = useState(false);
 
-  const { toast } = useToast();
+  const [resolvedOwnerId, setResolvedOwnerId] = useState<string>(millId || "");
+  const [currentMillRecord, setCurrentMillRecord] = useState<any>(null);
 
   const fetchData = async () => {
     if (!millId) return;
     setLoading(true);
     try {
-      // Log administrative access in background (fire-and-forget, does not block UI load)
+      // 1. Resolve mill entity from mills table first
+      let resolvedOwner = millId;
+      let millObj: any = null;
+
+      try {
+        const { data: m1 } = await supabase.from("mills").select("*").eq("id", millId).maybeSingle();
+        if (m1) {
+          millObj = m1;
+          resolvedOwner = m1.owner_user_id || millId;
+        } else {
+          const { data: m2 } = await supabase.from("mills").select("*").eq("owner_user_id", millId).maybeSingle();
+          if (m2) {
+            millObj = m2;
+            resolvedOwner = millId;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not query mills table directly:", err);
+      }
+
+      setResolvedOwnerId(resolvedOwner);
+      setCurrentMillRecord(millObj);
+
+      // Log administrative access in background
       supabase.rpc('log_admin_access', {
-        target_user_id: millId,
+        target_user_id: resolvedOwner,
         admin_action: 'viewed_mill_details'
       }).then().catch(err => console.error("Audit log error:", err));
 
       // Fetch all required mill records in parallel using Promise.all for super-fast loading
       const [
-        { data: profile },
-        { data: seasons },
-        { data: invoices },
-        { data: queue },
-        { data: expensesData },
-        { data: oilData },
-        { data: employeesData },
-        { data: inventory },
-        { data: paymentsData }
+        profileRes,
+        seasonsRes,
+        invoicesRes,
+        queueRes,
+        expensesRes,
+        oilRes,
+        employeesRes,
+        inventoryRes,
+        paymentsRes
       ] = await Promise.all([
-        supabase.from("profiles").select("*").eq("user_id", millId).maybeSingle(),
-        supabase.from("seasons").select("*").eq("user_id", millId).eq("status", "active").limit(1),
-        supabase.from("invoices").select("*").eq("user_id", millId).order("created_at", { ascending: false }),
-        supabase.from("queue").select("*").eq("user_id", millId).order("created_at", { ascending: false }),
-        supabase.from("expenses").select("*").eq("user_id", millId).order("created_at", { ascending: false }),
-        supabase.from("oil_transactions").select("*").eq("user_id", millId).order("created_at", { ascending: false }),
-        supabase.from("profiles").select("*").eq("parent_mill_id", millId).order("created_at", { ascending: false }),
-        supabase.from("inventory").select("*").eq("user_id", millId).limit(1),
-        supabase.from("subscription_payments").select("*").eq("mill_user_id", millId).order("payment_date", { ascending: false })
+        supabase.from("profiles").select("*").eq("user_id", resolvedOwner).maybeSingle(),
+        supabase.from("seasons").select("*").eq("user_id", resolvedOwner).eq("status", "active").limit(1),
+        supabase.from("invoices").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
+        supabase.from("queue").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
+        supabase.from("expenses").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
+        supabase.from("oil_transactions").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
+        supabase.from("profiles").select("*").eq("parent_mill_id", resolvedOwner).order("created_at", { ascending: false }),
+        supabase.from("inventory").select("*").eq("user_id", resolvedOwner).limit(1),
+        supabase.from("subscription_payments").select("*").eq("mill_user_id", resolvedOwner).order("payment_date", { ascending: false })
       ]);
+
+      let profile = profileRes.data || null;
+      // Fallback: if not found by user_id, check by profile id
+      if (!profile) {
+        const { data: pById } = await supabase.from("profiles").select("*").eq("id", resolvedOwner).maybeSingle();
+        if (pById) {
+          profile = pById;
+        }
+      }
+
+      const seasons = seasonsRes.data || [];
+      const invoices = invoicesRes.data || [];
+      const queue = queueRes.data || [];
+      const expensesData = expensesRes.data || [];
+      const oilData = oilRes.data || [];
+      const employeesData = employeesRes.data || [];
+      const inventory = inventoryRes.data || [];
+      const paymentsData = paymentsRes.data || [];
+
+      // Safe check for mill_memberships table
+      let membershipsData: any[] = [];
+      if (millObj?.id) {
+        try {
+          const { data: mems } = await supabase
+            .from("mill_memberships")
+            .select("id, user_id, role, display_username, created_at, profiles(display_name, phone)")
+            .eq("mill_id", millObj.id)
+            .eq("role", "mill_employee");
+          membershipsData = mems || [];
+        } catch (e) {
+          console.warn("Could not query mill_memberships:", e);
+        }
+      }
 
       const currentSeason = seasons?.[0] || null;
 
+      // Merge membership-based employees with profiles-based employees
+      let combinedEmployees = employeesData || [];
+      if (membershipsData && membershipsData.length > 0) {
+        const existingIds = new Set(combinedEmployees.map(e => e.user_id));
+        const membershipEmployees = membershipsData
+          .filter((m: any) => !existingIds.has(m.user_id))
+          .map((m: any) => ({
+            id: m.id,
+            user_id: m.user_id,
+            display_name: m.profiles?.display_name || m.display_username,
+            phone: m.profiles?.phone || m.display_username,
+            created_at: m.created_at,
+            parent_mill_id: resolvedOwner,
+          }));
+        combinedEmployees = [...combinedEmployees, ...membershipEmployees];
+      }
+
       setMillData({
-        profile,
+        profile: profile || {
+          mill_name: millObj?.name,
+          country: millObj?.country,
+          mill_location: millObj?.location,
+          subscription_status: millObj?.subscription_status,
+          subscription_notes: millObj?.subscription_notes,
+          monthly_fee: millObj?.monthly_fee,
+          mill_code: millObj?.mill_code,
+        },
         currentSeason,
         invoices: invoices || [],
         inventory: inventory?.[0] || null
@@ -107,14 +189,16 @@ export default function MillDetails() {
       setQueueItems(queue || []);
       setExpenses(expensesData || []);
       setOilTransactions(oilData || []);
-      setEmployees(employeesData || []);
+      setEmployees(combinedEmployees);
       setPayments(paymentsData || []);
 
-      if (profile) {
-        setNotes(profile.subscription_notes || "");
-        setMonthlyFee(profile.monthly_fee?.toString() || "0");
-        setMillCode(profile.mill_code || "");
-      }
+      const effectiveNotes = millObj?.subscription_notes ?? profile?.subscription_notes ?? "";
+      const effectiveFee = millObj?.monthly_fee ?? profile?.monthly_fee ?? 0;
+      const effectiveCode = millObj?.mill_code ?? profile?.mill_code ?? "";
+
+      setNotes(effectiveNotes);
+      setMonthlyFee(effectiveFee.toString());
+      setMillCode(effectiveCode);
     } catch (error) {
       console.error("Error fetching mill details:", error);
     } finally {
@@ -130,15 +214,22 @@ export default function MillDetails() {
     if (!millId) return;
     setUpdating(true);
     try {
+      if (currentMillRecord?.id) {
+        await supabase
+          .from("mills")
+          .update({ subscription_status: status })
+          .eq("id", currentMillRecord.id);
+      }
+      
       const { error } = await supabase
         .from("profiles")
         .update({ subscription_status: status })
-        .eq("user_id", millId);
+        .eq("user_id", resolvedOwnerId);
 
-      if (error) throw error;
+      if (error && !currentMillRecord?.id) throw error;
 
       await supabase.rpc('log_admin_access', {
-        target_user_id: millId,
+        target_user_id: resolvedOwnerId,
         admin_action: `updated_subscription_status_to_${status}`
       });
 
@@ -167,15 +258,22 @@ export default function MillDetails() {
     if (!millId) return;
     setUpdating(true);
     try {
+      if (currentMillRecord?.id) {
+        await supabase
+          .from("mills")
+          .update({ subscription_notes: notes })
+          .eq("id", currentMillRecord.id);
+      }
+
       const { error } = await supabase
         .from("profiles")
         .update({ subscription_notes: notes })
-        .eq("user_id", millId);
+        .eq("user_id", resolvedOwnerId);
 
-      if (error) throw error;
+      if (error && !currentMillRecord?.id) throw error;
 
       await supabase.rpc('log_admin_access', {
-        target_user_id: millId,
+        target_user_id: resolvedOwnerId,
         admin_action: 'updated_subscription_notes'
       });
 
@@ -199,15 +297,23 @@ export default function MillDetails() {
     if (!millId) return;
     setUpdating(true);
     try {
+      const feeNum = parseFloat(monthlyFee) || 0;
+      if (currentMillRecord?.id) {
+        await supabase
+          .from("mills")
+          .update({ monthly_fee: feeNum })
+          .eq("id", currentMillRecord.id);
+      }
+
       const { error } = await supabase
         .from("profiles")
-        .update({ monthly_fee: parseFloat(monthlyFee) || 0 })
-        .eq("user_id", millId);
+        .update({ monthly_fee: feeNum })
+        .eq("user_id", resolvedOwnerId);
 
-      if (error) throw error;
+      if (error && !currentMillRecord?.id) throw error;
 
       await supabase.rpc('log_admin_access', {
-        target_user_id: millId,
+        target_user_id: resolvedOwnerId,
         admin_action: 'updated_monthly_fee'
       });
 
@@ -235,7 +341,8 @@ export default function MillDetails() {
       const { error } = await supabase
         .from("subscription_payments")
         .insert({
-          mill_user_id: millId,
+          mill_user_id: resolvedOwnerId,
+          mill_id: currentMillRecord?.id || null,
           amount: parseFloat(newPayment.amount),
           payment_date: newPayment.date,
           notes: newPayment.notes,
@@ -245,7 +352,7 @@ export default function MillDetails() {
       if (error) throw error;
 
       await supabase.rpc('log_admin_access', {
-        target_user_id: millId,
+        target_user_id: resolvedOwnerId,
         admin_action: `added_subscription_payment_${newPayment.amount}`
       });
 
@@ -260,7 +367,7 @@ export default function MillDetails() {
       const { data: paymentsData } = await supabase
         .from("subscription_payments")
         .select("*")
-        .eq("mill_user_id", millId)
+        .or(`mill_user_id.eq.${resolvedOwnerId}${currentMillRecord?.id ? `,mill_id.eq.${currentMillRecord.id}` : ''}`)
         .order("payment_date", { ascending: false });
       
       setPayments(paymentsData || []);
@@ -286,11 +393,19 @@ export default function MillDetails() {
     }
     setSavingMillCode(true);
     try {
+      if (currentMillRecord?.id) {
+        await supabase
+          .from("mills")
+          .update({ mill_code: code })
+          .eq("id", currentMillRecord.id);
+      }
+
       const { error } = await supabase
         .from("profiles")
         .update({ mill_code: code })
-        .eq("user_id", millId);
-      if (error) throw error;
+        .eq("user_id", resolvedOwnerId);
+
+      if (error && !currentMillRecord?.id) throw error;
       setMillCode(code);
       toast({ title: "تم حفظ رمز المعصرة", description: `رمز المعصرة الآن: ${code}` });
     } catch (err: any) {
@@ -317,9 +432,9 @@ export default function MillDetails() {
 
     setCreatingEmployee(true);
     try {
-      // Call admin_create_cashier RPC to create account without sending confirmation email (bypassing email rate limit)
+      // Call admin_create_cashier RPC with resolvedOwnerId
       const { data, error } = await supabase.rpc('admin_create_cashier', {
-        p_parent_mill_id: millId,
+        p_parent_mill_id: resolvedOwnerId,
         p_display_name: newEmployee.name.trim(),
         p_username: newEmployee.username.trim(),
         p_password: newEmployee.password,
@@ -337,7 +452,7 @@ export default function MillDetails() {
               data: {
                 display_name: newEmployee.name.trim(),
                 username: newEmployee.username.trim(),
-                parent_mill_id: millId,
+                parent_mill_id: resolvedOwnerId,
                 mill_name: millData?.profile?.mill_name,
                 mill_code: millCode.trim(),
               }
