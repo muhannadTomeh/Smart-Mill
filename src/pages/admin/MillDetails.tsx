@@ -67,77 +67,36 @@ export default function MillDetails() {
     if (!millId) return;
     setLoading(true);
     try {
-      // Log administrative access
-      await supabase.rpc('log_admin_access', {
+      // Log administrative access in background (fire-and-forget, does not block UI load)
+      supabase.rpc('log_admin_access', {
         target_user_id: millId,
         admin_action: 'viewed_mill_details'
-      });
+      }).then().catch(err => console.error("Audit log error:", err));
 
-      // Fetch profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", millId)
-        .single();
-
-      // Fetch current season
-      const { data: seasons } = await supabase
-        .from("seasons")
-        .select("*")
-        .eq("user_id", millId)
-        .eq("status", "active")
-        .limit(1);
+      // Fetch all required mill records in parallel using Promise.all for super-fast loading
+      const [
+        { data: profile },
+        { data: seasons },
+        { data: invoices },
+        { data: queue },
+        { data: expensesData },
+        { data: oilData },
+        { data: employeesData },
+        { data: inventory },
+        { data: paymentsData }
+      ] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", millId).maybeSingle(),
+        supabase.from("seasons").select("*").eq("user_id", millId).eq("status", "active").limit(1),
+        supabase.from("invoices").select("*").eq("user_id", millId).order("created_at", { ascending: false }),
+        supabase.from("queue").select("*").eq("user_id", millId).order("created_at", { ascending: false }),
+        supabase.from("expenses").select("*").eq("user_id", millId).order("created_at", { ascending: false }),
+        supabase.from("oil_transactions").select("*").eq("user_id", millId).order("created_at", { ascending: false }),
+        supabase.from("profiles").select("*").eq("parent_mill_id", millId).order("created_at", { ascending: false }),
+        supabase.from("inventory").select("*").eq("user_id", millId).limit(1),
+        supabase.from("subscription_payments").select("*").eq("mill_user_id", millId).order("payment_date", { ascending: false })
+      ]);
 
       const currentSeason = seasons?.[0] || null;
-
-      // Fetch all invoices for activity log
-      const { data: invoices } = await supabase
-        .from("invoices")
-        .select("*")
-        .eq("user_id", millId)
-        .order("created_at", { ascending: false });
-
-      // Fetch queue entries
-      const { data: queue } = await supabase
-        .from("queue")
-        .select("*")
-        .eq("user_id", millId)
-        .order("created_at", { ascending: false });
-
-      // Fetch expenses
-      const { data: expensesData } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("user_id", millId)
-        .order("created_at", { ascending: false });
-
-      // Fetch oil transactions
-      const { data: oilData } = await supabase
-        .from("oil_transactions")
-        .select("*")
-        .eq("user_id", millId)
-        .order("created_at", { ascending: false });
-
-      // Fetch sub-account employees
-      const { data: employeesData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("parent_mill_id", millId)
-        .order("created_at", { ascending: false });
-
-      // Fetch inventory
-      const { data: inventory } = await supabase
-        .from("inventory")
-        .select("*")
-        .eq("user_id", millId)
-        .limit(1);
-
-      // Fetch subscription payments
-      const { data: paymentsData } = await supabase
-        .from("subscription_payments")
-        .select("*")
-        .eq("mill_user_id", millId)
-        .order("payment_date", { ascending: false });
 
       setMillData({
         profile,

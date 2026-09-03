@@ -119,31 +119,21 @@ export default function AdminIndex() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch all profiles and auth emails (via profiles linked to auth users)
-        const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("*");
-        
-        // Fetch last payments for each mill
-        const { data: lastPayments } = await supabase
-          .from("subscription_payments")
-          .select("mill_user_id, payment_date")
-          .order("payment_date", { ascending: false });
+        // Fetch all required data in parallel using Promise.all
+        const [
+          { data: profiles, error: profilesError },
+          { data: lastPayments },
+          { data: seasons, error: seasonsError },
+          { data: invoices, error: invoicesError }
+        ] = await Promise.all([
+          supabase.from("profiles").select("*"),
+          supabase.from("subscription_payments").select("mill_user_id, payment_date").order("payment_date", { ascending: false }),
+          supabase.from("seasons").select("user_id, status"),
+          supabase.from("invoices").select("oil_produced, created_at, user_id")
+        ]);
 
         if (profilesError) throw profilesError;
-
-        // Fetch seasons to identify active ones
-        const { data: seasons, error: seasonsError } = await supabase
-          .from("seasons")
-          .select("user_id, status");
-        
         if (seasonsError) throw seasonsError;
-
-        // Fetch all invoices for stats
-        const { data: invoices, error: invoicesError } = await supabase
-          .from("invoices")
-          .select("oil_produced, created_at, user_id");
-
         if (invoicesError) throw invoicesError;
 
         // Calculate stats

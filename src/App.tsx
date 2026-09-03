@@ -153,9 +153,15 @@ const HeaderBar = () => {
 };
 
 const SubscriptionGate = ({ children }: { children: React.ReactNode }) => {
-  const { status, loading } = useSubscription();
-  const { isAdmin, isEmployee } = useRole();
-  const { signOut: authSignOut } = useAuth();
+  const { status, loading: subLoading } = useSubscription();
+  const { isAdmin, isEmployee, loading: roleLoading } = useRole();
+
+  // Platform admin is always exempt from subscription check - instant bypass without delay
+  if (!roleLoading && isAdmin === true) {
+    return <>{children}</>;
+  }
+
+  const loading = subLoading || roleLoading;
 
   const signOut = async () => {
     if (isEmployee) {
