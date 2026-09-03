@@ -222,10 +222,17 @@ const Queue = () => {
     await fetchQueue();
   };
 
-  const startProcessing = async (id: string) => {
-    const startedAt = new Date().toISOString();
+  const updateCustomerEstimatedMinutes = async (id: string, mins: number) => {
+    const target = allItems.find((i) => i.id === id);
+    if (!target) return;
+
+    localStorage.setItem(`queue_est_${id}`, String(mins));
+    if (target.name) localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(mins));
+
+    const updatedNotes = `[وقت_تقديري:${mins}] ${(target.notes || "").replace(/\[(?:وقت_تقديري|الوقت|est):?[^\]]*\]/gi, "")}`.trim();
+
     setAllItems((prev) => {
-      const updated = prev.map((i) => (i.id === id ? { ...i, status: "processing", started_at: startedAt } : i));
+      const updated = prev.map((i) => (i.id === id ? { ...i, estimated_minutes: mins, notes: updatedNotes } : i));
       if (activeSeason) {
         try {
           localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
@@ -234,19 +241,55 @@ const Queue = () => {
       return updated;
     });
 
+    let { error } = await supabase.from("queue").update({
+      estimated_minutes: mins,
+      notes: updatedNotes,
+    } as any).eq("id", id);
+
+    if (error) {
+      await supabase.from("queue").update({ notes: updatedNotes }).eq("id", id);
+    }
+    toast.success(`تم تعيين الوقت التقديري لـ ${target.name}: ${mins} دقيقة`);
+    await fetchQueue();
+  };
+
+  const startProcessing = async (id: string) => {
+    const startedAt = new Date().toISOString();
+    const target = allItems.find((i) => i.id === id);
+    let estMin = target ? parseEstimatedMinutes(target) : null;
+    if (!estMin || estMin <= 0) {
+      estMin = 30; // default to 30 mins so countdown always runs
+    }
+
     // Save locally for instant cross-tab sync
     localStorage.setItem(`processing_started_${id}`, startedAt);
+    localStorage.setItem(`queue_est_${id}`, String(estMin));
+    if (target?.name) {
+      localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(estMin));
+    }
+
+    const updatedNotes = `[بدء_العصر:${startedAt}] [وقت_تقديري:${estMin}] ${(target?.notes || "").replace(/\[(?:بدء_العصر|وقت_تقديري|الوقت|est):?[^\]]*\]/gi, "")}`.trim();
+
+    setAllItems((prev) => {
+      const updated = prev.map((i) => (i.id === id ? { ...i, status: "processing", started_at: startedAt, estimated_minutes: estMin, notes: updatedNotes } : i));
+      if (activeSeason) {
+        try {
+          localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
 
     // Save to database
     let { error } = await supabase.from("queue").update({
       status: "processing",
       started_at: startedAt,
+      estimated_minutes: estMin,
+      notes: updatedNotes,
     } as any).eq("id", id);
 
-    // Fallback if started_at column is not yet migrated in Supabase
-    if (error && (error.message?.includes("started_at") || error.code === "PGRST204")) {
-      const target = allItems.find((i) => i.id === id);
-      const updatedNotes = `[بدء_العصر:${startedAt}] ${target?.notes || ""}`.trim();
+    // Fallback if started_at / estimated_minutes columns are not yet migrated in Supabase
+    if (error) {
       const retry = await supabase.from("queue").update({
         status: "processing",
         notes: updatedNotes,
@@ -255,7 +298,7 @@ const Queue = () => {
     }
 
     if (error) toast.error("تعذر بدء العصر: " + error.message);
-    else toast.success("تم بدء العصر وبدء التوقيت التنازلي");
+    else toast.success(`تم بدء العصر — الوقت التقديري: ${estMin} دقيقة`);
     await fetchQueue();
   };
 
@@ -312,10 +355,44 @@ const Queue = () => {
                   />
                 </div>
 
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label htmlFor="estimatedMinutes" className="font-bold flex items-center gap-1.5">
+                      <Clock className="h-4 w-4 text-primary" />
+                      الوقت التقديري للعصر (بالدقائق)
+                    </Label>
+                    <div className="flex gap-1">
+                      {[15, 30, 45, 60].map((m) => (
+                        <Button
+                          key={m}
+                          type="button"
+                          size="sm"
+                          variant={newCustomer.estimatedMinutes === String(m) ? "default" : "outline"}
+                          className="h-6 px-2 text-xs"
+                          onClick={() => setNewCustomer((p) => ({ ...p, estimatedMinutes: String(m) }))}
+                        >
+                          {m} د
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <Input
+                    id="estimatedMinutes"
+                    type="number"
+                    value={newCustomer.estimatedMinutes}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, estimatedMinutes: e.target.value }))}
+                    placeholder="مثال: 30"
+                    min="1"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    يتم بدء العد التنازلي التلقائي من هذا الوقت بمجرد الضغط على بدء العصر
+                  </p>
+                </div>
+
                 <Collapsible open={showExtra} onOpenChange={setShowExtra}>
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" size="sm" className="w-full justify-between">
-                      تفاصيل إضافية
+                      تفاصيل إضافية (هاتف وملاحظات)
                       <ChevronDown className={`h-4 w-4 transition-transform ${showExtra ? "rotate-180" : ""}`} />
                     </Button>
                   </CollapsibleTrigger>
@@ -327,17 +404,6 @@ const Queue = () => {
                         value={newCustomer.phone}
                         onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
                         placeholder="اختياري"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="estimatedMinutes">الوقت التقديري (دقائق)</Label>
-                      <Input
-                        id="estimatedMinutes"
-                        type="number"
-                        value={newCustomer.estimatedMinutes}
-                        onChange={(e) => setNewCustomer((p) => ({ ...p, estimatedMinutes: e.target.value }))}
-                        placeholder="اختياري"
-                        min="1"
                       />
                     </div>
                     <div>
@@ -424,14 +490,15 @@ const Queue = () => {
                               return (
                                 <Badge
                                   variant="outline"
-                                  className={`gap-1 text-xs font-mono font-bold transition-all ${
+                                  className={`gap-1.5 text-xs font-mono font-bold transition-all ${
                                     isNear
-                                      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 animate-pulse"
+                                      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 animate-pulse shadow-sm"
                                       : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
                                   }`}
                                 >
-                                  <Clock className="h-3 w-3" />
-                                  {remSec > 0 ? `متبقي: ${formatRemaining(remSec)}` : "أوشك على الانتهاء"}
+                                  <Clock className="h-3.5 w-3.5" />
+                                  <span>الوقت التقديري المتبقي :</span>
+                                  <span className="font-mono text-sm font-black">{formatRemaining(remSec)}</span>
                                   {isNear && (
                                     <span className="text-[10px] bg-emerald-500 text-white px-1.5 py-0.2 rounded ms-1">
                                       استعد
@@ -444,7 +511,7 @@ const Queue = () => {
                               return (
                                 <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
                                   <Clock className="h-3 w-3" />
-                                  {estMin} دقيقة
+                                  <span>الوقت التقديري: {estMin} دقيقة</span>
                                 </Badge>
                               );
                             }
@@ -455,6 +522,22 @@ const Queue = () => {
                           🛍️ {p.bags} شوال • ⏰ {formatTime(p.created_at)}
                           {p.phone && ` • ${p.phone}`}
                         </p>
+                        {/* Quick adjustment buttons */}
+                        <div className="flex items-center gap-1.5 pt-1.5 border-t border-primary/10 flex-wrap">
+                          <span className="text-[11px] font-bold text-muted-foreground">تعديل الوقت التقديري:</span>
+                          {[15, 30, 45, 60].map((m) => (
+                            <Button
+                              key={m}
+                              type="button"
+                              size="sm"
+                              variant={parseEstimatedMinutes(p) === m ? "default" : "outline"}
+                              className="h-6 px-2 text-[11px]"
+                              onClick={() => updateCustomerEstimatedMinutes(p.id, m)}
+                            >
+                              {m} د
+                            </Button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-2">

@@ -106,28 +106,39 @@ export default function PublicQueueDisplay() {
 
     // Map queue items and ensure estimated_minutes & started_at are extracted accurately
     const mappedItems: QueueItem[] = rawQueue.map((i) => {
-      // Find any cached metadata for this item
-      const localMatch = localItems.find((l) => l.id === i.id);
-      const merged = { ...localMatch, ...i };
+      const localMatch = localItems.find((l) => l.id === i.id || (l.name && l.name.trim() === i.name?.trim()));
+      
+      const localEst = (i.id ? localStorage.getItem(`queue_est_${i.id}`) : null) ||
+                       (i.name ? localStorage.getItem(`queue_est_name_${i.name.trim()}`) : null) ||
+                       (localMatch ? parseEstimatedMinutes(localMatch) : null);
+
+      const localStart = (i.id ? localStorage.getItem(`processing_started_${i.id}`) : null) ||
+                         (localMatch ? parseStartedAt(localMatch) : null);
+
+      const parsedEst = parseEstimatedMinutes(i) ?? (localEst ? Number(localEst) : null);
+      const parsedStart = parseStartedAt(i) ?? (localStart ? (typeof localStart === "number" ? new Date(localStart).toISOString() : localStart) : null);
 
       const item: QueueItem = {
-        id: merged.id,
-        name: merged.name,
-        position: merged.queue_position ?? merged.position,
-        status: merged.status,
-        bags: merged.bags,
-        notes: merged.notes || null,
-        started_at: merged.started_at || null,
-        estimated_minutes: parseEstimatedMinutes(merged),
+        id: i.id,
+        name: i.name,
+        position: i.queue_position ?? i.position,
+        status: i.status,
+        bags: i.bags,
+        notes: i.notes || localMatch?.notes || null,
+        started_at: parsedStart,
+        estimated_minutes: parsedEst,
       };
 
       // If it's processing and has no started_at stored, record locally so timer starts immediately
       if (item.status === "processing") {
-        const existingStart = parseStartedAt(item);
-        if (!existingStart && item.id) {
+        if (!item.started_at && item.id) {
           const nowIso = new Date().toISOString();
           localStorage.setItem(`processing_started_${item.id}`, nowIso);
           item.started_at = nowIso;
+        }
+        if (!item.estimated_minutes) {
+          item.estimated_minutes = 30;
+          if (item.id) localStorage.setItem(`queue_est_${item.id}`, "30");
         }
       }
       return item;
@@ -230,12 +241,18 @@ export default function PublicQueueDisplay() {
   const minutes = String(clock.getMinutes()).padStart(2, "0");
 
   // Calculate live second-by-second countdown for current processing customer
-  const currentEstMin = currentItem ? parseEstimatedMinutes(currentItem) : null;
+  const currentEstMin = currentItem
+    ? (currentItem.estimated_minutes ||
+       parseEstimatedMinutes(currentItem) ||
+       (currentItem.id ? Number(localStorage.getItem(`queue_est_${currentItem.id}`)) : null) ||
+       (currentItem.name ? Number(localStorage.getItem(`queue_est_name_${currentItem.name.trim()}`)) : null) ||
+       30)
+    : null;
   const currentStartedAt = currentItem ? parseStartedAt(currentItem) : null;
 
   let currentRemainingSeconds: number | null = null;
   let isCurrentNearCompletion = false;
-  let remainingText = "";
+  let remainingText = "30:00";
 
   if (currentItem && currentEstMin && currentEstMin > 0) {
     let startMs = currentStartedAt;
@@ -267,7 +284,7 @@ export default function PublicQueueDisplay() {
       remainingText = "00:00 (المراحل الأخيرة)";
     }
 
-    // Flash green warning if 5 minutes or less remain
+    // Flash green warning if 5 minutes or less remain (300 seconds)
     isCurrentNearCompletion = currentRemainingSeconds <= 5 * 60;
   }
 
@@ -377,29 +394,29 @@ export default function PublicQueueDisplay() {
                     </span>
                   )}
 
-                  {displaySettings.show_estimated_time && currentEstMin ? (
-                    <div className="flex flex-col items-center gap-1">
+                  {displaySettings.show_estimated_time && (
+                    <div className="flex flex-col items-center gap-2 mt-4 w-full">
                       <span
-                        className={`inline-flex items-center gap-2.5 px-6 py-2 rounded-2xl text-lg md:text-xl font-black border shadow-xl transition-all ${
+                        className={`inline-flex items-center justify-center gap-3 px-7 md:px-10 py-3 md:py-3.5 rounded-3xl text-xl md:text-2xl font-black border-2 shadow-2xl transition-all ${
                           isCurrentNearCompletion
-                            ? "bg-emerald-500/30 text-emerald-200 border-emerald-400 animate-pulse shadow-[0_0_40px_rgba(52,211,153,0.7)]"
-                            : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            ? "bg-emerald-500/30 text-emerald-100 border-emerald-400 animate-pulse shadow-[0_0_50px_rgba(52,211,153,0.85)]"
+                            : "bg-amber-500/20 text-amber-200 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.25)]"
                         }`}
                       >
-                        <span className="text-2xl">⏳</span>
-                        <span>الوقت المتبقي:</span>
-                        <span className="text-white font-mono text-2xl md:text-3xl font-black tracking-wider" dir="ltr">
+                        <span className="text-3xl">⏳</span>
+                        <span>الوقت التقديري المتبقي :</span>
+                        <span className="text-white font-mono text-3xl md:text-5xl font-black tracking-widest drop-shadow" dir="ltr">
                           {remainingText}
                         </span>
                       </span>
                       {isCurrentNearCompletion && (
-                        <span className="text-sm font-bold text-emerald-300 animate-pulse mt-0.5 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                          متبقي أقل من 5 دقائق — مرحلة تفريغ الزيت
+                        <span className="text-base md:text-lg font-black text-emerald-300 animate-pulse mt-1 flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
+                          متبقي أقل من 5 دقائق — مرحلة تفريغ وتجهيز الزيت
                         </span>
                       )}
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
             </div>
@@ -511,11 +528,21 @@ export default function PublicQueueDisplay() {
                       </div>
 
                       <div className="flex items-center gap-3 flex-wrap">
-                        {/* Flashing Green Alert when current turn <= 5 minutes */}
+                        {/* وميض أخضر كبير عند الدور التالي بعنوان استعد */}
                         {isNext && isCurrentNearCompletion ? (
-                          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/35 border-2 border-emerald-400 text-emerald-100 font-black text-sm md:text-base animate-bounce shadow-[0_0_25px_rgba(52,211,153,0.8)]">
-                            <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
-                            <span>🟢 استعد لدورك! (متبقي أقل من 5 دقائق)</span>
+                          <div
+                            className="inline-flex items-center gap-3 px-6 py-2.5 rounded-2xl text-white font-black text-2xl md:text-3xl tracking-wider shadow-2xl border-4 border-emerald-300 my-1"
+                            style={{
+                              animation: "qd-green-flash 0.8s ease-in-out infinite",
+                            }}
+                          >
+                            <span className="text-3xl md:text-4xl animate-ping">🟢</span>
+                            <span className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+                              استعد
+                            </span>
+                            <span className="text-sm md:text-base font-bold bg-black/40 px-3 py-1 rounded-xl text-emerald-100">
+                              متبقي أقل من 5 دقائق
+                            </span>
                           </div>
                         ) : isNext ? (
                           <span className="text-xs md:text-sm font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/30">
@@ -645,6 +672,18 @@ export default function PublicQueueDisplay() {
         }
         .animate-marquee {
           animation: marquee 25s linear infinite;
+        }
+        @keyframes qd-green-flash {
+          0%, 100% {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 0 50px rgba(52, 211, 153, 0.95), inset 0 0 15px rgba(255, 255, 255, 0.6);
+            transform: scale(1);
+          }
+          50% {
+            background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+            box-shadow: 0 0 18px rgba(52, 211, 153, 0.4), inset 0 0 5px rgba(255, 255, 255, 0.2);
+            transform: scale(1.03);
+          }
         }
       `}</style>
     </div>
