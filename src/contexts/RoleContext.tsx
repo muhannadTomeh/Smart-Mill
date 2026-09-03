@@ -21,16 +21,8 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setIsAdmin(false);
-        setIsEmployee(false);
-        setLoading(false);
-        return;
-      }
-
-      // Check for employee session in local storage
+    const checkRole = async (userId: string) => {
+      // Check for employee session in local storage first
       const employeeOwnerId = localStorage.getItem('employee_owner_id');
       if (employeeOwnerId) {
         setIsEmployee(true);
@@ -39,21 +31,47 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      const { data, error } = await supabase.rpc('has_role', { 
-        _user_id: user.id, 
-        _role: 'platform_admin' 
+      const { data, error } = await supabase.rpc('has_role', {
+        _user_id: userId,
+        _role: 'platform_admin'
       });
 
       if (error) {
         console.error("Error checking role:", error);
         setIsAdmin(false);
       } else {
-        setIsAdmin(!!data);
+        // Explicitly cast to boolean so null/undefined → false
+        setIsAdmin(data === true);
       }
+      setIsEmployee(false);
       setLoading(false);
     };
 
-    checkRole();
+    // Listen to auth state changes — single source of truth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        // User logged out or no session
+        setIsAdmin(false);
+        setIsEmployee(false);
+        setLoading(false);
+      } else {
+        setLoading(true);
+        checkRole(session.user.id);
+      }
+    });
+
+    // Seed initial state from existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user) {
+        setIsAdmin(false);
+        setIsEmployee(false);
+        setLoading(false);
+      } else {
+        checkRole(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   return (

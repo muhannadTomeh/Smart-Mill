@@ -138,13 +138,14 @@ export function AppSidebar() {
             <MenuGroup label="النظام" items={systemItems} isCollapsed={isCollapsed} />
           </>
         )}
-        {isAdmin && (
+        {isAdmin === true && (
           <MenuGroup 
             label="الإشراف" 
             items={[{ title: "لوحة المشرف", url: "/admin", icon: ShieldCheck }]} 
             isCollapsed={isCollapsed} 
           />
         )}
+
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-sidebar-border/60">
