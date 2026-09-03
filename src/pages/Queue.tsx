@@ -233,7 +233,7 @@ const Queue = () => {
 
   const openDisplay = () => {
     if (activeSeason) {
-      window.open(`/display/${activeSeason.id}`, "_blank", "fullscreen=yes");
+      window.open(`/display/${activeSeason.id}`, "_blank");
     }
   };
 
