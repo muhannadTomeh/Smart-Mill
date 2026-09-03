@@ -52,20 +52,27 @@ export default function AdminIndex() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [newAccountData, setNewAccountData] = useState({
-    email: "",
-    password: "",
-    mill_name: "",
     owner_name: "",
-    phone: "",
-    secondary_phone: "",
-    country: ""
+    owner_phone: "",
+    owner_email: "",
+    mill_name: "",
+    country: "",
+    username: "",
+    password: ""
   });
-  const [createdCredentials, setCreatedCredentials] = useState<{email: string, password: string} | null>(null);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    mill_name: string;
+    owner_name: string;
+    username: string;
+    password: string;
+    owner_phone: string;
+    owner_email?: string;
+  } | null>(null);
 
   const generatePassword = () => {
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let retVal = "";
-    for (let i = 0, n = charset.length; i < 12; ++i) {
+    for (let i = 0, n = charset.length; i < 8; ++i) {
       retVal += charset.charAt(Math.floor(Math.random() * n));
     }
     setNewAccountData(prev => ({ ...prev, password: retVal }));
@@ -75,33 +82,66 @@ export default function AdminIndex() {
     e.preventDefault();
     setCreateLoading(true);
     try {
-      console.log("Invoking admin-create-mill-account...");
-      const { data, error } = await supabase.functions.invoke('admin-create-mill-account', {
-        body: newAccountData
+      const cleanUsername = newAccountData.username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
+      if (!cleanUsername) {
+        throw new Error("يرجى إدخال اسم مستخدم صالح (أحرف إنجليزية وأرقام)");
+      }
+
+      console.log("Creating mill account via admin_create_mill RPC...");
+      const { data, error } = await supabase.rpc('admin_create_mill', {
+        p_mill_name: newAccountData.mill_name.trim(),
+        p_country: newAccountData.country.trim() || 'فلسطين',
+        p_username: cleanUsername,
+        p_password: newAccountData.password,
+        p_owner_name: newAccountData.owner_name.trim(),
+        p_owner_phone: newAccountData.owner_phone.trim(),
+        p_owner_email: newAccountData.owner_email.trim() || null
       });
 
       if (error) {
-        console.error("Function error details:", error);
-        throw error;
+        console.warn("admin_create_mill RPC error:", error);
+        // Fallback: if RPC does not exist yet, try edge function
+        if (error.message?.includes('admin_create_mill') && error.message?.includes('does not exist')) {
+          const edgeRes = await supabase.functions.invoke('admin-create-mill-account', {
+            body: {
+              mill_name: newAccountData.mill_name.trim(),
+              owner_name: newAccountData.owner_name.trim(),
+              phone: newAccountData.owner_phone.trim(),
+              secondary_phone: newAccountData.owner_email.trim() || null,
+              country: newAccountData.country.trim() || 'فلسطين',
+              username: cleanUsername,
+              email: `${cleanUsername}@smartmill.com`,
+              password: newAccountData.password
+            }
+          });
+          if (edgeRes.error) {
+            throw new Error("يرجى تشغيل استعلام SQL الخاص بإنشاء دالة admin_create_mill في Supabase SQL Editor أولاً، ثم إعادة المحاولة.");
+          }
+        } else {
+          throw error;
+        }
       }
 
       setCreatedCredentials({
-        email: newAccountData.email,
-        password: newAccountData.password
+        mill_name: newAccountData.mill_name.trim(),
+        owner_name: newAccountData.owner_name.trim(),
+        username: cleanUsername,
+        password: newAccountData.password,
+        owner_phone: newAccountData.owner_phone.trim(),
+        owner_email: newAccountData.owner_email.trim() || undefined
       });
-      toast.success("تم إنشاء الحساب بنجاح");
-      
+
+      toast.success("تم إنشاء حساب المعصرة بنجاح!");
+
       setNewAccountData({
-        email: "",
-        password: "",
-        mill_name: "",
         owner_name: "",
-        phone: "",
-        secondary_phone: "",
-        country: ""
+        owner_phone: "",
+        owner_email: "",
+        mill_name: "",
+        country: "",
+        username: "",
+        password: ""
       });
-      
-      // We'll defer the reload to when they close the success view
     } catch (error: any) {
       console.error("Error creating account:", error);
       toast.error(error.message || "حدث خطأ أثناء إنشاء الحساب");
@@ -346,122 +386,175 @@ export default function AdminIndex() {
                 <span>إنشاء حساب معصرة جديد</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[440px] text-right" dir="rtl">
+            <DialogContent className="sm:max-w-[500px] text-right max-h-[90vh] overflow-y-auto" dir="rtl">
               <DialogHeader className="text-right sm:text-right">
-                <DialogTitle className="text-right">إنشاء حساب معصرة جديد</DialogTitle>
+                <DialogTitle className="text-right text-lg">إنشاء حساب معصرة جديد</DialogTitle>
+                <DialogDescription className="text-right text-xs">
+                  إدخال بيانات المالك والمعصرة وبيانات الدخول للنظام
+                </DialogDescription>
               </DialogHeader>
               
               {!createdCredentials ? (
-                <form onSubmit={handleCreateAccount} className="space-y-4 py-4 text-right">
-                  <div className="space-y-2">
-                    <Label htmlFor="mill_name" className="text-right block">اسم المعصرة *</Label>
-                    <Input 
-                      id="mill_name" 
-                      required 
-                      className="text-right"
-                      value={newAccountData.mill_name}
-                      onChange={e => setNewAccountData(prev => ({...prev, mill_name: e.target.value}))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="owner_name" className="text-right block">اسم صاحب المعصرة *</Label>
-                    <Input 
-                      id="owner_name" 
-                      required 
-                      className="text-right"
-                      value={newAccountData.owner_name}
-                      onChange={e => setNewAccountData(prev => ({...prev, owner_name: e.target.value}))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-right block">البريد الإلكتروني (للتسجيل) *</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      required 
-                      dir="ltr"
-                      className="text-left font-mono"
-                      value={newAccountData.email}
-                      onChange={e => setNewAccountData(prev => ({...prev, email: e.target.value}))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-right block">رقم الهاتف الأساسي</Label>
-                    <Input 
-                      id="phone" 
-                      dir="ltr"
-                      className="text-left font-mono"
-                      value={newAccountData.phone}
-                      onChange={e => setNewAccountData(prev => ({...prev, phone: e.target.value}))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="secondary_phone" className="text-right block">رقم هاتف إضافي (اختياري)</Label>
-                    <Input 
-                      id="secondary_phone" 
-                      dir="ltr"
-                      className="text-left font-mono"
-                      value={newAccountData.secondary_phone}
-                      onChange={e => setNewAccountData(prev => ({...prev, secondary_phone: e.target.value}))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="country" className="text-right block">البلد / المدينة</Label>
-                    <Input 
-                      id="country" 
-                      className="text-right"
-                      value={newAccountData.country}
-                      placeholder="مثال: فلسطين - جنين"
-                      onChange={e => setNewAccountData(prev => ({...prev, country: e.target.value}))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="text-right block">كلمة المرور *</Label>
-                    <div className="flex gap-2">
+                <form onSubmit={handleCreateAccount} className="space-y-4 py-2 text-right">
+                  {/* القسم الأول: معلومات المالك */}
+                  <div className="p-3.5 bg-muted/40 rounded-xl border border-border/60 space-y-3">
+                    <div className="flex items-center gap-2 text-primary font-bold text-xs">
+                      <User className="h-4 w-4" />
+                      <span>معلومات المالك (مدير المعصرة)</span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="owner_name" className="text-right block text-xs font-semibold">اسم صاحب المعصرة *</Label>
                       <Input 
-                        id="password" 
-                        type="text" 
+                        id="owner_name" 
                         required 
-                        dir="ltr"
-                        className="text-left font-mono"
-                        value={newAccountData.password}
-                        onChange={e => setNewAccountData(prev => ({...prev, password: e.target.value}))}
+                        placeholder="مثال: رائف عمار"
+                        className="text-right h-9 text-sm"
+                        value={newAccountData.owner_name}
+                        onChange={e => setNewAccountData(prev => ({...prev, owner_name: e.target.value}))}
                       />
-                      <Button type="button" variant="outline" onClick={generatePassword} title="توليد كلمة مرور عشوائية">
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="owner_phone" className="text-right block text-xs font-semibold">رقم هاتف المالك *</Label>
+                      <Input 
+                        id="owner_phone" 
+                        required
+                        dir="ltr"
+                        placeholder="مثال: 0569945677"
+                        className="text-left font-mono h-9 text-sm"
+                        value={newAccountData.owner_phone}
+                        onChange={e => setNewAccountData(prev => ({...prev, owner_phone: e.target.value}))}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="owner_email" className="text-right block text-xs font-semibold">البريد الإلكتروني للمالك</Label>
+                        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">اختياري</span>
+                      </div>
+                      <Input 
+                        id="owner_email" 
+                        type="email" 
+                        dir="ltr"
+                        placeholder="example@gmail.com (اختياري للإشعارات والتواصل)"
+                        className="text-left font-mono h-9 text-sm"
+                        value={newAccountData.owner_email}
+                        onChange={e => setNewAccountData(prev => ({...prev, owner_email: e.target.value}))}
+                      />
                     </div>
                   </div>
-                  <Button type="submit" className="w-full" disabled={createLoading}>
-                    {createLoading ? "جاري الإنشاء..." : "إنشاء الحساب الآن"}
+
+                  {/* القسم الثاني: معلومات المعصرة وحساب الدخول */}
+                  <div className="p-3.5 bg-muted/40 rounded-xl border border-border/60 space-y-3">
+                    <div className="flex items-center gap-2 text-primary font-bold text-xs">
+                      <Building2 className="h-4 w-4" />
+                      <span>معلومات المعصرة وحساب الدخول</span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="mill_name" className="text-right block text-xs font-semibold">اسم المعصرة *</Label>
+                      <Input 
+                        id="mill_name" 
+                        required 
+                        placeholder="مثال: معصرة قفين الغربية"
+                        className="text-right h-9 text-sm"
+                        value={newAccountData.mill_name}
+                        onChange={e => setNewAccountData(prev => ({...prev, mill_name: e.target.value}))}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="country" className="text-right block text-xs font-semibold">البلد / المدينة *</Label>
+                      <Input 
+                        id="country" 
+                        required
+                        className="text-right h-9 text-sm"
+                        value={newAccountData.country}
+                        placeholder="مثال: قفين - طولكرم"
+                        onChange={e => setNewAccountData(prev => ({...prev, country: e.target.value}))}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="username" className="text-right block text-xs font-semibold">اسم المستخدم (Username للدخول) *</Label>
+                      <Input 
+                        id="username" 
+                        required 
+                        dir="ltr"
+                        placeholder="مثال: raef أو qaffin_mill"
+                        className="text-left font-mono h-9 text-sm"
+                        value={newAccountData.username}
+                        onChange={e => setNewAccountData(prev => ({...prev, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "")}))}
+                      />
+                      <p className="text-[11px] text-muted-foreground text-right">يدخل به صاحب المعصرة مباشرة في شاشة الدخول</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="password" className="text-right block text-xs font-semibold">كلمة المرور (Password) *</Label>
+                      <div className="flex gap-2">
+                        <Input 
+                          id="password" 
+                          type="text" 
+                          required 
+                          dir="ltr"
+                          placeholder="أدخل كلمة المرور"
+                          className="text-left font-mono h-9 text-sm"
+                          value={newAccountData.password}
+                          onChange={e => setNewAccountData(prev => ({...prev, password: e.target.value}))}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={generatePassword} title="توليد كلمة مرور عشوائية" className="h-9 px-2.5">
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 h-10 font-bold" disabled={createLoading}>
+                    {createLoading ? "جارٍ إنشاء الحساب..." : "إنشاء الحساب الآن"}
                   </Button>
                 </form>
               ) : (
-                <div className="space-y-6 py-4 text-right">
-                  <div className="flex flex-col items-center justify-center text-green-600 gap-2 mb-4">
-                    <CheckCircle2 className="h-12 w-12" />
-                    <h3 className="text-xl font-bold">تم إنشاء الحساب بنجاح!</h3>
+                <div className="space-y-5 py-3 text-right">
+                  <div className="flex flex-col items-center justify-center text-green-600 gap-1.5 mb-2">
+                    <CheckCircle2 className="h-10 w-10" />
+                    <h3 className="text-lg font-bold">تم إنشاء حساب المعصرة بنجاح!</h3>
+                    <p className="text-xs text-muted-foreground">يمكن لصاحب المعصرة الدخول فوراً بالبيانات التالية:</p>
                   </div>
                   
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm mb-4 text-right">
-                    ⚠️ <strong>هام:</strong> احفظ هذه البيانات الآن، لن تظهر مرة أخرى.
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-right block">البريد الإلكتروني</Label>
+                  <div className="space-y-2.5 p-3.5 bg-muted/40 rounded-xl border border-border">
+                    <div className="flex items-center justify-between text-xs py-1 border-b border-border/50">
+                      <span className="text-muted-foreground font-medium">اسم المعصرة:</span>
+                      <span className="font-bold text-foreground">{createdCredentials.mill_name}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs py-1 border-b border-border/50">
+                      <span className="text-muted-foreground font-medium">صاحب المعصرة:</span>
+                      <span className="font-bold text-foreground">{createdCredentials.owner_name}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs py-1 border-b border-border/50">
+                      <span className="text-muted-foreground font-medium">رقم الهاتف:</span>
+                      <span className="font-mono text-foreground">{createdCredentials.owner_phone}</span>
+                    </div>
+                    {createdCredentials.owner_email && (
+                      <div className="flex items-center justify-between text-xs py-1 border-b border-border/50">
+                        <span className="text-muted-foreground font-medium">البريد الإلكتروني:</span>
+                        <span className="font-mono text-foreground">{createdCredentials.owner_email}</span>
+                      </div>
+                    )}
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-right block text-xs font-semibold text-primary">اسم المستخدم للدخول (Username):</Label>
                       <div className="flex gap-2">
-                        <Input value={createdCredentials.email} readOnly dir="ltr" className="text-left font-mono" />
-                        <Button variant="outline" onClick={() => copyToClipboard(createdCredentials.email, "البريد الإلكتروني")}>
+                        <Input value={createdCredentials.username} readOnly dir="ltr" className="text-left font-mono font-bold text-primary h-9" />
+                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(createdCredentials.username, "اسم المستخدم")} className="h-9">
                           <Copy className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-right block">كلمة المرور</Label>
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-right block text-xs font-semibold text-foreground">كلمة المرور (Password):</Label>
                       <div className="flex gap-2">
-                        <Input value={createdCredentials.password} readOnly dir="ltr" className="text-left font-mono" />
-                        <Button variant="outline" onClick={() => copyToClipboard(createdCredentials.password, "كلمة المرور")}>
+                        <Input value={createdCredentials.password} readOnly dir="ltr" className="text-left font-mono font-bold h-9" />
+                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(createdCredentials.password, "كلمة المرور")} className="h-9">
                           <Copy className="h-4 w-4" />
                         </Button>
                       </div>

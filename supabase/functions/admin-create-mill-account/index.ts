@@ -50,10 +50,25 @@ serve(async (req) => {
 
     // Get request body
     const body = await req.json();
-    const { email, password, mill_name, owner_name, phone, secondary_phone, country } = body;
+    const { 
+      mill_name, 
+      owner_name, 
+      country, 
+      username, 
+      password, 
+      phone, 
+      owner_phone, 
+      secondary_phone, 
+      owner_email 
+    } = body;
 
-    if (!email || !password || !mill_name || !owner_name) {
-      throw new Error('Missing required fields');
+    const cleanUsername = (username || body.email?.split('@')[0] || '').toLowerCase().trim().replace(/[^a-z0-9_.-]/g, '');
+    const cleanEmail = body.email || (cleanUsername ? `${cleanUsername}@smartmill.com` : '');
+    const cleanPhone = owner_phone || phone || '';
+    const cleanOwnerEmail = owner_email || secondary_phone || '';
+
+    if (!cleanEmail || !password || !mill_name || !owner_name) {
+      throw new Error('Missing required fields: mill_name, owner_name, username/email, and password are required');
     }
 
     // Create admin client with service role
@@ -64,19 +79,20 @@ serve(async (req) => {
       }
     });
 
-    console.log(`Creating user for ${email}...`);
+    console.log(`Creating user for ${cleanEmail}...`);
 
     // 1. Create User in Auth
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: cleanEmail,
       password,
       email_confirm: true,
       user_metadata: {
         display_name: owner_name,
         mill_name: mill_name,
-        phone: phone || '',
-        secondary_phone: secondary_phone || '',
-        country: country || ''
+        username: cleanUsername,
+        phone: cleanPhone,
+        owner_email: cleanOwnerEmail,
+        country: country || 'فلسطين'
       }
     });
 
