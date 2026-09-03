@@ -770,6 +770,7 @@ export default function MillDetails() {
                   <TableRow>
                     <TableHead className="text-right">اسم الموظف</TableHead>
                     <TableHead className="text-right">اسم المستخدم</TableHead>
+                    <TableHead className="text-right">كلمة المرور</TableHead>
                     <TableHead className="text-right">الصلاحيات</TableHead>
                     <TableHead className="text-right">تاريخ الإنشاء</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
@@ -780,7 +781,42 @@ export default function MillDetails() {
                     <TableRow key={emp.id}>
                       <TableCell className="font-bold text-foreground text-right">{emp.display_name || 'موظف كاشير'}</TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-primary text-right">
-                        {emp.phone || getDisplayUsername(emp.display_name, null)}
+                        <div className="flex items-center gap-1 justify-start">
+                          <span>{emp.phone || getDisplayUsername(emp.display_name, null)}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                            title="نسخ اسم المستخدم"
+                            onClick={() => {
+                              navigator.clipboard.writeText(emp.phone || getDisplayUsername(emp.display_name, null));
+                              toast({ title: "تم النسخ", description: "تم نسخ اسم المستخدم" });
+                            }}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center gap-1.5 justify-start">
+                          <code className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-mono font-bold px-2 py-0.5 rounded text-xs">
+                            {emp.employee_pin || "••••••"}
+                          </code>
+                          {emp.employee_pin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                              title="نسخ كلمة المرور"
+                              onClick={() => {
+                                navigator.clipboard.writeText(emp.employee_pin);
+                                toast({ title: "تم النسخ", description: "تم نسخ كلمة المرور إلى الحافظة" });
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge variant="secondary" className="text-xs">
@@ -797,7 +833,7 @@ export default function MillDetails() {
                   ))}
                   {employees.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                         لا توجد حسابات موظفين مسجلة لهذه المعصرة بعد. اضغط "إنشاء حساب كاشير جديد" لإنشاء أول حساب.
                       </TableCell>
                     </TableRow>

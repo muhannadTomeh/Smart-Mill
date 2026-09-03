@@ -57,19 +57,25 @@ const Auth = () => {
       }
 
       if ("notFound" in result) {
-        setLoading(false);
-        toast({
-          title: "خطأ في تسجيل الدخول",
-          description: "اسم المستخدم أو كلمة المرور غير صحيحة",
-          variant: "destructive",
-        });
-        return;
+        // Fallback: try standard pattern before giving up
+        emailToUse = `${usernameOrEmail.trim().toLowerCase()}@smartmill.com`;
+      } else {
+        emailToUse = result.email;
       }
-
-      emailToUse = result.email;
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
+    let { data, error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
+
+    // If first attempt failed and we used @smartmill.com, try with legacy @mill.local
+    if (error && emailToUse.endsWith("@smartmill.com")) {
+      const legacyEmail = emailToUse.replace("@smartmill.com", "@mill.local");
+      const retry = await supabase.auth.signInWithPassword({ email: legacyEmail, password });
+      if (!retry.error) {
+        data = retry.data;
+        error = null;
+      }
+    }
+
     setLoading(false);
     if (error) {
       toast({ title: "خطأ في تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة", variant: "destructive" });
