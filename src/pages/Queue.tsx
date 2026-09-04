@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
-  Clock, UserPlus, Trash2, CheckCircle, Monitor, Play, Receipt,
-  ChevronDown, Calculator, Users,
+  Clock, UserPlus, Trash2, CheckCircle, Monitor, Play,
+  ChevronDown, Calculator, Users, Search, Sparkles, Package,
+  Phone, AlertCircle, X, RefreshCw
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -106,7 +107,8 @@ const Queue = () => {
   const [allItems, setAllItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
-  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "30" });
   const [showExtra, setShowExtra] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
@@ -126,6 +128,24 @@ const Queue = () => {
   const waiting = allItems.filter((i) => i.status === "waiting");
   const completed = allItems.filter((i) => i.status === "completed");
 
+  const totalWaitingBags = useMemo(() => waiting.reduce((acc, i) => acc + (Number(i.bags) || 0), 0), [waiting]);
+  const totalProcessingBags = useMemo(() => processing.reduce((acc, i) => acc + (Number(i.bags) || 0), 0), [processing]);
+  const totalCompletedBags = useMemo(() => completed.reduce((acc, i) => acc + (Number(i.bags) || 0), 0), [completed]);
+
+  const matchesSearch = (item: QueueItem) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      item.name.toLowerCase().includes(q) ||
+      String(item.position).includes(q) ||
+      (item.phone && item.phone.includes(q)) ||
+      (item.notes && item.notes.toLowerCase().includes(q))
+    );
+  };
+
+  const filteredWaiting = waiting.filter(matchesSearch);
+  const filteredProcessing = processing.filter(matchesSearch);
+  const filteredCompleted = completed.filter(matchesSearch);
 
   useEffect(() => {
     if (targetUserId && activeSeason) fetchQueue();
@@ -157,7 +177,6 @@ const Queue = () => {
       .order("created_at", { ascending: true });
 
     const raw = (data as QueueItem[]) || [];
-    // Ensure all positions are positive sequential numbers (> 0)
     let curSeq = 1;
     const items = raw.map((item) => {
       const pos = item.position && Number(item.position) > 0 ? Number(item.position) : curSeq;
@@ -178,12 +197,11 @@ const Queue = () => {
       return;
     }
 
-    const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes) : null;
+    const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes) : 30;
     const fallbackNotes = estMin 
       ? `[وقت_تقديري:${estMin}] ${newCustomer.notes?.trim() || ""}`.trim()
       : (newCustomer.notes?.trim() || null);
 
-    // Compute next sequential position (guaranteed >= 1)
     const existingPositions = allItems.map((i) => Number(i.position) || 0);
     const maxPos = existingPositions.length > 0 ? Math.max(0, ...existingPositions) : 0;
     const nextPosition = maxPos + 1;
@@ -199,13 +217,11 @@ const Queue = () => {
       position: nextPosition,
     };
 
-    // Try inserting with estimated_minutes column
     let { data: insertedData, error } = await supabase.from("queue").insert({
       ...basePayload,
       ...(estMin ? { estimated_minutes: estMin } : {}),
     }).select().single();
 
-    // Fallback if estimated_minutes column is not yet migrated in Supabase
     if (error && (error.message?.includes("estimated_minutes") || error.code === "PGRST204")) {
       const retry = await supabase.from("queue").insert({
         ...basePayload,
@@ -222,10 +238,10 @@ const Queue = () => {
       if (newCustomer.name) {
         localStorage.setItem(`queue_est_name_${newCustomer.name.trim()}`, String(estMin || 30));
       }
-      setNewCustomer({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
+      setNewCustomer({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "30" });
       setShowExtra(false);
       setDialogOpen(false);
-      toast.success(`تم إضافة ${newCustomer.name} برقم دور #${nextPosition}`);
+      toast.success(`تمت إضافة الزبون "${newCustomer.name}" برقم دور #${nextPosition}`);
       await fetchQueue();
     } else {
       toast.error("تعذر إضافة الزبون: " + error.message);
@@ -245,7 +261,7 @@ const Queue = () => {
 
     const { error } = await supabase.from("queue").update({ status: "completed" }).eq("id", id);
     if (error) toast.error("تعذر إنهاء العصر: " + error.message);
-    else toast.success("تم الانتهاء من العصر — انتقل لقسم تم العصر بانتظار الفوترة");
+    else toast.success("تم الانتهاء من العصر — انتقل لقسم الفوترة");
     await fetchQueue();
   };
 
@@ -280,7 +296,7 @@ const Queue = () => {
       await supabase.from("queue").update({ notes: updatedNotes }).eq("id", id);
     }
 
-    toast.success(`تمت إضافة ${extraMins} دقائق إضافية (الإجمالي: ${newEst} دقيقة)`);
+    toast.success(`تمت إضافة ${extraMins} دقيقة إضافية (الإجمالي: ${newEst} دقيقة)`);
     await fetchQueue();
   };
 
@@ -293,46 +309,14 @@ const Queue = () => {
     await fetchQueue();
   };
 
-  const updateCustomerEstimatedMinutes = async (id: string, mins: number) => {
-    const target = allItems.find((i) => i.id === id);
-    if (!target) return;
-
-    localStorage.setItem(`queue_est_${id}`, String(mins));
-    if (target.name) localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(mins));
-
-    const updatedNotes = `[وقت_تقديري:${mins}] ${(target.notes || "").replace(/\[(?:وقت_تقديري|الوقت|est):?[^\]]*\]/gi, "")}`.trim();
-
-    setAllItems((prev) => {
-      const updated = prev.map((i) => (i.id === id ? { ...i, estimated_minutes: mins, notes: updatedNotes } : i));
-      if (activeSeason) {
-        try {
-          localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
-        } catch {}
-      }
-      return updated;
-    });
-
-    let { error } = await supabase.from("queue").update({
-      estimated_minutes: mins,
-      notes: updatedNotes,
-    } as any).eq("id", id);
-
-    if (error) {
-      await supabase.from("queue").update({ notes: updatedNotes }).eq("id", id);
-    }
-    toast.success(`تم تعيين الوقت التقديري لـ ${target.name}: ${mins} دقيقة`);
-    await fetchQueue();
-  };
-
   const startProcessing = async (id: string) => {
     const startedAt = new Date().toISOString();
     const target = allItems.find((i) => i.id === id);
     let estMin = target ? parseEstimatedMinutes(target) : null;
     if (!estMin || estMin <= 0) {
-      estMin = 30; // default to 30 mins so countdown always runs
+      estMin = 30;
     }
 
-    // Save locally for instant cross-tab sync
     localStorage.setItem(`processing_started_${id}`, startedAt);
     localStorage.setItem(`queue_est_${id}`, String(estMin));
     if (target?.name) {
@@ -351,7 +335,6 @@ const Queue = () => {
       return updated;
     });
 
-    // Save to database
     let { error } = await supabase.from("queue").update({
       status: "processing",
       started_at: startedAt,
@@ -359,7 +342,6 @@ const Queue = () => {
       notes: updatedNotes,
     } as any).eq("id", id);
 
-    // Fallback if started_at / estimated_minutes columns are not yet migrated in Supabase
     if (error) {
       const retry = await supabase.from("queue").update({
         status: "processing",
@@ -379,58 +361,130 @@ const Queue = () => {
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
-      {/* Top Header with Traffic Light Controller */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-card border shadow-sm">
-        <div className="flex items-center gap-3">
-          <Clock className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">إدارة الطابور والعصر</h1>
-            <p className="text-xs md:text-sm text-muted-foreground">
-              {waiting.length} في الانتظار • {processing.length} قيد العصر • {completed.length} بانتظار الفوترة
-            </p>
+    <div className="space-y-6 pb-12" dir="rtl">
+      {/* Hero Header with Centered Action Button & Clean Stats */}
+      <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-b from-card via-card to-card/70 p-6 md:p-8 shadow-sm">
+        {/* Subtle decorative background glow */}
+        <div className="pointer-events-none absolute -left-20 -top-20 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-amber-500/10 blur-3xl" />
+
+        {/* Top bar: Title & Screen Link */}
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 text-primary shadow-inner">
+              <Clock className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">
+                إدارة الطابور والعصر
+              </h1>
+              <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+                تنظيم أدوار المزارعين ومتابعة مراحل العصر في المعصرة لحظة بلحظة
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchQueue}
+              className="h-10 px-3 rounded-xl border-border/70 hover:bg-accent gap-1.5 text-xs font-semibold text-muted-foreground"
+              title="تحديث البيانات"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              تحديث
+            </Button>
+
+            {activeSeason && (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="h-10 px-4 rounded-xl border-primary/25 hover:border-primary/50 hover:bg-primary/5 transition-all text-xs font-bold gap-2 text-foreground"
+              >
+                <a
+                  href={`/display/${activeSeason.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Monitor className="h-4 w-4 text-primary" />
+                  شاشة العرض للزبائن
+                </a>
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Action Buttons: Add Customer and Open Display */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* PROMINENT CENTERED ACTION: إضافة زبون في النصف تماماً */}
+        <div className="relative z-10 my-6 flex flex-col items-center justify-center text-center">
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="lg" className="h-10 px-4">
-                <UserPlus className="h-4 w-4 me-1.5" />
-                إضافة زبون
+              <Button
+                size="lg"
+                className="h-14 px-8 md:px-12 rounded-2xl text-base md:text-lg font-black bg-primary text-primary-foreground shadow-xl shadow-primary/20 hover:shadow-2xl hover:shadow-primary/35 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 gap-3 group border border-primary/30"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 group-hover:scale-110 transition-transform">
+                  <UserPlus className="h-5 w-5 text-white" />
+                </div>
+                <span>إضافة زبون جديد للطابور</span>
               </Button>
             </DialogTrigger>
-            <DialogContent dir="rtl">
-              <DialogHeader>
-                <DialogTitle>إضافة زبون جديد للطابور</DialogTitle>
+
+            <DialogContent dir="rtl" className="max-w-md rounded-3xl p-6">
+              <DialogHeader className="text-right">
+                <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                  <UserPlus className="h-5 w-5 text-primary" />
+                  تسجيل زبون جديد في الطابور
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  سيتم إعطاء الزبون رقم دور تلقائي وفق تسلسل الطابور الحالي
+                </p>
               </DialogHeader>
-              <div className="space-y-4 mt-2">
-                <div>
-                  <Label htmlFor="name">الاسم *</Label>
+
+              <div className="space-y-4 mt-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-sm font-semibold">اسم الزبون *</Label>
                   <Input
                     id="name"
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, name: e.target.value }))}
-                    placeholder="اسم الزبون"
+                    placeholder="مثال: أبو محمد الخالد"
+                    className="h-11 rounded-xl text-base"
                     autoFocus
                   />
                 </div>
-                <div>
-                  <Label htmlFor="bags">عدد الشوالات *</Label>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="bags" className="text-sm font-semibold">عدد الشوالات *</Label>
+                    <div className="flex gap-1">
+                      {[10, 20, 30, 50].map((b) => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setNewCustomer((p) => ({ ...p, bags: String(b) }))}
+                          className="text-[11px] px-2 py-0.5 rounded-lg border border-border/80 bg-muted/50 hover:bg-muted text-muted-foreground font-medium transition-colors"
+                        >
+                          +{b}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <Input
                     id="bags"
                     type="number"
                     value={newCustomer.bags}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, bags: e.target.value }))}
-                    placeholder="عدد الشوالات"
+                    placeholder="أدخل عدد الشوالات"
                     min="1"
+                    className="h-11 rounded-xl text-base"
                   />
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Label htmlFor="estimatedMinutes" className="font-bold flex items-center gap-1.5">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="estimatedMinutes" className="text-sm font-semibold flex items-center gap-1.5">
                       <Clock className="h-4 w-4 text-primary" />
                       الوقت التقديري للعصر (بالدقائق)
                     </Label>
@@ -441,7 +495,7 @@ const Queue = () => {
                           type="button"
                           size="sm"
                           variant={newCustomer.estimatedMinutes === String(m) ? "default" : "outline"}
-                          className="h-6 px-2 text-xs"
+                          className="h-6 px-2 text-xs rounded-lg"
                           onClick={() => setNewCustomer((p) => ({ ...p, estimatedMinutes: String(m) }))}
                         >
                           {m} د
@@ -454,205 +508,339 @@ const Queue = () => {
                     type="number"
                     value={newCustomer.estimatedMinutes}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, estimatedMinutes: e.target.value }))}
-                    placeholder="مثال: 30"
+                    placeholder="30"
                     min="1"
+                    className="h-11 rounded-xl"
                   />
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    يبدأ العداد التنازلي من هذا الوقت فور الضغط على بدء العصر
+                  <p className="text-[11px] text-muted-foreground">
+                    يبدأ العد التنازلي المباشر على شاشة العرض بمجرد الضغط على بدء العصر
                   </p>
                 </div>
 
                 <Collapsible open={showExtra} onOpenChange={setShowExtra}>
                   <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full justify-between">
-                      تفاصيل إضافية (هاتف وملاحظات)
-                      <ChevronDown className={`h-4 w-4 transition-transform ${showExtra ? "rotate-180" : ""}`} />
+                    <Button variant="ghost" size="sm" className="w-full justify-between rounded-xl text-muted-foreground hover:text-foreground">
+                      <span className="text-xs font-semibold">تفاصيل إضافية (رقم الهاتف والملاحظات)</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showExtra ? "rotate-180" : ""}`} />
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-3 pt-2">
-                    <div>
-                      <Label htmlFor="phone">رقم الهاتف</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor="phone" className="text-xs">رقم الهاتف (اختياري للإشعارات)</Label>
                       <Input
                         id="phone"
                         value={newCustomer.phone}
                         onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
-                        placeholder="اختياري"
+                        placeholder="05XXXXXXXX"
+                        className="h-10 rounded-xl"
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="notes">ملاحظات</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor="notes" className="text-xs">ملاحظات خاصة</Label>
                       <Textarea
                         id="notes"
                         value={newCustomer.notes}
                         onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))}
-                        placeholder="ملاحظات إضافية"
+                        placeholder="مثل: صنف الزيتون، تفضيلات، أرقام الشوالات..."
                         rows={2}
+                        className="rounded-xl resize-none"
                       />
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
 
-                <Button onClick={addToQueue} className="w-full" size="lg">
-                  <UserPlus className="h-4 w-4 me-2" />
-                  إضافة إلى الطابور
+                <Button
+                  onClick={addToQueue}
+                  className="w-full h-12 rounded-xl text-base font-bold shadow-md shadow-primary/20"
+                >
+                  <UserPlus className="h-5 w-5 me-2" />
+                  حفظ وإصدار رقم الدور
                 </Button>
               </div>
             </DialogContent>
           </Dialog>
 
-          {activeSeason && (
-            <Button variant="outline" asChild>
-              <a
-                href={`/display/${activeSeason.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center h-10 px-3.5"
-              >
-                <Monitor className="h-4 w-4 me-2" />
-                شاشة العرض
-              </a>
-            </Button>
-          )}
+          <p className="text-xs text-muted-foreground mt-2.5 font-medium">
+            اضغط لتسجيل زبون جديد وإصدار رقم دوره فورياً على الشاشة
+          </p>
+        </div>
+
+        {/* KPI Quick Status Cards: 3 Interactive stats */}
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+          {/* Waiting */}
+          <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+              <Users className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">في قائمة الانتظار</p>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-extrabold text-foreground">{waiting.length}</span>
+                <span className="text-xs text-muted-foreground">زبون ({totalWaitingBags} شوال)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Processing */}
+          <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-primary/10 border border-primary/25">
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-primary">
+              <Play className="h-5 w-5" />
+              {processing.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-primary" />
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-primary">قيد العصر الآن</p>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-extrabold text-foreground">{processing.length}</span>
+                <span className="text-xs text-muted-foreground">معصرة نشطة ({totalProcessingBags} شوال)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Completed */}
+          <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">جاهز للفوترة والحساب</p>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-extrabold text-foreground">{completed.length}</span>
+                <span className="text-xs text-muted-foreground">زبون مكتمل ({totalCompletedBags} شوال)</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Three-column operations layout: RIGHT to LEFT */}
+      {/* Quick Search and Filter Bar */}
+      <div className="flex items-center gap-3 bg-card border border-border/70 rounded-2xl px-4 py-2.5 shadow-sm">
+        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="بحث سريع بالاسم، رقم الدور، أو رقم الهاتف..."
+          className="border-0 shadow-none focus-visible:ring-0 px-1 h-9 text-sm placeholder:text-muted-foreground/70"
+        />
+        {searchQuery && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSearchQuery("")}
+            className="h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+
+      {/* Operations Columns: 3 Columns from Right to Left */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         {/* العمود 1 (اليمين): 1. الطابور المنتظر */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3 border-b bg-muted/20">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="h-5 w-5 text-amber-500" />
-              1. الطابور المنتظر
-              {waiting.length > 0 && (
-                <Badge variant="secondary" className="ms-auto font-bold">{waiting.length}</Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="text-xs">الزبائن بانتظار بدء العصر</CardDescription>
+        <Card className="border-border/80 shadow-sm rounded-2xl overflow-hidden">
+          <CardHeader className="pb-3 border-b bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Users className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold">1. قائمة الانتظار</CardTitle>
+                  <CardDescription className="text-xs">الزبائن بانتظار بدء العصر</CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 font-extrabold px-2 py-0.5">
+                {filteredWaiting.length}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="pt-3">
+          <CardContent className="pt-4 p-3.5">
             {loading ? (
-              <p className="text-center py-8 text-muted-foreground text-sm">جارٍ التحميل...</p>
-            ) : waiting.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">لا يوجد زبائن في الانتظار</p>
+              <div className="py-12 text-center text-muted-foreground text-sm flex flex-col items-center justify-center gap-2">
+                <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+                <span>جارٍ تحميل الطابور...</span>
+              </div>
+            ) : filteredWaiting.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground px-4">
+                <div className="w-12 h-12 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3 text-muted-foreground/60">
+                  <Users className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">لا يوجد زبائن بالانتظار</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {searchQuery ? "لا توجد نتائج تطابق بحثك" : "اضغط على زر إضافة زبون بالأعلى لإدراج أول دور"}
+                </p>
+                {!searchQuery && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDialogOpen(true)}
+                    className="mt-3 text-xs rounded-xl border-dashed border-primary/40 text-primary hover:bg-primary/10"
+                  >
+                    + إضافة زبون الآن
+                  </Button>
+                )}
               </div>
             ) : (
-              <div className="space-y-2 max-h-[550px] overflow-y-auto">
-                {waiting.map((customer) => (
-                  <div
-                    key={customer.id}
-                    className="flex items-center gap-2.5 p-2.5 border rounded-lg hover:bg-accent/40 transition-colors"
-                  >
-                    <Badge variant="outline" className="text-base font-bold shrink-0 min-w-[2.5rem] justify-center bg-background">
-                      #{customer.position}
-                    </Badge>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h3 className="font-semibold text-foreground truncate text-sm">{customer.name}</h3>
-                        {parseEstimatedMinutes(customer) ? (
-                          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-[11px] py-0 px-1.5">
-                            <Clock className="h-2.5 w-2.5" />
-                            {parseEstimatedMinutes(customer)} د
-                          </Badge>
-                        ) : null}
+              <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+                {filteredWaiting.map((customer) => {
+                  const estMin = parseEstimatedMinutes(customer);
+                  return (
+                    <div
+                      key={customer.id}
+                      className="group relative flex items-center gap-3 p-3 border border-border/70 rounded-2xl bg-card hover:border-primary/40 hover:shadow-md transition-all duration-200"
+                    >
+                      {/* Position Badge */}
+                      <div className="flex flex-col items-center justify-center w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 shrink-0 font-black">
+                        <span className="text-[10px] leading-none opacity-60">دور</span>
+                        <span className="text-base leading-tight">#{customer.position}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        🛍️ {customer.bags} شوال • ⏰ {formatTime(customer.created_at)}
-                      </p>
+
+                      {/* Info */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-bold text-foreground truncate text-sm">
+                            {customer.name}
+                          </h3>
+                          {estMin ? (
+                            <Badge variant="outline" className="bg-muted/80 text-muted-foreground border-border text-[10px] py-0 px-1.5 gap-1 font-semibold">
+                              <Clock className="h-2.5 w-2.5 text-primary" />
+                              {estMin} د
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                          <span className="flex items-center gap-1 font-medium">
+                            <Package className="h-3 w-3 text-amber-500" />
+                            {customer.bags} شوال
+                          </span>
+                          <span>•</span>
+                          <span>{formatTime(customer.created_at)}</span>
+                          {customer.phone && (
+                            <>
+                              <span>•</span>
+                              <span className="font-mono text-[11px] truncate">{customer.phone}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          size="sm"
+                          onClick={() => startProcessing(customer.id)}
+                          className="h-9 px-3 rounded-xl font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20 gap-1.5 text-xs"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          بدء العصر
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTarget(customer)}
+                          title="حذف"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        size="sm"
-                        onClick={() => startProcessing(customer.id)}
-                        className="h-8 px-2.5 font-bold"
-                      >
-                        <Play className="h-3.5 w-3.5 me-1" />
-                        ابدأ
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(customer)}
-                        title="حذف"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* العمود 2 (الوسط): 2. قيد العصر */}
-        <Card className="border-primary/40 shadow-sm">
-          <CardHeader className="pb-3 border-b bg-primary/5">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Play className="h-5 w-5 text-primary" />
-              2. قيد العصر حالياً
-              {processing.length > 0 && (
-                <Badge variant="default" className="ms-auto font-bold">{processing.length}</Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="text-xs">
-              العصر جاري الآن — اضغط زر "تم العصر" عند الانتهاء لنقله للفوترة
-            </CardDescription>
+        <Card className="border-primary/40 shadow-sm rounded-2xl overflow-hidden bg-gradient-to-b from-primary/[0.03] to-transparent">
+          <CardHeader className="pb-3 border-b bg-primary/10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
+                  <Play className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold">2. قيد العصر حالياً</CardTitle>
+                  <CardDescription className="text-xs">المعصرة تعمل الآن — راقب العداد</CardDescription>
+                </div>
+              </div>
+              <Badge className="bg-primary text-primary-foreground font-extrabold px-2 py-0.5">
+                {filteredProcessing.length}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="pt-3">
-            {processing.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Play className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">لا يوجد زبون قيد العصر حالياً</p>
-                <p className="text-xs opacity-70 mt-1">اضغط "ابدأ" لأي زبون من قائمة الانتظار</p>
+          <CardContent className="pt-4 p-3.5">
+            {filteredProcessing.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground px-4">
+                <div className="w-12 h-12 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3 text-muted-foreground/60">
+                  <Play className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">لا يوجد زبون قيد العصر حالياً</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  اضغط زر "بدء العصر" لأي زبون من قائمة الانتظار لنقله إلى هنا
+                </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[550px] overflow-y-auto">
-                {processing.map((p) => {
+              <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1">
+                {filteredProcessing.map((p) => {
                   const remSec = getRemainingSeconds(p, nowMs);
                   const estMin = parseEstimatedMinutes(p) || 30;
                   return (
                     <div
                       key={p.id}
-                      className="rounded-xl border border-primary/40 bg-primary/5 p-3.5 space-y-3 shadow-sm"
+                      className="rounded-2xl border-2 border-primary/40 bg-card p-4 space-y-3 shadow-md relative overflow-hidden"
                     >
+                      {/* Active indicator bar */}
+                      <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-l from-primary via-emerald-400 to-primary" />
+
                       <div className="flex items-center gap-3">
-                        <Badge className="bg-primary text-primary-foreground text-xl px-3 py-1 font-bold shrink-0">
-                          #{p.position}
-                        </Badge>
+                        <div className="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/25 shrink-0">
+                          <span className="text-[10px] leading-none opacity-80">دور</span>
+                          <span className="text-lg leading-tight">#{p.position}</span>
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-foreground truncate text-base">{p.name}</h3>
-                          <p className="text-xs text-muted-foreground">
-                            🛍️ {p.bags} شوال • ⏰ بدأ: {formatTime(p.started_at || p.created_at)}
-                          </p>
+                          <h3 className="font-extrabold text-foreground truncate text-base">{p.name}</h3>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                            <span className="flex items-center gap-1 font-medium">
+                              <Package className="h-3 w-3 text-primary" />
+                              {p.bags} شوال
+                            </span>
+                            <span>•</span>
+                            <span>بدأ {formatTime(p.started_at || p.created_at)}</span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* عداد الوقت التنازلي المتبقي */}
-                      <div className="flex items-center justify-between bg-card/80 border p-2 rounded-lg gap-2">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                          <Clock className="h-4 w-4 text-amber-500" />
-                          <span>الوقت التقديري المتبقي :</span>
+                      {/* Digital Timer Countdown */}
+                      <div className="flex items-center justify-between bg-primary/5 border border-primary/20 p-2.5 rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+                          </div>
+                          <span className="text-xs font-bold text-foreground">الوقت المتبقي:</span>
                         </div>
-                        <span className="font-mono text-base font-black text-primary px-2 py-0.5 rounded bg-primary/10" dir="ltr">
+                        <span className="font-mono text-xl font-black text-primary tracking-wider" dir="ltr">
                           {remSec !== null ? formatRemaining(remSec) : `${estMin}:00`}
                         </span>
                       </div>
 
-                      {/* أزرار الوقت الإضافي إذا تأخر */}
-                      <div className="flex items-center justify-between gap-1 pt-1 border-t border-border/50">
-                        <span className="text-[11px] font-bold text-muted-foreground">وقت إضافي:</span>
-                        <div className="flex items-center gap-1">
+                      {/* Quick Extra Minutes Buttons */}
+                      <div className="flex items-center justify-between gap-1 pt-1 border-t border-border/60">
+                        <span className="text-[11px] font-semibold text-muted-foreground">تمديد وقت إضافي:</span>
+                        <div className="flex items-center gap-1.5">
                           {[5, 10, 15].map((extra) => (
                             <Button
                               key={extra}
                               size="sm"
                               type="button"
                               variant="outline"
-                              className="h-6 px-2 text-[11px] font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                              className="h-6 px-2 text-[11px] font-bold rounded-lg border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
                               onClick={() => addExtraMinutes(p.id, extra)}
                             >
                               +{extra} د
@@ -661,22 +849,22 @@ const Queue = () => {
                         </div>
                       </div>
 
-                      {/* زر "تم العصر" البارز لنقله لقسم تم بانتظار الفوترة */}
+                      {/* Main Finish Button */}
                       <div className="flex items-center gap-2 pt-1">
                         <Button
                           size="sm"
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9"
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 rounded-xl shadow-md shadow-emerald-600/20 text-xs md:text-sm"
                           onClick={() => completeProcessing(p.id)}
                         >
                           <CheckCircle className="h-4 w-4 me-1.5" />
-                          تم العصر
+                          تم العصر (جاهز للفوترة)
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-9 w-9 text-destructive hover:text-destructive"
+                          className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           onClick={() => setDeleteTarget(p)}
-                          title="حذف"
+                          title="إلغاء وحذف"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -690,59 +878,69 @@ const Queue = () => {
         </Card>
 
         {/* العمود 3 (اليسار): 3. تم العصر / بانتظار الفوترة */}
-        <Card className="border-emerald-500/30 shadow-sm">
-          <CardHeader className="pb-3 border-b bg-emerald-500/5">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <CheckCircle className="h-5 w-5 text-emerald-600" />
-              3. تم العصر / بانتظار الفوترة
-              {completed.length > 0 && (
-                <Badge variant="outline" className="ms-auto text-emerald-600 border-emerald-500/30 font-bold">{completed.length}</Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="text-xs">
-              انتهى العصر — اضغط "حساب وفاتورة" بعد تجميع الزيت لإنهاء المعاملة
-            </CardDescription>
+        <Card className="border-emerald-500/40 shadow-sm rounded-2xl overflow-hidden bg-gradient-to-b from-emerald-500/[0.03] to-transparent">
+          <CardHeader className="pb-3 border-b bg-emerald-500/10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <CheckCircle className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold">3. بانتظار الفوترة</CardTitle>
+                  <CardDescription className="text-xs">جاهز لحساب الزيت وإصدار السند</CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-extrabold px-2 py-0.5">
+                {filteredCompleted.length}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="pt-3">
-            {completed.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30 text-emerald-600" />
-                <p className="text-sm">لا يوجد زبائن بانتظار الفاتورة</p>
-                <p className="text-xs opacity-70 mt-1">عند الضغط على "تم العصر" سيظهر الزبون هنا</p>
+          <CardContent className="pt-4 p-3.5">
+            {filteredCompleted.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground px-4">
+                <div className="w-12 h-12 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3 text-muted-foreground/60">
+                  <CheckCircle className="h-6 w-6 text-emerald-600/50" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">لا يوجد زبائن بانتظار الفاتورة</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  عند الضغط على "تم العصر" سينتقل الزبون إلى هنا فوراً للفوترة
+                </p>
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-[550px] overflow-y-auto">
-                {completed.map((c) => (
+              <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+                {filteredCompleted.map((c) => (
                   <div
                     key={c.id}
-                    className="p-3 border border-emerald-500/20 bg-emerald-500/5 rounded-xl space-y-2"
+                    className="p-3.5 border border-emerald-500/30 bg-card rounded-2xl space-y-2.5 shadow-sm hover:border-emerald-500/50 transition-colors"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Badge variant="outline" className="text-base font-bold shrink-0 min-w-[2.5rem] justify-center bg-background border-emerald-500/40 text-emerald-700 dark:text-emerald-300">
-                        #{c.position}
-                      </Badge>
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-center justify-center w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 font-black shrink-0">
+                        <span className="text-[10px] leading-none opacity-60">دور</span>
+                        <span className="text-base leading-tight">#{c.position}</span>
+                      </div>
                       <div className="min-w-0 flex-1">
                         <h3 className="font-bold text-foreground truncate text-sm">{c.name}</h3>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground mt-0.5">
                           🛍️ {c.bags} شوال {c.phone && `• 📞 ${c.phone}`}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+
+                    <div className="flex items-center gap-2 pt-1 border-t border-border/60">
                       <Button
                         size="sm"
-                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-8 text-xs"
+                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 rounded-xl text-xs shadow-sm shadow-primary/20 gap-1.5"
                         onClick={() => openInvoiceFor(c)}
                       >
-                        <Calculator className="h-3.5 w-3.5 me-1" />
-                        حساب وفوترة
+                        <Calculator className="h-4 w-4" />
+                        حساب وفوترة الزبون
                       </Button>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        className="h-8 w-8 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         onClick={() => setDeleteTarget(c)}
-                        title="حذف"
+                        title="حذف من السجل"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -755,7 +953,7 @@ const Queue = () => {
         </Card>
       </div>
 
-      {/* Invoice Sheet */}
+      {/* Quick Invoice Sheet */}
       <QuickInvoiceSheet
         open={invoiceSheetOpen}
         onOpenChange={setInvoiceSheetOpen}
@@ -766,19 +964,19 @@ const Queue = () => {
         }}
       />
 
-      {/* Delete Confirmation */}
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir="rtl" className="rounded-3xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
-            <AlertDialogDescription>
-              هل تريد حذف <strong>{deleteTarget?.name}</strong> من الطابور؟ لا يمكن التراجع عن هذا الإجراء.
+            <AlertDialogTitle className="text-right">تأكيد حذف الزبون</AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              هل أنت متأكد من حذف الزبون <strong>{deleteTarget?.name}</strong> من الطابور؟ لا يمكن التراجع عن هذا الإجراء.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row-reverse gap-2">
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">
-              حذف
+            <AlertDialogCancel className="rounded-xl">إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90 rounded-xl">
+              تأكيد الحذف
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
