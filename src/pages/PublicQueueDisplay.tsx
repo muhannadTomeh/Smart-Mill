@@ -14,29 +14,7 @@ interface QueueItem {
   notes?: string | null;
 }
 
-interface DisplaySettings {
-  show_estimated_time: boolean;
-  show_oil_prices: boolean;
-  show_sell_price: boolean;
-  show_buy_price: boolean;
-  show_clock: boolean;
-  show_bags_count: boolean;
-  show_faqs: boolean;
-  ticker_text?: string;
-  custom_faqs?: Array<{ id?: string; q: string; a: string }>;
-}
-
-const defaultDisplaySettings: DisplaySettings = {
-  show_estimated_time: true,
-  show_oil_prices: true,
-  show_sell_price: true,
-  show_buy_price: true,
-  show_clock: true,
-  show_bags_count: true,
-  show_faqs: true,
-  ticker_text: "",
-  custom_faqs: [],
-};
+import { DisplaySettings, defaultDisplaySettings } from "@/hooks/useDisplaySettings";
 
 interface SeasonInfo {
   name: string;
@@ -84,9 +62,9 @@ export default function PublicQueueDisplay() {
       }
     } catch {}
 
-    // Multi-source fetching: Try direct select first (contains all columns if accessible), fallback to RPC
+    // Multi-source fetching: Try direct select first, fallback to RPC, and load display_settings
     let rawQueue: any[] = [];
-    const [tableRes, queueRes, seasonRes] = await Promise.all([
+    const [tableRes, queueRes, seasonRes, seasonSettingsRes] = await Promise.all([
       supabase
         .from("queue")
         .select("*")
@@ -94,6 +72,11 @@ export default function PublicQueueDisplay() {
         .order("position", { ascending: true }),
       supabase.rpc("get_public_queue", { p_season_id: seasonId }),
       supabase.rpc("get_public_season_display", { p_season_id: seasonId }),
+      supabase
+        .from("seasons")
+        .select("display_settings")
+        .eq("id", seasonId)
+        .maybeSingle(),
     ]);
 
     if (tableRes.data && Array.isArray(tableRes.data) && tableRes.data.length > 0) {
@@ -102,6 +85,17 @@ export default function PublicQueueDisplay() {
       rawQueue = queueRes.data;
     } else if (localItems.length > 0) {
       rawQueue = localItems;
+    }
+
+    // Update display settings from DB if available
+    if (seasonSettingsRes.data && (seasonSettingsRes.data as any).display_settings) {
+      const dbSettings = (seasonSettingsRes.data as any).display_settings;
+      if (typeof dbSettings === "object") {
+        setDisplaySettings((prev) => ({ ...defaultDisplaySettings, ...dbSettings }));
+        try {
+          localStorage.setItem(`display_settings_${seasonId}`, JSON.stringify(dbSettings));
+        } catch {}
+      }
     }
 
     // Map queue items and ensure estimated_minutes & started_at are extracted accurately
@@ -182,6 +176,28 @@ export default function PublicQueueDisplay() {
     return () => clearInterval(id);
   }, [activeFaqs.length]);
 
+  // Realtime BroadcastChannel listener for instant live toggle sync (0ms latency)
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("smart_mill_display_channel");
+      bc.onmessage = (event) => {
+        if (event.data?.type === "UPDATE_DISPLAY_SETTINGS" && event.data.settings) {
+          if (!event.data.seasonId || !seasonId || event.data.seasonId === seasonId) {
+            setDisplaySettings((prev) => ({
+              ...prev,
+              ...event.data.settings,
+            }));
+          }
+        }
+      };
+    } catch {}
+
+    return () => {
+      bc?.close();
+    };
+  }, [seasonId]);
+
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 4000);
@@ -211,7 +227,19 @@ export default function PublicQueueDisplay() {
     const channel = supabase
       .channel(`public-display-${seasonId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "queue" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "seasons", filter: `id=eq.${seasonId}` }, () => fetchData())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seasons", filter: `id=eq.${seasonId}` },
+        (payload) => {
+          if (payload.new && (payload.new as any).display_settings) {
+            const ds = (payload.new as any).display_settings;
+            if (typeof ds === "object") {
+              setDisplaySettings((prev) => ({ ...prev, ...ds }));
+            }
+          }
+          fetchData();
+        }
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);

@@ -176,13 +176,28 @@ export default function Settings() {
       });
   }, [activeSeason?.id]);
 
-  // Instantly persist any toggle change so it never reverts
+  // Broadcast to other tabs immediately (0ms)
+  const broadcastSettingsChange = (settings: DisplaySettings) => {
+    try {
+      const bc = new BroadcastChannel("smart_mill_display_channel");
+      bc.postMessage({
+        type: "UPDATE_DISPLAY_SETTINGS",
+        seasonId: activeSeason?.id,
+        settings,
+      });
+      bc.close();
+    } catch {}
+  };
+
+  // Instantly persist any toggle change so it never reverts and reflects live
   const updateDisplaySetting = <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
     setDisplaySettings((prev) => {
       const updated = { ...prev, [key]: value };
       if (activeSeason?.id) {
         localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+        localStorage.setItem("display_settings_global", JSON.stringify(updated));
       }
+      broadcastSettingsChange(updated);
       return updated;
     });
   };
@@ -195,6 +210,8 @@ export default function Settings() {
     setSavingDisplay(true);
     try {
       localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(displaySettings));
+      localStorage.setItem("display_settings_global", JSON.stringify(displaySettings));
+      broadcastSettingsChange(displaySettings);
 
       const { error } = await supabase
         .from("seasons")
@@ -205,7 +222,7 @@ export default function Settings() {
         throw error;
       }
 
-      toast({ title: "تم الحفظ بنجاح", description: "تم تحديث إعدادات شاشة العرض العامة" });
+      toast({ title: "تم الحفظ بنجاح", description: "تم تحديث وتطبيق إعدادات شاشة العرض العامة" });
       if (refetchSeasons) refetchSeasons();
     } catch (err: any) {
       toast({ title: "خطأ", description: err.message || "تعذر حفظ إعدادات الشاشة", variant: "destructive" });
@@ -227,7 +244,9 @@ export default function Settings() {
       };
       if (activeSeason?.id) {
         localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+        localStorage.setItem("display_settings_global", JSON.stringify(updated));
       }
+      broadcastSettingsChange(updated);
       return updated;
     });
     setNewFaqQ("");
@@ -242,7 +261,9 @@ export default function Settings() {
       };
       if (activeSeason?.id) {
         localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+        localStorage.setItem("display_settings_global", JSON.stringify(updated));
       }
+      broadcastSettingsChange(updated);
       return updated;
     });
   };
@@ -255,7 +276,9 @@ export default function Settings() {
       };
       if (activeSeason?.id) {
         localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+        localStorage.setItem("display_settings_global", JSON.stringify(updated));
       }
+      broadcastSettingsChange(updated);
       return updated;
     });
   };

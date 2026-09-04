@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { QuickInvoiceSheet } from "@/components/queue/QuickInvoiceSheet";
+import { DisplaySettingsDialog } from "@/components/queue/DisplaySettingsDialog";
 
 interface QueueItem {
   id: string;
@@ -505,21 +506,25 @@ const Queue = () => {
           </Button>
 
           {activeSeason && (
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="h-9 px-3 rounded-lg border-border hover:bg-accent text-xs font-medium text-foreground gap-1.5"
-            >
-              <a
-                href={`/display/${activeSeason.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
+            <div className="flex items-center gap-1.5">
+              <DisplaySettingsDialog seasonId={activeSeason.id} />
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="h-9 px-3 rounded-lg border-border hover:bg-accent text-xs font-medium text-foreground gap-1.5"
+                title="فتح شاشة العرض العامة في نافذة جديدة"
               >
-                <Monitor className="h-3.5 w-3.5 text-primary" />
-                <span>شاشة العرض</span>
-              </a>
-            </Button>
+                <a
+                  href={`/display/${activeSeason.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Monitor className="h-3.5 w-3.5 text-primary" />
+                  <span>شاشة العرض</span>
+                </a>
+              </Button>
+            </div>
           )}
         </div>
       </div>
