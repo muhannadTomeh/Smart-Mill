@@ -281,9 +281,10 @@ const Queue = () => {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    const deletedName = deleteTarget.name;
     setAllItems((prev) => prev.filter((i) => i.id !== deleteTarget.id));
     await supabase.from("queue").delete().eq("id", deleteTarget.id);
-    toast.success("تم حذف الزبون من الطابور");
+    toast.success(`تمت إزالة ${deletedName} من الطابور`);
     setDeleteTarget(null);
     await fetchQueue();
   };
@@ -340,113 +341,75 @@ const Queue = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12" dir="rtl">
-      {/* Header Container with Centered Action Button */}
-      <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-b from-card via-card to-card/70 p-6 md:p-8 shadow-sm">
-        <div className="pointer-events-none absolute -left-20 -top-20 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-amber-500/10 blur-3xl" />
-
-        {/* Top bar: Title & Screen Link */}
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 text-primary shadow-inner">
-              <Clock className="h-6 w-6" />
+    <div className="space-y-5 pb-8" dir="rtl">
+      {/* 1. Header: Compact, Functional SaaS Page Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 md:px-5 md:py-3.5 rounded-xl bg-card border border-border shadow-xs">
+        {/* Right side (RTL start): Title + Primary CTA */}
+        <div className="flex items-center gap-3 md:gap-4 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
+              <Clock className="h-4 w-4" />
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">
+            <h1 className="text-lg md:text-xl font-semibold text-foreground tracking-tight">
               إدارة الطابور والعصر
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchQueue}
-              className="h-10 px-3 rounded-xl border-border/70 hover:bg-accent gap-1.5 text-xs font-semibold text-muted-foreground"
-              title="تحديث البيانات"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              تحديث
-            </Button>
-
-            {activeSeason && (
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="h-10 px-4 rounded-xl border-primary/25 hover:border-primary/50 hover:bg-primary/5 transition-all text-xs font-bold gap-2 text-foreground"
-              >
-                <a
-                  href={`/display/${activeSeason.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Monitor className="h-4 w-4 text-primary" />
-                  شاشة العرض
-                </a>
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* PROMINENT CENTERED ACTION: إضافة زبون في النصف تماماً */}
-        <div className="relative z-10 mt-6 flex justify-center">
+          {/* Primary CTA: + إضافة زبون near the title */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button
-                size="lg"
-                className="h-14 px-8 md:px-12 rounded-2xl text-base md:text-lg font-black bg-primary text-primary-foreground shadow-xl shadow-primary/20 hover:shadow-2xl hover:shadow-primary/35 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 gap-3 group border border-primary/30"
+                size="sm"
+                className="h-9 px-3.5 rounded-lg text-sm font-semibold shadow-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 group-hover:scale-110 transition-transform">
-                  <UserPlus className="h-5 w-5 text-white" />
-                </div>
-                <span>إضافة زبون جديد للطابور</span>
+                <UserPlus className="h-4 w-4" />
+                <span>+ إضافة زبون</span>
               </Button>
             </DialogTrigger>
 
-            <DialogContent dir="rtl" className="max-w-md rounded-3xl p-6">
+            <DialogContent dir="rtl" className="max-w-md rounded-xl p-5">
               <DialogHeader className="text-right">
-                <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <DialogTitle className="text-lg font-semibold flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-primary" />
                   تسجيل زبون جديد في الطابور
                 </DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-4 mt-3">
+              <div className="space-y-3.5 mt-2">
                 {/* اسم الزبون */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="name" className="text-sm font-semibold">اسم الزبون *</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="name" className="text-xs font-medium">اسم الزبون *</Label>
                   <Input
                     id="name"
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, name: e.target.value }))}
-                    className="h-11 rounded-xl text-base"
+                    className="h-10 rounded-lg text-sm"
                     autoFocus
                   />
                 </div>
 
                 {/* رقم التواصل (إختياري) */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="phone" className="text-sm font-semibold">رقم التواصل (إختياري)</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="phone" className="text-xs font-medium">رقم التواصل (إختياري)</Label>
                   <Input
                     id="phone"
                     value={newCustomer.phone}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
-                    className="h-11 rounded-xl text-base"
+                    className="h-10 rounded-lg text-sm"
                   />
                 </div>
 
                 {/* عدد الشوالات */}
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="bags" className="text-sm font-semibold">عدد الشوالات *</Label>
+                    <Label htmlFor="bags" className="text-xs font-medium">عدد الشوالات *</Label>
                     <div className="flex gap-1">
                       {[10, 20, 30, 50].map((b) => (
                         <button
                           key={b}
                           type="button"
                           onClick={() => setNewCustomer((p) => ({ ...p, bags: String(b) }))}
-                          className="text-[11px] px-2 py-0.5 rounded-lg border border-border/80 bg-muted/50 hover:bg-muted text-muted-foreground font-medium transition-colors"
+                          className="text-[11px] px-2 py-0.5 rounded border border-border bg-muted/50 hover:bg-muted text-muted-foreground font-medium transition-colors"
                         >
                           +{b}
                         </button>
@@ -459,23 +422,23 @@ const Queue = () => {
                     value={newCustomer.bags}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, bags: e.target.value }))}
                     min="1"
-                    className="h-11 rounded-xl text-base"
+                    className="h-10 rounded-lg text-sm"
                   />
                 </div>
 
                 {/* طي: الوقت التقديري (افتراضي نص ساعة) + ملاحظات */}
                 <Collapsible open={showExtra} onOpenChange={setShowExtra}>
                   <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full justify-between rounded-xl text-muted-foreground hover:text-foreground">
-                      <span className="text-xs font-semibold">خيارات إضافية (الوقت التقديري، ملاحظات)</span>
-                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showExtra ? "rotate-180" : ""}`} />
+                    <Button variant="ghost" size="sm" className="w-full justify-between rounded-lg text-muted-foreground hover:text-foreground h-8 px-2">
+                      <span className="text-xs font-medium">خيارات إضافية (الوقت التقديري، ملاحظات)</span>
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showExtra ? "rotate-180" : ""}`} />
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-3 pt-2">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="estimatedMinutes" className="text-sm font-semibold flex items-center gap-1.5">
-                          <Clock className="h-4 w-4 text-primary" />
+                        <Label htmlFor="estimatedMinutes" className="text-xs font-medium flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-primary" />
                           الوقت التقديري (بالدقائق)
                         </Label>
                         <div className="flex gap-1">
@@ -485,7 +448,7 @@ const Queue = () => {
                               type="button"
                               size="sm"
                               variant={newCustomer.estimatedMinutes === String(m) ? "default" : "outline"}
-                              className="h-6 px-2 text-xs rounded-lg"
+                              className="h-6 px-2 text-[11px] rounded"
                               onClick={() => setNewCustomer((p) => ({ ...p, estimatedMinutes: String(m) }))}
                             >
                               {m} د
@@ -499,18 +462,18 @@ const Queue = () => {
                         value={newCustomer.estimatedMinutes}
                         onChange={(e) => setNewCustomer((p) => ({ ...p, estimatedMinutes: e.target.value }))}
                         min="1"
-                        className="h-11 rounded-xl"
+                        className="h-9 rounded-lg text-sm"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <Label htmlFor="notes" className="text-xs font-semibold">ملاحظات</Label>
+                      <Label htmlFor="notes" className="text-xs font-medium">ملاحظات</Label>
                       <Textarea
                         id="notes"
                         value={newCustomer.notes}
                         onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))}
                         rows={2}
-                        className="rounded-xl resize-none"
+                        className="rounded-lg resize-none text-sm"
                       />
                     </div>
                   </CollapsibleContent>
@@ -518,107 +481,131 @@ const Queue = () => {
 
                 <Button
                   onClick={addToQueue}
-                  className="w-full h-12 rounded-xl text-base font-bold shadow-md shadow-primary/20"
+                  className="w-full h-10 rounded-lg text-sm font-semibold shadow-xs mt-2"
                 >
-                  <UserPlus className="h-5 w-5 me-2" />
+                  <UserPlus className="h-4 w-4 me-1.5" />
                   حفظ وإصدار رقم الدور
                 </Button>
               </div>
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Left side (Secondary Actions): تحديث + شاشة العرض */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchQueue}
+            className="h-9 px-3 rounded-lg border-border text-xs font-medium text-muted-foreground hover:text-foreground gap-1.5"
+            title="تحديث البيانات"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>تحديث</span>
+          </Button>
+
+          {activeSeason && (
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="h-9 px-3 rounded-lg border-border hover:bg-accent text-xs font-medium text-foreground gap-1.5"
+            >
+              <a
+                href={`/display/${activeSeason.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Monitor className="h-3.5 w-3.5 text-primary" />
+                <span>شاشة العرض</span>
+              </a>
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Operations Columns: 3 Columns from Right to Left */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        {/* العمود 1 (اليمين): 1. قائمة الانتظار */}
-        <Card className="border-border/80 shadow-sm rounded-2xl overflow-hidden">
-          <CardHeader className="pb-3 border-b bg-muted/30">
+      {/* 2. Operations Workflow Columns: 30% Waiting - 40% Processing - 30% Invoicing */}
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 md:gap-5 items-start">
+        {/* العمود 1 (اليمين): 1. قائمة الانتظار (30%) */}
+        <Card className="lg:col-span-3 border border-border shadow-xs rounded-xl overflow-hidden bg-card">
+          <CardHeader className="py-3 px-4 border-b border-border/80 bg-muted/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                  <Users className="h-4 w-4" />
-                </div>
-                <CardTitle className="text-base font-bold">1. قائمة الانتظار</CardTitle>
+                <Users className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <CardTitle className="text-base font-semibold">1. قائمة الانتظار</CardTitle>
               </div>
-              <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 font-extrabold px-2 py-0.5">
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25 font-bold px-2 py-0 text-xs">
                 {waiting.length}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="pt-4 p-3.5">
+          <CardContent className="p-3">
             {loading ? (
-              <div className="py-12 text-center text-muted-foreground text-sm flex flex-col items-center justify-center gap-2">
-                <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+              <div className="py-10 text-center text-muted-foreground text-xs flex flex-col items-center justify-center gap-2">
+                <RefreshCw className="h-4 w-4 animate-spin text-primary" />
                 <span>جارٍ التحميل...</span>
               </div>
             ) : waiting.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground px-4">
-                <div className="w-12 h-12 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3 text-muted-foreground/60">
-                  <Users className="h-6 w-6" />
-                </div>
-                <p className="text-sm font-semibold text-foreground">لا يوجد زبائن بالانتظار</p>
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground/30" />
+                <p className="text-xs font-medium">لا يوجد زبائن في الانتظار</p>
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-0.5">
                 {waiting.map((customer) => {
                   const estMin = parseEstimatedMinutes(customer);
                   return (
                     <div
                       key={customer.id}
-                      className="group relative flex items-center gap-3 p-3 border border-border/70 rounded-2xl bg-card hover:border-primary/40 hover:shadow-md transition-all duration-200"
+                      className="group flex items-center justify-between gap-2.5 p-2.5 border border-border rounded-lg bg-card hover:bg-muted/30 transition-colors"
                     >
-                      {/* Position Badge */}
-                      <div className="flex flex-col items-center justify-center w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 shrink-0 font-black">
-                        <span className="text-[10px] leading-none opacity-60">دور</span>
-                        <span className="text-base leading-tight">#{customer.position}</span>
-                      </div>
+                      {/* Left info: Queue # and Details */}
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <span className="inline-flex items-center justify-center h-8 w-8 rounded-md bg-amber-500/15 border border-amber-500/25 text-amber-800 dark:text-amber-200 font-bold text-xs shrink-0">
+                          #{customer.position}
+                        </span>
 
-                      {/* Info */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="font-bold text-foreground truncate text-sm">
-                            {customer.name}
-                          </h3>
-                          {estMin ? (
-                            <Badge variant="outline" className="bg-muted/80 text-muted-foreground border-border text-[10px] py-0 px-1.5 gap-1 font-semibold">
-                              <Clock className="h-2.5 w-2.5 text-primary" />
-                              {estMin} د
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                          <span className="flex items-center gap-1 font-medium">
-                            <Package className="h-3 w-3 text-amber-500" />
-                            {customer.bags} شوال
-                          </span>
-                          <span>•</span>
-                          <span>{formatTime(customer.created_at)}</span>
-                          {customer.phone && (
-                            <>
-                              <span>•</span>
-                              <span className="font-mono text-[11px] truncate">{customer.phone}</span>
-                            </>
-                          )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-foreground text-sm truncate">
+                              {customer.name}
+                            </span>
+                            {estMin ? (
+                              <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                {estMin} د
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                            <span>{customer.bags} شوال</span>
+                            <span>•</span>
+                            <span>{formatTime(customer.created_at)}</span>
+                            {customer.phone && (
+                              <>
+                                <span>•</span>
+                                <span className="font-mono text-[11px]">{customer.phone}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         <Button
                           size="sm"
                           onClick={() => startProcessing(customer.id)}
-                          className="h-9 px-3 rounded-xl font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20 gap-1.5 text-xs"
+                          className="h-8 px-2.5 rounded-md font-medium bg-primary text-primary-foreground hover:bg-primary/90 text-xs gap-1"
                         >
-                          <Play className="h-3.5 w-3.5" />
-                          بدء العصر
+                          <Play className="h-3 w-3" />
+                          <span>بدء العصر</span>
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          className="h-8 w-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           onClick={() => setDeleteTarget(customer)}
-                          title="حذف"
+                          title="إزالة الزبون"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -631,112 +618,103 @@ const Queue = () => {
           </CardContent>
         </Card>
 
-        {/* العمود 2 (الوسط): 2. قيد العصر */}
-        <Card className="border-primary/40 shadow-sm rounded-2xl overflow-hidden bg-gradient-to-b from-primary/[0.03] to-transparent">
-          <CardHeader className="pb-3 border-b bg-primary/10">
+        {/* العمود 2 (الوسط): 2. قيد العصر حالياً (40% - Visual Focal Point) */}
+        <Card className="lg:col-span-4 border-2 border-primary/30 shadow-xs rounded-xl overflow-hidden bg-card">
+          <CardHeader className="py-3 px-4 border-b border-border/80 bg-primary/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
-                  <Play className="h-4 w-4" />
-                </div>
-                <CardTitle className="text-base font-bold">2. قيد العصر حالياً</CardTitle>
+                <Play className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base font-semibold text-foreground">
+                  2. قيد العصر حالياً
+                </CardTitle>
               </div>
-              <Badge className="bg-primary text-primary-foreground font-extrabold px-2 py-0.5">
+              <Badge className="bg-primary text-primary-foreground font-bold px-2 py-0 text-xs">
                 {processing.length}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="pt-4 p-3.5">
+          <CardContent className="p-3.5">
             {processing.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground px-4">
-                <div className="w-12 h-12 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3 text-muted-foreground/60">
-                  <Play className="h-6 w-6" />
-                </div>
-                <p className="text-sm font-semibold text-foreground">لا يوجد زبون قيد العصر</p>
+              <div className="text-center py-10 text-muted-foreground">
+                <Play className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground/30" />
+                <p className="text-xs font-medium">لا يوجد زبون قيد العصر حالياً</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-0.5">
                 {processing.map((p) => {
                   const remSec = getRemainingSeconds(p, nowMs);
                   const estMin = parseEstimatedMinutes(p) || 30;
                   return (
                     <div
                       key={p.id}
-                      className="rounded-2xl border-2 border-primary/40 bg-card p-4 space-y-3 shadow-md relative overflow-hidden"
+                      className="rounded-xl border border-primary/30 bg-card p-4 space-y-3.5 shadow-xs"
                     >
-                      <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-l from-primary via-emerald-400 to-primary" />
-
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-primary text-primary-foreground font-black shadow-md shadow-primary/25 shrink-0">
-                          <span className="text-[10px] leading-none opacity-80">دور</span>
-                          <span className="text-lg leading-tight">#{p.position}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-extrabold text-foreground truncate text-base">{p.name}</h3>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                            <span className="flex items-center gap-1 font-medium">
-                              <Package className="h-3 w-3 text-primary" />
+                      {/* Customer Name and Position */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base md:text-lg font-bold text-foreground truncate">
+                              {p.name}
+                            </h3>
+                            <Badge variant="outline" className="text-xs font-medium px-2 py-0 border-border text-muted-foreground shrink-0">
                               {p.bags} شوال
-                            </span>
-                            <span>•</span>
-                            <span>بدأ {formatTime(p.started_at || p.created_at)}</span>
+                            </Badge>
                           </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            بدأ {formatTime(p.started_at || p.created_at)}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg bg-primary text-primary-foreground font-bold text-sm">
+                            #{p.position}
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteTarget(p)}
+                            title="إزالة الزبون"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
 
-                      {/* Digital Timer Countdown */}
-                      <div className="flex items-center justify-between bg-primary/5 border border-primary/20 p-2.5 rounded-xl">
-                        <div className="flex items-center gap-2">
-                          <div className="relative flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
-                          </div>
-                          <span className="text-xs font-bold text-foreground">الوقت المتبقي:</span>
-                        </div>
-                        <span className="font-mono text-xl font-black text-primary tracking-wider" dir="ltr">
+                      {/* Prominent Operational Timer */}
+                      <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-muted/40 border border-border/50 text-center">
+                        <span className="text-xs font-medium text-muted-foreground mb-1">
+                          الوقت المتبقي
+                        </span>
+                        <span className="text-3xl md:text-4xl font-bold font-mono text-primary tracking-tight" dir="ltr">
                           {remSec !== null ? formatRemaining(remSec) : `${estMin}:00`}
                         </span>
                       </div>
 
-                      {/* Quick Extra Minutes Buttons */}
-                      <div className="flex items-center justify-between gap-1 pt-1 border-t border-border/60">
-                        <span className="text-[11px] font-semibold text-muted-foreground">تمديد وقت:</span>
-                        <div className="flex items-center gap-1.5">
-                          {[5, 10, 15].map((extra) => (
-                            <Button
-                              key={extra}
-                              size="sm"
-                              type="button"
-                              variant="outline"
-                              className="h-6 px-2 text-[11px] font-bold rounded-lg border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
-                              onClick={() => addExtraMinutes(p.id, extra)}
-                            >
-                              +{extra} د
-                            </Button>
-                          ))}
-                        </div>
+                      {/* Time Extensions: +5 د, +10 د, +15 د */}
+                      <div className="flex items-center justify-center gap-2">
+                        {[5, 10, 15].map((extra) => (
+                          <Button
+                            key={extra}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            className="h-7 px-3 text-xs font-medium rounded-lg border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+                            onClick={() => addExtraMinutes(p.id, extra)}
+                          >
+                            +{extra} د
+                          </Button>
+                        ))}
                       </div>
 
-                      {/* Main Finish Button */}
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 rounded-xl shadow-md shadow-emerald-600/20 text-xs md:text-sm"
-                          onClick={() => completeProcessing(p.id)}
-                        >
-                          <CheckCircle className="h-4 w-4 me-1.5" />
-                          تم العصر (جاهز للفوترة)
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => setDeleteTarget(p)}
-                          title="إلغاء وحذف"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {/* Main Action: ✓ تم العصر (Strongest Action) */}
+                      <Button
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-10 rounded-lg shadow-xs text-sm gap-2"
+                        onClick={() => completeProcessing(p.id)}
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        <span>تم العصر</span>
+                      </Button>
                     </div>
                   );
                 })}
@@ -745,64 +723,63 @@ const Queue = () => {
           </CardContent>
         </Card>
 
-        {/* العمود 3 (اليسار): 3. تم العصر / بانتظار الفوترة */}
-        <Card className="border-emerald-500/40 shadow-sm rounded-2xl overflow-hidden bg-gradient-to-b from-emerald-500/[0.03] to-transparent">
-          <CardHeader className="pb-3 border-b bg-emerald-500/10">
+        {/* العمود 3 (اليسار): 3. بانتظار الفاتورة (30%) */}
+        <Card className="lg:col-span-3 border border-border shadow-xs rounded-xl overflow-hidden bg-card">
+          <CardHeader className="py-3 px-4 border-b border-border/80 bg-muted/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                  <CheckCircle className="h-4 w-4" />
-                </div>
-                <CardTitle className="text-base font-bold">3. بانتظار الفوترة</CardTitle>
+                <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <CardTitle className="text-base font-semibold">3. بانتظار الفاتورة</CardTitle>
               </div>
-              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-extrabold px-2 py-0.5">
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 font-bold px-2 py-0 text-xs">
                 {completed.length}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="pt-4 p-3.5">
+          <CardContent className="p-3">
             {completed.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground px-4">
-                <div className="w-12 h-12 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3 text-muted-foreground/60">
-                  <CheckCircle className="h-6 w-6 text-emerald-600/50" />
-                </div>
-                <p className="text-sm font-semibold text-foreground">لا يوجد زبائن بانتظار الفاتورة</p>
+              <div className="text-center py-8 text-muted-foreground">
+                <CheckCircle className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground/30" />
+                <p className="text-xs font-medium">لا يوجد زبائن بانتظار الفاتورة</p>
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-0.5">
                 {completed.map((c) => (
                   <div
                     key={c.id}
-                    className="p-3.5 border border-emerald-500/30 bg-card rounded-2xl space-y-2.5 shadow-sm hover:border-emerald-500/50 transition-colors"
+                    className="flex items-center justify-between gap-2.5 p-2.5 border border-border rounded-lg bg-card hover:bg-muted/30 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col items-center justify-center w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 font-black shrink-0">
-                        <span className="text-[10px] leading-none opacity-60">دور</span>
-                        <span className="text-base leading-tight">#{c.position}</span>
-                      </div>
+                    {/* Left info */}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <span className="inline-flex items-center justify-center h-8 w-8 rounded-md bg-emerald-500/15 border border-emerald-500/25 text-emerald-800 dark:text-emerald-200 font-bold text-xs shrink-0">
+                        #{c.position}
+                      </span>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-bold text-foreground truncate text-sm">{c.name}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          🛍️ {c.bags} شوال {c.phone && `• 📞 ${c.phone}`}
+                        <span className="font-semibold text-foreground text-sm truncate block">
+                          {c.name}
+                        </span>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {c.bags} شوال {c.phone && `• ${c.phone}`}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-1 border-t border-border/60">
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
                       <Button
                         size="sm"
-                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 rounded-xl text-xs shadow-sm shadow-primary/20 gap-1.5"
+                        className="h-8 px-2.5 rounded-md font-medium bg-primary text-primary-foreground hover:bg-primary/90 text-xs gap-1"
                         onClick={() => openInvoiceFor(c)}
                       >
-                        <Calculator className="h-4 w-4" />
-                        حساب وفوترة الزبون
+                        <Calculator className="h-3 w-3" />
+                        <span>حساب وفوترة</span>
                       </Button>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        className="h-8 w-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         onClick={() => setDeleteTarget(c)}
-                        title="حذف من السجل"
+                        title="إزالة الزبون"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -826,19 +803,22 @@ const Queue = () => {
         }}
       />
 
-      {/* Delete Confirmation Dialog */}
+      {/* 5. Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent dir="rtl" className="rounded-3xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-right">تأكيد حذف الزبون</AlertDialogTitle>
-            <AlertDialogDescription className="text-right">
-              هل أنت متأكد من حذف الزبون <strong>{deleteTarget?.name}</strong> من الطابور؟ لا يمكن التراجع عن هذا الإجراء.
+        <AlertDialogContent dir="rtl" className="max-w-sm rounded-xl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle className="text-base font-semibold">تأكيد الإزالة</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              هل تريد إزالة هذا الزبون ({deleteTarget?.name}) من الطابور؟
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row-reverse gap-2">
-            <AlertDialogCancel className="rounded-xl">إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90 rounded-xl">
-              تأكيد الحذف
+          <AlertDialogFooter className="flex-row-reverse gap-2 mt-2">
+            <AlertDialogCancel className="rounded-lg text-xs h-9">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg text-xs h-9 font-medium"
+            >
+              إزالة الزبون
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -848,4 +828,5 @@ const Queue = () => {
 };
 
 export default Queue;
+
 
