@@ -22,7 +22,6 @@ interface DisplaySettings {
   show_clock: boolean;
   show_bags_count: boolean;
   show_faqs: boolean;
-  traffic_light?: "green" | "orange" | "red";
   ticker_text?: string;
   custom_faqs?: Array<{ id?: string; q: string; a: string }>;
 }
@@ -35,7 +34,6 @@ const defaultDisplaySettings: DisplaySettings = {
   show_clock: true,
   show_bags_count: true,
   show_faqs: true,
-  traffic_light: "orange",
   ticker_text: "",
   custom_faqs: [],
 };
@@ -64,7 +62,6 @@ export default function PublicQueueDisplay() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(defaultDisplaySettings);
-  const [trafficLight, setTrafficLight] = useState<"green" | "orange" | "red">("orange");
   const [prevProcessingId, setPrevProcessingId] = useState<string | null>(null);
   const [fadeKey, setFadeKey] = useState(0);
   const [faqIndex, setFaqIndex] = useState(0);
@@ -80,10 +77,6 @@ export default function PublicQueueDisplay() {
       const cachedSettings = localStorage.getItem(`display_settings_${seasonId}`);
       if (cachedSettings) {
         setDisplaySettings({ ...defaultDisplaySettings, ...JSON.parse(cachedSettings) });
-      }
-      const cachedLight = localStorage.getItem(`traffic_light_${seasonId}`);
-      if (cachedLight === "green" || cachedLight === "orange" || cachedLight === "red") {
-        setTrafficLight(cachedLight);
       }
       const cachedQueue = localStorage.getItem(`active_queue_${seasonId}`);
       if (cachedQueue) {
@@ -163,9 +156,6 @@ export default function PublicQueueDisplay() {
       setSeason(seasonRow);
       if (seasonRow.display_settings && typeof seasonRow.display_settings === "object") {
         setDisplaySettings({ ...defaultDisplaySettings, ...seasonRow.display_settings });
-        if (seasonRow.display_settings.traffic_light) {
-          setTrafficLight(seasonRow.display_settings.traffic_light);
-        }
       }
     }
   };
@@ -198,11 +188,6 @@ export default function PublicQueueDisplay() {
 
     // Cross-tab instant synchronization
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === `traffic_light_${seasonId}` && e.newValue) {
-        if (e.newValue === "green" || e.newValue === "orange" || e.newValue === "red") {
-          setTrafficLight(e.newValue);
-        }
-      }
       if (
         e.key?.includes("display_settings") ||
         e.key?.includes("active_queue") ||
@@ -333,51 +318,6 @@ export default function PublicQueueDisplay() {
           </div>
         </div>
 
-        {/* Traffic Light Unit (إشارة المرور اليدوية للكاش) */}
-        <div className="flex items-center gap-4 bg-black/60 border border-white/10 px-5 py-2.5 rounded-2xl backdrop-blur-md shadow-2xl">
-          <span className="text-sm text-white/60 font-bold">إشارة المرور:</span>
-          {/* 3 LEDs */}
-          <div className="flex items-center gap-3 bg-black/80 px-3 py-1.5 rounded-xl border border-white/10">
-            <div
-              className={`w-7 h-7 rounded-full transition-all duration-300 ${
-                trafficLight === "red"
-                  ? "bg-rose-500 shadow-[0_0_20px_#f43f5e] border-2 border-rose-200"
-                  : "bg-rose-950/40 border border-rose-900/30 opacity-20"
-              }`}
-              title="أحمر: توقف مؤقت"
-            />
-            <div
-              className={`w-7 h-7 rounded-full transition-all duration-300 ${
-                trafficLight === "orange"
-                  ? "bg-amber-400 shadow-[0_0_20px_#fbbf24] border-2 border-amber-200"
-                  : "bg-amber-950/40 border border-amber-900/30 opacity-20"
-              }`}
-              title="برتقالي: قيد العصر"
-            />
-            <div
-              className={`w-7 h-7 rounded-full transition-all duration-300 ${
-                trafficLight === "green"
-                  ? "bg-emerald-400 shadow-[0_0_20px_#34d399] border-2 border-emerald-200"
-                  : "bg-emerald-950/40 border border-emerald-900/30 opacity-20"
-              }`}
-              title="أخضر: استعد لدورك"
-            />
-          </div>
-
-          <span
-            className={`text-base font-black px-4 py-1 rounded-xl border ${
-              trafficLight === "green"
-                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_rgba(52,211,153,0.3)]"
-                : trafficLight === "orange"
-                ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_15px_rgba(251,191,36,0.3)]"
-                : "bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]"
-            }`}
-          >
-            {trafficLight === "green" && "🟢 استعد لدورك — مسموح بالدخول"}
-            {trafficLight === "orange" && "🟠 قيد العصر — يرجى الانتظار"}
-            {trafficLight === "red" && "🔴 توقف مؤقت — يرجى الانتظار"}
-          </span>
-        </div>
 
         {displaySettings.show_clock && (
           <div className="font-mono flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] px-6 py-2 rounded-2xl backdrop-blur-md shadow-inner">
@@ -507,29 +447,6 @@ export default function PublicQueueDisplay() {
             )}
           </div>
 
-          {/* Traffic Light Signal in Upcoming Panel */}
-          <div
-            className={`mb-4 px-5 py-2.5 rounded-2xl flex items-center justify-between border ${
-              trafficLight === "green"
-                ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200"
-                : trafficLight === "orange"
-                ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
-                : "bg-rose-950/40 border-rose-500/40 text-rose-200"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1 rounded-lg border border-white/10">
-                <span className={`w-3.5 h-3.5 rounded-full ${trafficLight === "red" ? "bg-rose-500 shadow-[0_0_8px_#f43f5e]" : "bg-rose-950/40 opacity-20"}`} />
-                <span className={`w-3.5 h-3.5 rounded-full ${trafficLight === "orange" ? "bg-amber-400 shadow-[0_0_8px_#fbbf24]" : "bg-amber-950/40 opacity-20"}`} />
-                <span className={`w-3.5 h-3.5 rounded-full ${trafficLight === "green" ? "bg-emerald-400 shadow-[0_0_8px_#34d399]" : "bg-emerald-950/40 opacity-20"}`} />
-              </div>
-              <span className="font-bold text-base md:text-lg">
-                {trafficLight === "green" && "إشارة المرور: 🟢 استعد لدورك — مسموح بالدخول"}
-                {trafficLight === "orange" && "إشارة المرور: 🟠 قيد العصر — يرجى الانتظار"}
-                {trafficLight === "red" && "إشارة المرور: 🔴 توقف مؤقت — يرجى الانتظار"}
-              </span>
-            </div>
-          </div>
 
           <div className="flex-1 flex flex-col gap-3.5 overflow-hidden">
             {nextFive.length > 0 ? (
@@ -541,26 +458,14 @@ export default function PublicQueueDisplay() {
                     className="flex items-center gap-5 rounded-2xl px-6 py-4 transition-all duration-300"
                     style={{
                       background: isNext
-                        ? (trafficLight === "green"
-                            ? "linear-gradient(135deg, rgba(16,185,129,0.25) 0%, rgba(5,150,105,0.15) 100%)"
-                            : trafficLight === "orange"
-                            ? "linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(180,83,9,0.12) 100%)"
-                            : "linear-gradient(135deg, rgba(244,63,94,0.2) 0%, rgba(159,18,57,0.12) 100%)")
-                        : "rgba(255,255,255,0.03)",
+                          ? "linear-gradient(135deg, rgba(16,185,129,0.25) 0%, rgba(5,150,105,0.15) 100%)"
+                          : "rgba(255,255,255,0.03)",
                       border: isNext
-                        ? (trafficLight === "green"
-                            ? "2px solid rgba(52,211,153,0.7)"
-                            : trafficLight === "orange"
-                            ? "2px solid rgba(251,191,36,0.6)"
-                            : "2px solid rgba(244,63,94,0.6)")
-                        : "1px solid rgba(255,255,255,0.06)",
+                          ? "2px solid rgba(52,211,153,0.7)"
+                          : "1px solid rgba(255,255,255,0.06)",
                       boxShadow: isNext
-                        ? (trafficLight === "green"
-                            ? "0 0 35px rgba(52,211,153,0.25)"
-                            : trafficLight === "orange"
-                            ? "0 0 35px rgba(245,158,11,0.2)"
-                            : "0 0 35px rgba(244,63,94,0.2)")
-                        : "none",
+                          ? "0 0 35px rgba(52,211,153,0.25)"
+                          : "none",
                       animation: `qd-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.06}s both`,
                     }}
                   >
@@ -570,14 +475,10 @@ export default function PublicQueueDisplay() {
                       style={{
                         fontSize: isNext ? "4.5rem" : "3.2rem",
                         color: isNext
-                          ? (trafficLight === "green" ? "#a7f3d0" : trafficLight === "orange" ? "#fbbf24" : "#fecdd3")
+                          ? "#a7f3d0"
                           : "rgba(255,255,255,0.4)",
                         textShadow: isNext
-                          ? (trafficLight === "green"
-                              ? "0 0 25px rgba(52,211,153,0.5)"
-                              : trafficLight === "orange"
-                              ? "0 0 25px rgba(251,191,36,0.35)"
-                              : "0 0 25px rgba(244,63,94,0.4)")
+                          ? "0 0 25px rgba(52,211,153,0.5)"
                           : "none",
                         minWidth: "4.5rem",
                       }}
@@ -618,17 +519,9 @@ export default function PublicQueueDisplay() {
                       <div className="flex items-center gap-3 flex-wrap">
                         {isNext ? (
                           <span
-                            className={`text-sm md:text-base font-black px-3 py-1 rounded-xl border ${
-                              trafficLight === "green"
-                                ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/50"
-                                : trafficLight === "orange"
-                                ? "bg-amber-500/20 text-amber-200 border-amber-400/50"
-                                : "bg-rose-500/20 text-rose-200 border-rose-400/50"
-                            }`}
+                            className="text-sm md:text-base font-black px-3 py-1 rounded-xl border bg-emerald-500/20 text-emerald-200 border-emerald-400/50"
                           >
-                            {trafficLight === "green" && "🟢 استعد لدورك — مسموح بالدخول"}
-                            {trafficLight === "orange" && "🟠 الدور التالي — بانتظار إشارة الدخول"}
-                            {trafficLight === "red" && "🔴 توقف مؤقت — يرجى الانتظار"}
+                            الدور التالي
                           </span>
                         ) : null}
 

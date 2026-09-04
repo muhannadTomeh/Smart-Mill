@@ -107,7 +107,6 @@ const Queue = () => {
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
-  const [trafficLight, setTrafficLight] = useState<"green" | "orange" | "red">("orange");
   const [showExtra, setShowExtra] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
@@ -127,28 +126,6 @@ const Queue = () => {
   const waiting = allItems.filter((i) => i.status === "waiting");
   const completed = allItems.filter((i) => i.status === "completed");
 
-  useEffect(() => {
-    if (activeSeason?.id) {
-      const saved = localStorage.getItem(`traffic_light_${activeSeason.id}`);
-      if (saved === "green" || saved === "orange" || saved === "red") {
-        setTrafficLight(saved);
-      }
-    }
-  }, [activeSeason?.id]);
-
-  const changeTrafficLight = async (color: "green" | "orange" | "red") => {
-    setTrafficLight(color);
-    if (activeSeason?.id) {
-      localStorage.setItem(`traffic_light_${activeSeason.id}`, color);
-      window.dispatchEvent(new StorageEvent("storage", { key: `traffic_light_${activeSeason.id}`, newValue: color }));
-      try {
-        const { data: s } = await supabase.from("seasons").select("display_settings").eq("id", activeSeason.id).single();
-        const ds = (s as any)?.display_settings || {};
-        await supabase.from("seasons").update({ display_settings: { ...ds, traffic_light: color } } as any).eq("id", activeSeason.id);
-      } catch {}
-    }
-    toast.success(color === "green" ? "🟢 الإشارة: أخضر (استعد للدخول)" : color === "orange" ? "🟠 الإشارة: برتقالي (قيد العصر)" : "🔴 الإشارة: أحمر (توقف مؤقت)");
-  };
 
   useEffect(() => {
     if (targetUserId && activeSeason) fetchQueue();
@@ -413,55 +390,6 @@ const Queue = () => {
               {waiting.length} في الانتظار • {processing.length} قيد العصر • {completed.length} بانتظار الفوترة
             </p>
           </div>
-        </div>
-
-        {/* إشارة المرور اليدوية للكاشير */}
-        <div className="flex items-center gap-2 bg-muted/60 p-1.5 rounded-2xl border flex-wrap">
-          <span className="text-xs font-bold text-muted-foreground px-2">إشارة الشاشة:</span>
-          <Button
-            size="sm"
-            type="button"
-            variant="ghost"
-            onClick={() => changeTrafficLight("green")}
-            className={`h-8 px-3 rounded-xl font-bold gap-1.5 transition-all ${
-              trafficLight === "green"
-                ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/40 ring-2 ring-emerald-300"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-300" />
-            🟢 أخضر (استعد / ادخل)
-          </Button>
-
-          <Button
-            size="sm"
-            type="button"
-            variant="ghost"
-            onClick={() => changeTrafficLight("orange")}
-            className={`h-8 px-3 rounded-xl font-bold gap-1.5 transition-all ${
-              trafficLight === "orange"
-                ? "bg-amber-500 text-white shadow-md shadow-amber-500/40 ring-2 ring-amber-300"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-200" />
-            🟠 برتقالي (قيد العصر)
-          </Button>
-
-          <Button
-            size="sm"
-            type="button"
-            variant="ghost"
-            onClick={() => changeTrafficLight("red")}
-            className={`h-8 px-3 rounded-xl font-bold gap-1.5 transition-all ${
-              trafficLight === "red"
-                ? "bg-rose-600 text-white shadow-md shadow-rose-600/40 ring-2 ring-rose-300"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-200" />
-            🔴 أحمر (توقف)
-          </Button>
         </div>
 
         {/* Action Buttons: Add Customer and Open Display */}
