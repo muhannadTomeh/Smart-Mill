@@ -326,32 +326,31 @@ export default function PublicQueueDisplay() {
 
   return (
     <div
-      className="fixed inset-0 overflow-hidden flex flex-col font-sans select-none"
+      className="fixed inset-0 overflow-hidden flex flex-col font-sans select-none text-foreground"
       dir="rtl"
       style={{
         background: "radial-gradient(ellipse at 50% 20%, #082411 0%, #031207 50%, #010803 100%)",
       }}
     >
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-8 md:px-12 pt-6 pb-4 flex-wrap gap-4">
-        <div className="flex items-center gap-3.5">
-          <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" />
+      {/* Top Header Bar */}
+      <header className="flex items-center justify-between px-6 md:px-10 pt-4 pb-2.5 shrink-0 flex-wrap gap-3 z-10">
+        <div className="flex items-center gap-3">
+          <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399] animate-pulse" />
           <div className="flex flex-col">
-            <span className="text-white/90 text-2xl font-black tracking-wide">
+            <span className="text-white/95 text-xl md:text-2xl font-black tracking-wide">
               {season?.name || "المعصرة الذكية"}
             </span>
-            <span className="text-emerald-400/70 text-xs font-semibold tracking-wider">
+            <span className="text-emerald-400/80 text-xs font-semibold tracking-wider">
               نظام إدارة الطابور المباشر
             </span>
           </div>
         </div>
 
-
         {displaySettings.show_clock && (
-          <div className="font-mono flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] px-6 py-2 rounded-2xl backdrop-blur-md shadow-inner">
+          <div className="font-mono flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] px-5 py-1.5 rounded-2xl backdrop-blur-md shadow-inner">
             <span
-              className="text-white text-4xl md:text-5xl font-black tracking-wider"
-              style={{ textShadow: "0 0 25px rgba(255,255,255,0.2)" }}
+              className="text-white text-3xl md:text-4xl font-black tracking-wider"
+              style={{ textShadow: "0 0 20px rgba(255,255,255,0.25)" }}
             >
               {hours}:{minutes}
             </span>
@@ -359,22 +358,29 @@ export default function PublicQueueDisplay() {
         )}
       </header>
 
-      {/* Decorative Top Line */}
+      {/* Subtle Divider */}
       <div
-        className="mx-8 md:mx-12 h-px"
+        className="mx-6 md:mx-10 h-px shrink-0"
         style={{
           background: "linear-gradient(90deg, transparent, rgba(52,211,153,0.35), transparent)",
         }}
       />
 
-      {/* Main split layout */}
-      <main className="flex-1 flex overflow-hidden p-6 md:p-8 gap-8">
-        {/* RIGHT — Currently Processing (الدور الحالي) */}
-        <div className="flex-1 flex flex-col items-center justify-center relative rounded-3xl p-6 bg-emerald-950/20 border border-emerald-500/10 shadow-2xl backdrop-blur-sm overflow-hidden">
-          {/* Subtle Ambient Radial Glow */}
+      {/* Main Split Content */}
+      <main className="flex-1 min-h-0 flex overflow-hidden p-4 md:p-6 gap-5 md:gap-6">
+        {/* RIGHT COLUMN — Currently Processing (الدور الحالي قيد العصر) */}
+        <div
+          className="flex-1 flex flex-col justify-between items-center relative rounded-3xl p-5 md:p-6 shadow-2xl backdrop-blur-sm overflow-hidden"
+          style={{
+            background: "linear-gradient(170deg, rgba(16,185,129,0.18) 0%, rgba(4,47,21,0.45) 100%)",
+            border: "2px solid rgba(52,211,153,0.45)",
+            boxShadow: "0 0 70px rgba(16,185,129,0.15), inset 0 1px 1px rgba(255,255,255,0.1)",
+          }}
+        >
+          {/* Subtle Ambient Glow */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div
-              className="w-[550px] h-[550px] rounded-full opacity-20 blur-[130px]"
+              className="w-[450px] h-[450px] rounded-full opacity-20 blur-[110px]"
               style={{ background: "radial-gradient(circle, #10b981 0%, transparent 70%)" }}
             />
           </div>
@@ -382,90 +388,93 @@ export default function PublicQueueDisplay() {
           {currentItem ? (
             <div
               key={fadeKey}
-              className="relative z-10 flex flex-col items-center gap-5 w-full max-w-xl text-center"
-              style={{ animation: "qd-fade-scale 0.55s cubic-bezier(0.16, 1, 0.3, 1)" }}
+              className="relative z-10 flex flex-col justify-between items-center w-full h-full text-center"
+              style={{ animation: "qd-fade-scale 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
-              <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-black text-lg uppercase tracking-[0.25em] shadow-md">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                الدور الحالي قيد العصر
+              {/* Header Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-sm md:text-base uppercase tracking-wider shadow-sm shrink-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>الدور الحالي قيد العصر</span>
               </div>
 
-              <div
-                className="w-full rounded-[3rem] p-8 md:p-10 flex flex-col items-center relative overflow-hidden"
-                style={{
-                  background: "linear-gradient(170deg, rgba(16,185,129,0.18) 0%, rgba(4,47,21,0.45) 100%)",
-                  border: "2px solid rgba(52,211,153,0.4)",
-                  boxShadow: "0 0 100px rgba(16,185,129,0.18), inset 0 1px 1px rgba(255,255,255,0.1)",
-                }}
-              >
+              {/* Core Hero Info (Number + Name + Bags) */}
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto w-full py-2">
+                {/* Big Turn Number */}
                 <span
-                  className="font-black text-white leading-none drop-shadow-2xl"
+                  className="font-black text-white leading-none drop-shadow-2xl select-none shrink-0"
                   style={{
-                    fontSize: "clamp(9rem, 18vw, 16rem)",
-                    textShadow: "0 0 90px rgba(52,211,153,0.45), 0 6px 0 rgba(0,0,0,0.4)",
-                    lineHeight: 0.85,
+                    fontSize: "clamp(5.5rem, 11vh, 9.5rem)",
+                    textShadow: "0 0 60px rgba(52,211,153,0.5), 0 4px 0 rgba(0,0,0,0.4)",
+                    lineHeight: 0.9,
                   }}
                 >
                   {currentItem.position}
                 </span>
 
+                {/* Customer Name */}
                 <span
-                  className="text-white text-4xl md:text-5xl font-black mt-6 tracking-wide truncate max-w-full px-4"
-                  style={{ textShadow: "0 3px 15px rgba(0,0,0,0.7)" }}
+                  className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-2.5 md:mt-3 tracking-wide truncate max-w-full px-4 drop-shadow"
+                  style={{ textShadow: "0 2px 10px rgba(0,0,0,0.7)" }}
                 >
                   {currentItem.name}
                 </span>
 
-                {/* Sub-info: Bags count and Live Countdown */}
-                <div className="flex flex-wrap items-center justify-center gap-3 mt-5">
-                  {displaySettings.show_bags_count && currentItem.bags > 0 && (
-                    <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-white/10 text-white/90 text-lg font-bold border border-white/10 backdrop-blur-md">
-                      🛍️ {currentItem.bags} شوال
-                    </span>
-                  )}
-
-                  {displaySettings.show_estimated_time && (
-                    <div className="flex flex-col items-center gap-2 mt-4 w-full">
-                      <div className="inline-flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 px-6 md:px-10 py-2.5 md:py-3.5 rounded-3xl border-2 shadow-2xl bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-[0_0_25px_rgba(245,158,11,0.2)] max-w-full">
-                        <div className="flex items-center gap-2 text-lg md:text-2xl font-black whitespace-nowrap">
-                          <span className="text-2xl md:text-3xl">⏳</span>
-                          <span>الوقت التقديري المتبقي:</span>
-                        </div>
-                        <span className="text-white font-mono text-3xl md:text-5xl font-black tracking-widest drop-shadow" dir="ltr">
-                          {remainingText}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* Bags Badge */}
+                {displaySettings.show_bags_count && currentItem.bags > 0 && (
+                  <span className="mt-2.5 inline-flex items-center gap-1.5 px-4 py-1 rounded-xl bg-white/10 text-white/95 text-base md:text-lg font-bold border border-white/15 backdrop-blur-md shadow-sm">
+                    🛍️ {currentItem.bags} شوال
+                  </span>
+                )}
               </div>
+
+              {/* Bottom Operational Countdown Timer */}
+              {displaySettings.show_estimated_time && (
+                <div className="w-full shrink-0 pt-1">
+                  <div className="inline-flex items-center justify-center gap-3 md:gap-4 px-6 md:px-8 py-2 md:py-2.5 rounded-2xl border-2 shadow-xl bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.2)] max-w-full">
+                    <span className="text-xl md:text-2xl shrink-0">⏳</span>
+                    <span className="text-sm md:text-base font-bold whitespace-nowrap">
+                      الوقت التقديري المتبقي:
+                    </span>
+                    <span
+                      className="text-white font-mono text-2xl md:text-3xl font-black tracking-widest drop-shadow shrink-0"
+                      dir="ltr"
+                    >
+                      {remainingText}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-4 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 text-center my-auto">
               <div
-                className="w-32 h-32 rounded-full flex items-center justify-center shadow-inner"
+                className="w-24 h-24 rounded-full flex items-center justify-center shadow-inner"
                 style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
               >
-                <span className="text-5xl opacity-40">🫒</span>
+                <span className="text-4xl opacity-40">🫒</span>
               </div>
-              <p className="text-white/30 text-3xl font-bold tracking-wide">لا يوجد عصر حالياً</p>
-              <p className="text-white/15 text-lg">بانتظار بدء الزبون القادم في الطابور</p>
+              <p className="text-white/30 text-2xl font-bold tracking-wide">لا يوجد عصر حالياً</p>
+              <p className="text-white/15 text-sm">بانتظار بدء الزبون القادم في الطابور</p>
             </div>
           )}
         </div>
 
-        {/* LEFT — Upcoming Queue (الأدوار القادمة) */}
-        <div className="flex-1 flex flex-col p-6 md:p-8 rounded-3xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm overflow-hidden shadow-2xl">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">⏳</span>
-              <h2 className="text-3xl font-black tracking-wide text-amber-400" style={{ textShadow: "0 0 20px rgba(251,191,36,0.3)" }}>
-                الدور القادم
+        {/* LEFT COLUMN — Upcoming Queue (الأدوار القادمة) */}
+        <div className="flex-1 flex flex-col p-5 md:p-6 rounded-3xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm overflow-hidden shadow-2xl">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-white/[0.08] shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl">⏳</span>
+              <h2
+                className="text-2xl md:text-3xl font-black tracking-wide text-amber-400"
+                style={{ textShadow: "0 0 20px rgba(251,191,36,0.3)" }}
+              >
+                الأدوار القادمة
               </h2>
             </div>
             {waitingItems.length > 0 && (
               <span
-                className="text-lg font-black px-4 py-1.5 rounded-full border shadow-sm"
+                className="text-sm md:text-base font-black px-3.5 py-1 rounded-full border shadow-sm"
                 style={{
                   background: "rgba(251,191,36,0.15)",
                   color: "#fbbf24",
@@ -477,40 +486,34 @@ export default function PublicQueueDisplay() {
             )}
           </div>
 
-
-          <div className="flex-1 flex flex-col gap-3.5 overflow-hidden">
+          {/* Upcoming Items List */}
+          <div className="flex-1 min-h-0 flex flex-col gap-2.5 overflow-y-auto pr-0.5">
             {nextFive.length > 0 ? (
               nextFive.map((item, idx) => {
                 const isNext = idx === 0;
                 return (
                   <div
                     key={item.id}
-                    className="flex items-center gap-5 rounded-2xl px-6 py-4 transition-all duration-300"
+                    className="flex items-center gap-4 rounded-2xl px-5 py-3 transition-all duration-300 shrink-0"
                     style={{
                       background: isNext
-                          ? "linear-gradient(135deg, rgba(16,185,129,0.25) 0%, rgba(5,150,105,0.15) 100%)"
-                          : "rgba(255,255,255,0.03)",
+                        ? "linear-gradient(135deg, rgba(16,185,129,0.22) 0%, rgba(5,150,105,0.12) 100%)"
+                        : "rgba(255,255,255,0.03)",
                       border: isNext
-                          ? "2px solid rgba(52,211,153,0.7)"
-                          : "1px solid rgba(255,255,255,0.06)",
-                      boxShadow: isNext
-                          ? "0 0 35px rgba(52,211,153,0.25)"
-                          : "none",
-                      animation: `qd-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.06}s both`,
+                        ? "2px solid rgba(52,211,153,0.65)"
+                        : "1px solid rgba(255,255,255,0.06)",
+                      boxShadow: isNext ? "0 0 25px rgba(52,211,153,0.2)" : "none",
+                      animation: `qd-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.05}s both`,
                     }}
                   >
                     {/* Position Number */}
                     <span
                       className="font-black leading-none flex-shrink-0 text-center"
                       style={{
-                        fontSize: isNext ? "4.5rem" : "3.2rem",
-                        color: isNext
-                          ? "#a7f3d0"
-                          : "rgba(255,255,255,0.4)",
-                        textShadow: isNext
-                          ? "0 0 25px rgba(52,211,153,0.5)"
-                          : "none",
-                        minWidth: "4.5rem",
+                        fontSize: isNext ? "3.2rem" : "2.4rem",
+                        color: isNext ? "#a7f3d0" : "rgba(255,255,255,0.45)",
+                        textShadow: isNext ? "0 0 20px rgba(52,211,153,0.45)" : "none",
+                        minWidth: "3.5rem",
                       }}
                     >
                       {item.position}
@@ -518,45 +521,42 @@ export default function PublicQueueDisplay() {
 
                     {/* Customer Info */}
                     <div className="flex-1 min-w-0 flex flex-col gap-1">
-                      <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2.5 flex-wrap">
                         <span
-                          className="font-black truncate max-w-full"
+                          className="font-black truncate max-w-full text-lg md:text-xl"
                           style={{
-                            fontSize: isNext ? "2.1rem" : "1.6rem",
                             color: isNext ? "#fffbeb" : "rgba(255,255,255,0.85)",
-                            textShadow: isNext ? "0 2px 10px rgba(0,0,0,0.5)" : "none",
+                            textShadow: isNext ? "0 2px 8px rgba(0,0,0,0.5)" : "none",
                           }}
                         >
                           {item.name}
                         </span>
 
-                        {/* Estimated Time Badge (الوقت التقديري بجانب اسم الدور) */}
+                        {/* Estimated Time Badge */}
                         {displaySettings.show_estimated_time && item.estimated_minutes ? (
                           <span
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-black text-sm md:text-base border shadow-md"
+                            className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full font-bold text-xs md:text-sm border shadow-xs"
                             style={{
                               background: isNext ? "rgba(251,191,36,0.2)" : "rgba(16,185,129,0.15)",
                               borderColor: isNext ? "rgba(251,191,36,0.4)" : "rgba(16,185,129,0.3)",
                               color: isNext ? "#fef08a" : "#6ee7b7",
                             }}
                           >
-                            <span className="text-base">⏳</span>
-                            <span>{item.estimated_minutes} دقيقة</span>
+                            <span>⏳</span>
+                            <span>{item.estimated_minutes} د</span>
                           </span>
                         ) : null}
                       </div>
 
-                      <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2.5 flex-wrap">
                         {isNext ? (
-                          <span
-                            className="text-sm md:text-base font-black px-3 py-1 rounded-xl border bg-emerald-500/20 text-emerald-200 border-emerald-400/50"
-                          >
+                          <span className="text-xs md:text-sm font-bold px-2.5 py-0.5 rounded-lg border bg-emerald-500/20 text-emerald-200 border-emerald-400/50">
                             الدور التالي
                           </span>
                         ) : null}
 
                         {displaySettings.show_bags_count && item.bags > 0 && (
-                          <span className="text-sm font-medium text-white/50">
+                          <span className="text-xs font-medium text-white/50">
                             🛍️ {item.bags} شوال
                           </span>
                         )}
@@ -566,56 +566,58 @@ export default function PublicQueueDisplay() {
                 );
               })
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center">
-                <span className="text-4xl opacity-30">✨</span>
-                <p className="text-white/20 text-2xl font-bold">لا يوجد زبائن في الانتظار</p>
-                <p className="text-white/10 text-sm">الطابور شاغر حالياً</p>
+              <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center my-auto">
+                <span className="text-3xl opacity-30">✨</span>
+                <p className="text-white/30 text-xl font-bold">لا يوجد زبائن في قائمة الانتظار</p>
+                <p className="text-white/15 text-xs">الطابور شاغر حالياً</p>
               </div>
             )}
           </div>
 
           {waitingItems.length > 5 && (
-            <p className="text-white/30 text-sm md:text-base mt-3 text-center font-semibold">
+            <p className="text-white/35 text-xs md:text-sm mt-2 text-center font-medium shrink-0">
               +{waitingItems.length - 5} زبائن إضافيين في الانتظار
             </p>
           )}
         </div>
       </main>
 
-      {/* Bottom info bar — Oil Prices & Dynamic FAQs */}
+      {/* Bottom Info Bar — Oil Prices & Rotating FAQs */}
       {showBottomBar && (
         <div
-          className="mx-8 md:mx-12 mb-4 rounded-2xl px-8 py-4 flex items-center gap-8 backdrop-blur-md shadow-xl"
+          className="mx-6 md:mx-10 mb-2.5 rounded-2xl px-6 md:px-8 py-2 md:py-2.5 flex items-center gap-6 backdrop-blur-md shadow-xl shrink-0"
           style={{
             background: "linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
             border: "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          {/* Oil Prices */}
+          {/* Oil Prices Section */}
           {hasBottomPrices && (
-            <div className="flex items-center gap-6 shrink-0">
+            <div className="flex items-center gap-5 shrink-0">
               {displaySettings.show_buy_price && (
                 <div className="text-center">
-                  <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: "rgba(110,231,183,0.8)" }}>
+                  <p className="text-[11px] uppercase tracking-wider font-semibold text-emerald-300/80">
                     شراء الزيت
                   </p>
-                  <p className="text-3xl font-black" style={{ color: "#6ee7b7" }}>
-                    {season.oil_buy_price} <span className="text-base font-normal opacity-70">₪/كغم</span>
+                  <p className="text-2xl md:text-3xl font-black text-emerald-300">
+                    {season?.oil_buy_price}{" "}
+                    <span className="text-xs font-normal opacity-70">₪/كغم</span>
                   </p>
                 </div>
               )}
 
               {displaySettings.show_buy_price && displaySettings.show_sell_price && (
-                <div className="w-px h-10" style={{ background: "rgba(255,255,255,0.12)" }} />
+                <div className="w-px h-8 bg-white/10" />
               )}
 
               {displaySettings.show_sell_price && (
                 <div className="text-center">
-                  <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: "rgba(251,191,36,0.8)" }}>
+                  <p className="text-[11px] uppercase tracking-wider font-semibold text-amber-300/80">
                     بيع الزيت
                   </p>
-                  <p className="text-3xl font-black" style={{ color: "#fbbf24" }}>
-                    {season.oil_sell_price} <span className="text-base font-normal opacity-70">₪/كغم</span>
+                  <p className="text-2xl md:text-3xl font-black text-amber-300">
+                    {season?.oil_sell_price}{" "}
+                    <span className="text-xs font-normal opacity-70">₪/كغم</span>
                   </p>
                 </div>
               )}
@@ -623,18 +625,18 @@ export default function PublicQueueDisplay() {
           )}
 
           {hasBottomPrices && displaySettings.show_faqs && activeFaqs.length > 0 && (
-            <div className="w-px h-12" style={{ background: "rgba(255,255,255,0.12)" }} />
+            <div className="w-px h-10 bg-white/10 shrink-0" />
           )}
 
-          {/* Dynamic / Rotating FAQs */}
+          {/* Dynamic Rotating FAQs */}
           {displaySettings.show_faqs && activeFaqs.length > 0 && (
-            <div className="flex-1 overflow-hidden">
-              <div key={faqIndex} style={{ animation: "qd-faq-fade 0.5s ease-out" }}>
-                <p className="text-xs md:text-sm font-bold text-white/50 flex items-center gap-1.5">
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <div key={faqIndex} style={{ animation: "qd-faq-fade 0.4s ease-out" }}>
+                <p className="text-xs font-bold text-white/50 flex items-center gap-1.5">
                   <span>💡</span>
                   <span>{activeFaqs[faqIndex].q}</span>
                 </p>
-                <p className="text-xl md:text-2xl font-black mt-0.5 text-white/90 truncate">
+                <p className="text-lg md:text-xl font-bold mt-0.5 text-white/95 truncate">
                   {activeFaqs[faqIndex].a}
                 </p>
               </div>
@@ -645,13 +647,15 @@ export default function PublicQueueDisplay() {
 
       {/* News / Announcement Ticker */}
       {displaySettings.ticker_text && displaySettings.ticker_text.trim() && (
-        <div className="w-full bg-emerald-950/90 border-t border-emerald-500/30 py-2 px-6 overflow-hidden flex items-center z-50">
-          <span className="bg-emerald-400 text-black text-xs font-black px-3 py-1 rounded-md me-4 shrink-0 uppercase tracking-wider flex items-center gap-1.5 shadow-md">
-            <span className="w-2 h-2 rounded-full bg-black animate-ping" />
-            إعلان المعصرة
-          </span>
-          <div className="flex-1 overflow-hidden whitespace-nowrap">
-            <div className="inline-block animate-marquee text-emerald-100 font-bold text-base md:text-lg">
+        <div className="w-full bg-emerald-950/95 border-t border-emerald-500/30 py-1.5 px-4 overflow-hidden flex items-center shrink-0 z-20">
+          <div className="flex items-center gap-2 shrink-0 z-10 pe-3 bg-emerald-950">
+            <span className="bg-emerald-400 text-black text-xs font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-black animate-ping" />
+              إعلان المعصرة
+            </span>
+          </div>
+          <div className="flex-1 overflow-hidden whitespace-nowrap relative">
+            <div className="inline-block animate-marquee-arabic text-emerald-100 font-bold text-sm md:text-base">
               {displaySettings.ticker_text}
             </div>
           </div>
@@ -660,23 +664,24 @@ export default function PublicQueueDisplay() {
 
       <style>{`
         @keyframes qd-fade-scale {
-          0% { opacity: 0; transform: scale(0.92); }
+          0% { opacity: 0; transform: scale(0.95); }
           100% { opacity: 1; transform: scale(1); }
         }
         @keyframes qd-slide-up {
-          0% { opacity: 0; transform: translateY(18px); }
+          0% { opacity: 0; transform: translateY(12px); }
           100% { opacity: 1; transform: translateY(0); }
         }
         @keyframes qd-faq-fade {
-          0% { opacity: 0; transform: translateY(6px); }
+          0% { opacity: 0; transform: translateY(4px); }
           100% { opacity: 1; transform: translateY(0); }
         }
-        @keyframes marquee {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
+        @keyframes marquee-arabic {
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
         }
-        .animate-marquee {
-          animation: marquee 25s linear infinite;
+        .animate-marquee-arabic {
+          display: inline-block;
+          animation: marquee-arabic 22s linear infinite;
         }
       `}</style>
     </div>
