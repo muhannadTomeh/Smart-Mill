@@ -20,7 +20,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { QuickInvoiceSheet } from "@/components/queue/QuickInvoiceSheet";
-import { DisplaySettingsDialog } from "@/components/queue/DisplaySettingsDialog";
 
 interface QueueItem {
   id: string;
@@ -113,8 +112,16 @@ const Queue = () => {
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [selectedForInvoice, setSelectedForInvoice] = useState<QueueItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QueueItem | null>(null);
-  const { user, effectiveUserId } = useAuth();
+  const { user, effectiveUserId, profile } = useAuth();
   const { activeSeason } = useSeason();
+
+  useEffect(() => {
+    if (profile?.mill_name) {
+      try {
+        localStorage.setItem("mill_name", profile.mill_name);
+      } catch {}
+    }
+  }, [profile?.mill_name]);
 
   // Tick every second for live countdown
   useEffect(() => {
@@ -506,25 +513,22 @@ const Queue = () => {
           </Button>
 
           {activeSeason && (
-            <div className="flex items-center gap-1.5">
-              <DisplaySettingsDialog seasonId={activeSeason.id} />
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="h-9 px-3 rounded-lg border-border hover:bg-accent text-xs font-medium text-foreground gap-1.5"
-                title="فتح شاشة العرض العامة في نافذة جديدة"
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="h-9 px-3 rounded-lg border-border hover:bg-accent text-xs font-medium text-foreground gap-1.5"
+              title="فتح شاشة العرض العامة في نافذة جديدة"
+            >
+              <a
+                href={`/display/${activeSeason.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
               >
-                <a
-                  href={`/display/${activeSeason.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Monitor className="h-3.5 w-3.5 text-primary" />
-                  <span>شاشة العرض</span>
-                </a>
-              </Button>
-            </div>
+                <Monitor className="h-3.5 w-3.5 text-primary" />
+                <span>شاشة العرض</span>
+              </a>
+            </Button>
           )}
         </div>
       </div>

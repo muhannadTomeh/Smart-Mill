@@ -39,6 +39,13 @@ export default function PublicQueueDisplay() {
   const { seasonId } = useParams<{ seasonId: string }>();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
+  const [millName, setMillName] = useState<string>(() => {
+    return (
+      localStorage.getItem("mill_name") ||
+      localStorage.getItem("profile_mill_name") ||
+      "المعصرة"
+    );
+  });
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(defaultDisplaySettings);
   const [prevProcessingId, setPrevProcessingId] = useState<string | null>(null);
   const [fadeKey, setFadeKey] = useState(0);
@@ -74,7 +81,7 @@ export default function PublicQueueDisplay() {
       supabase.rpc("get_public_season_display", { p_season_id: seasonId }),
       supabase
         .from("seasons")
-        .select("display_settings")
+        .select("user_id, display_settings")
         .eq("id", seasonId)
         .maybeSingle(),
     ]);
@@ -85,6 +92,25 @@ export default function PublicQueueDisplay() {
       rawQueue = queueRes.data;
     } else if (localItems.length > 0) {
       rawQueue = localItems;
+    }
+
+    // Fetch mill name from profile if available
+    if (seasonSettingsRes.data && (seasonSettingsRes.data as any).user_id) {
+      const uId = (seasonSettingsRes.data as any).user_id;
+      supabase
+        .from("profiles")
+        .select("mill_name")
+        .or(`id.eq.${uId},user_id.eq.${uId}`)
+        .limit(1)
+        .maybeSingle()
+        .then(({ data: prof }) => {
+          if (prof?.mill_name) {
+            setMillName(prof.mill_name);
+            try {
+              localStorage.setItem("mill_name", prof.mill_name);
+            } catch {}
+          }
+        });
     }
 
     // Update display settings from DB if available
@@ -317,12 +343,24 @@ export default function PublicQueueDisplay() {
     }
   }
 
+  const nextItem = waitingItems[0] || null;
+
+  const formattedDate = new Intl.DateTimeFormat("ar-EG", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(clock);
+
   const hasBottomPrices =
     displaySettings.show_oil_prices &&
     season &&
     (displaySettings.show_buy_price || displaySettings.show_sell_price);
 
-  const showBottomBar = hasBottomPrices || (displaySettings.show_faqs && activeFaqs.length > 0);
+  const showBottomBar =
+    hasBottomPrices ||
+    (season && (season.plastic_container_price > 0 || season.return_percent > 0)) ||
+    (displaySettings.show_faqs && activeFaqs.length > 0);
 
   return (
     <div
@@ -334,26 +372,33 @@ export default function PublicQueueDisplay() {
     >
       {/* Top Header Bar */}
       <header className="flex items-center justify-between px-6 md:px-10 pt-4 pb-2.5 shrink-0 flex-wrap gap-3 z-10">
+        {/* اعلى اليمين: اسم المعصرة وتحته بخط اصغر اسم الموسم */}
         <div className="flex items-center gap-3">
-          <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399] animate-pulse" />
-          <div className="flex flex-col">
-            <span className="text-white/95 text-xl md:text-2xl font-black tracking-wide">
-              {season?.name || "المعصرة الذكية"}
+          <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399] animate-pulse shrink-0" />
+          <div className="flex flex-col text-right">
+            <span className="text-white text-2xl md:text-3xl font-black tracking-wide drop-shadow-md">
+              {millName || "معصرة الزيتون"}
             </span>
-            <span className="text-emerald-400/80 text-xs font-semibold tracking-wider">
-              نظام إدارة الطابور المباشر
+            <span className="text-emerald-400/90 text-sm md:text-base font-bold tracking-wider mt-0.5">
+              {season?.name || "نظام إدارة الطابور المباشر"}
             </span>
           </div>
         </div>
 
+        {/* اعلى اليسار: الساعة والتاريخ */}
         {displaySettings.show_clock && (
-          <div className="font-mono flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] px-5 py-1.5 rounded-2xl backdrop-blur-md shadow-inner">
-            <span
-              className="text-white text-3xl md:text-4xl font-black tracking-wider"
-              style={{ textShadow: "0 0 20px rgba(255,255,255,0.25)" }}
-            >
-              {hours}:{minutes}
-            </span>
+          <div className="flex items-center gap-3 bg-white/[0.04] border border-white/[0.08] px-5 py-2 rounded-2xl backdrop-blur-md shadow-inner">
+            <div className="flex flex-col items-end text-left font-mono">
+              <span
+                className="text-white text-3xl md:text-4xl font-black tracking-wider leading-none"
+                style={{ textShadow: "0 0 20px rgba(255,255,255,0.25)" }}
+              >
+                {hours}:{minutes}
+              </span>
+              <span className="text-emerald-400/80 text-xs md:text-sm font-sans font-medium mt-1">
+                {formattedDate}
+              </span>
+            </div>
           </div>
         )}
       </header>
@@ -366,18 +411,18 @@ export default function PublicQueueDisplay() {
         }}
       />
 
-      {/* Main Split Content */}
+      {/* Main Split Content: Twin Windows (الدور الحالي - الدور التالي) */}
       <main className="flex-1 min-h-0 flex overflow-hidden p-4 md:p-6 gap-5 md:gap-6">
-        {/* RIGHT COLUMN — Currently Processing (الدور الحالي قيد العصر) */}
+        {/* RIGHT COLUMN — Currently Processing (الدور الحالي) */}
         <div
-          className="flex-1 flex flex-col justify-between items-center relative rounded-3xl p-5 md:p-6 shadow-2xl backdrop-blur-sm overflow-hidden"
+          className="flex-1 flex flex-col justify-between items-center relative rounded-3xl p-5 md:p-7 shadow-2xl backdrop-blur-sm overflow-hidden text-center"
           style={{
             background: "linear-gradient(170deg, rgba(16,185,129,0.18) 0%, rgba(4,47,21,0.45) 100%)",
             border: "2px solid rgba(52,211,153,0.45)",
             boxShadow: "0 0 70px rgba(16,185,129,0.15), inset 0 1px 1px rgba(255,255,255,0.1)",
           }}
         >
-          {/* Subtle Ambient Glow */}
+          {/* Ambient Glow */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div
               className="w-[450px] h-[450px] rounded-full opacity-20 blur-[110px]"
@@ -392,7 +437,7 @@ export default function PublicQueueDisplay() {
               style={{ animation: "qd-fade-scale 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
               {/* Header Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-sm md:text-base uppercase tracking-wider shadow-sm shrink-0">
+              <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-base md:text-lg uppercase tracking-wider shadow-sm shrink-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>الدور الحالي قيد العصر</span>
               </div>
@@ -413,7 +458,7 @@ export default function PublicQueueDisplay() {
 
                 {/* Customer Name */}
                 <span
-                  className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-2.5 md:mt-3 tracking-wide truncate max-w-full px-4 drop-shadow"
+                  className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-3 tracking-wide truncate max-w-full px-4 drop-shadow"
                   style={{ textShadow: "0 2px 10px rgba(0,0,0,0.7)" }}
                 >
                   {currentItem.name}
@@ -421,7 +466,7 @@ export default function PublicQueueDisplay() {
 
                 {/* Bags Badge */}
                 {displaySettings.show_bags_count && currentItem.bags > 0 && (
-                  <span className="mt-2.5 inline-flex items-center gap-1.5 px-4 py-1 rounded-xl bg-white/10 text-white/95 text-base md:text-lg font-bold border border-white/15 backdrop-blur-md shadow-sm">
+                  <span className="mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-white/10 text-white/95 text-base md:text-lg font-bold border border-white/15 backdrop-blur-md shadow-sm">
                     🛍️ {currentItem.bags} شوال
                   </span>
                 )}
@@ -459,203 +504,214 @@ export default function PublicQueueDisplay() {
           )}
         </div>
 
-        {/* LEFT COLUMN — Upcoming Queue (الأدوار القادمة) */}
-        <div className="flex-1 flex flex-col p-5 md:p-6 rounded-3xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm overflow-hidden shadow-2xl">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-white/[0.08] shrink-0">
-            <div className="flex items-center gap-2.5">
-              <span className="text-2xl">⏳</span>
-              <h2
-                className="text-2xl md:text-3xl font-black tracking-wide text-amber-400"
-                style={{ textShadow: "0 0 20px rgba(251,191,36,0.3)" }}
-              >
-                الأدوار القادمة
-              </h2>
-            </div>
-            {waitingItems.length > 0 && (
-              <span
-                className="text-sm md:text-base font-black px-3.5 py-1 rounded-full border shadow-sm"
-                style={{
-                  background: "rgba(251,191,36,0.15)",
-                  color: "#fbbf24",
-                  borderColor: "rgba(251,191,36,0.3)",
-                }}
-              >
-                {waitingItems.length} في الانتظار
-              </span>
-            )}
+        {/* LEFT COLUMN — Next Turn (الدور التالي) - Twin Window Matching Right Window */}
+        <div
+          className="flex-1 flex flex-col justify-between items-center relative rounded-3xl p-5 md:p-7 shadow-2xl backdrop-blur-sm overflow-hidden text-center"
+          style={{
+            background: "linear-gradient(170deg, rgba(16,185,129,0.18) 0%, rgba(4,47,21,0.45) 100%)",
+            border: "2px solid rgba(52,211,153,0.45)",
+            boxShadow: "0 0 70px rgba(16,185,129,0.15), inset 0 1px 1px rgba(255,255,255,0.1)",
+          }}
+        >
+          {/* Ambient Glow */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div
+              className="w-[450px] h-[450px] rounded-full opacity-20 blur-[110px]"
+              style={{ background: "radial-gradient(circle, #10b981 0%, transparent 70%)" }}
+            />
           </div>
 
-          {/* Upcoming Items List */}
-          <div className="flex-1 min-h-0 flex flex-col gap-2.5 overflow-y-auto pr-0.5">
-            {nextFive.length > 0 ? (
-              nextFive.map((item, idx) => {
-                const isNext = idx === 0;
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-4 rounded-2xl px-5 py-3 transition-all duration-300 shrink-0"
-                    style={{
-                      background: isNext
-                        ? "linear-gradient(135deg, rgba(16,185,129,0.22) 0%, rgba(5,150,105,0.12) 100%)"
-                        : "rgba(255,255,255,0.03)",
-                      border: isNext
-                        ? "2px solid rgba(52,211,153,0.65)"
-                        : "1px solid rgba(255,255,255,0.06)",
-                      boxShadow: isNext ? "0 0 25px rgba(52,211,153,0.2)" : "none",
-                      animation: `qd-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.05}s both`,
-                    }}
-                  >
-                    {/* Position Number */}
-                    <span
-                      className="font-black leading-none flex-shrink-0 text-center"
-                      style={{
-                        fontSize: isNext ? "3.2rem" : "2.4rem",
-                        color: isNext ? "#a7f3d0" : "rgba(255,255,255,0.45)",
-                        textShadow: isNext ? "0 0 20px rgba(52,211,153,0.45)" : "none",
-                        minWidth: "3.5rem",
-                      }}
-                    >
-                      {item.position}
-                    </span>
-
-                    {/* Customer Info */}
-                    <div className="flex-1 min-w-0 flex flex-col gap-1">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <span
-                          className="font-black truncate max-w-full text-lg md:text-xl"
-                          style={{
-                            color: isNext ? "#fffbeb" : "rgba(255,255,255,0.85)",
-                            textShadow: isNext ? "0 2px 8px rgba(0,0,0,0.5)" : "none",
-                          }}
-                        >
-                          {item.name}
-                        </span>
-
-                        {/* Estimated Time Badge */}
-                        {displaySettings.show_estimated_time && item.estimated_minutes ? (
-                          <span
-                            className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full font-bold text-xs md:text-sm border shadow-xs"
-                            style={{
-                              background: isNext ? "rgba(251,191,36,0.2)" : "rgba(16,185,129,0.15)",
-                              borderColor: isNext ? "rgba(251,191,36,0.4)" : "rgba(16,185,129,0.3)",
-                              color: isNext ? "#fef08a" : "#6ee7b7",
-                            }}
-                          >
-                            <span>⏳</span>
-                            <span>{item.estimated_minutes} د</span>
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        {isNext ? (
-                          <span className="text-xs md:text-sm font-bold px-2.5 py-0.5 rounded-lg border bg-emerald-500/20 text-emerald-200 border-emerald-400/50">
-                            الدور التالي
-                          </span>
-                        ) : null}
-
-                        {displaySettings.show_bags_count && item.bags > 0 && (
-                          <span className="text-xs font-medium text-white/50">
-                            🛍️ {item.bags} شوال
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center my-auto">
-                <span className="text-3xl opacity-30">✨</span>
-                <p className="text-white/30 text-xl font-bold">لا يوجد زبائن في قائمة الانتظار</p>
-                <p className="text-white/15 text-xs">الطابور شاغر حالياً</p>
+          {nextItem ? (
+            <div
+              className="relative z-10 flex flex-col justify-between items-center w-full h-full text-center"
+              style={{ animation: "qd-fade-scale 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }}
+            >
+              {/* Header Badge */}
+              <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-base md:text-lg uppercase tracking-wider shadow-sm shrink-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                <span>الدور التالي</span>
               </div>
-            )}
-          </div>
 
-          {waitingItems.length > 5 && (
-            <p className="text-white/35 text-xs md:text-sm mt-2 text-center font-medium shrink-0">
-              +{waitingItems.length - 5} زبائن إضافيين في الانتظار
-            </p>
+              {/* Core Hero Info (Number + Name + Bags) — No 'الدور التالي' text beside name */}
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto w-full py-2">
+                {/* Big Turn Number */}
+                <span
+                  className="font-black text-white leading-none drop-shadow-2xl select-none shrink-0"
+                  style={{
+                    fontSize: "clamp(5.5rem, 11vh, 9.5rem)",
+                    textShadow: "0 0 60px rgba(52,211,153,0.5), 0 4px 0 rgba(0,0,0,0.4)",
+                    lineHeight: 0.9,
+                  }}
+                >
+                  {nextItem.position}
+                </span>
+
+                {/* Customer Name (Only Position Number and beside/under it Name) */}
+                <span
+                  className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-3 tracking-wide truncate max-w-full px-4 drop-shadow"
+                  style={{ textShadow: "0 2px 10px rgba(0,0,0,0.7)" }}
+                >
+                  {nextItem.name}
+                </span>
+
+                {/* Bags Badge */}
+                {displaySettings.show_bags_count && nextItem.bags > 0 && (
+                  <span className="mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-white/10 text-white/95 text-base md:text-lg font-bold border border-white/15 backdrop-blur-md shadow-sm">
+                    🛍️ {nextItem.bags} شوال
+                  </span>
+                )}
+              </div>
+
+              {/* Bottom Operational Expected Time */}
+              {displaySettings.show_estimated_time && (
+                <div className="w-full shrink-0 pt-1">
+                  <div className="inline-flex items-center justify-center gap-3 md:gap-4 px-6 md:px-8 py-2 md:py-2.5 rounded-2xl border-2 shadow-xl bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.2)] max-w-full">
+                    <span className="text-xl md:text-2xl shrink-0">⏳</span>
+                    <span className="text-sm md:text-base font-bold whitespace-nowrap">
+                      الوقت المتوقع للدور:
+                    </span>
+                    <span
+                      className="text-white font-mono text-2xl md:text-3xl font-black tracking-widest drop-shadow shrink-0"
+                      dir="ltr"
+                    >
+                      {nextItem.estimated_minutes ? `${nextItem.estimated_minutes}:00` : "30:00"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3 text-center my-auto">
+              <div
+                className="w-24 h-24 rounded-full flex items-center justify-center shadow-inner"
+                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                <span className="text-4xl opacity-40">✨</span>
+              </div>
+              <p className="text-white/30 text-2xl font-bold tracking-wide">لا يوجد دور تالٍ</p>
+              <p className="text-white/15 text-sm">قائمة الانتظار فارغة حالياً</p>
+            </div>
           )}
         </div>
       </main>
 
-      {/* Bottom Info Bar — Oil Prices & Rotating FAQs */}
+      {/* Bottom Info Bar — Information distributed evenly across the screen */}
       {showBottomBar && (
         <div
-          className="mx-6 md:mx-10 mb-2.5 rounded-2xl px-6 md:px-8 py-2 md:py-2.5 flex items-center gap-6 backdrop-blur-md shadow-xl shrink-0"
+          className="mx-6 md:mx-10 mb-2.5 rounded-2xl px-6 md:px-12 py-3 flex items-center justify-between gap-4 md:gap-8 backdrop-blur-md shadow-xl shrink-0"
           style={{
-            background: "linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
+            background: "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
             border: "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          {/* Oil Prices Section */}
-          {hasBottomPrices && (
-            <div className="flex items-center gap-5 shrink-0">
-              {displaySettings.show_buy_price && (
-                <div className="text-center">
-                  <p className="text-[11px] uppercase tracking-wider font-semibold text-emerald-300/80">
-                    شراء الزيت
-                  </p>
-                  <p className="text-2xl md:text-3xl font-black text-emerald-300">
-                    {season?.oil_buy_price}{" "}
-                    <span className="text-xs font-normal opacity-70">₪/كغم</span>
-                  </p>
-                </div>
-              )}
-
-              {displaySettings.show_buy_price && displaySettings.show_sell_price && (
-                <div className="w-px h-8 bg-white/10" />
-              )}
-
-              {displaySettings.show_sell_price && (
-                <div className="text-center">
-                  <p className="text-[11px] uppercase tracking-wider font-semibold text-amber-300/80">
-                    بيع الزيت
-                  </p>
-                  <p className="text-2xl md:text-3xl font-black text-amber-300">
-                    {season?.oil_sell_price}{" "}
-                    <span className="text-xs font-normal opacity-70">₪/كغم</span>
-                  </p>
-                </div>
-              )}
+          {/* Oil Buy Price */}
+          {displaySettings.show_buy_price && season?.oil_buy_price != null && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center">
+              <p className="text-xs uppercase tracking-wider font-bold text-emerald-300/80 mb-0.5">
+                شراء الزيت
+              </p>
+              <p className="text-2xl md:text-3xl font-black text-emerald-300">
+                {season.oil_buy_price}{" "}
+                <span className="text-xs font-medium opacity-70">₪/كغم</span>
+              </p>
             </div>
           )}
 
-          {hasBottomPrices && displaySettings.show_faqs && activeFaqs.length > 0 && (
+          {displaySettings.show_buy_price && displaySettings.show_sell_price && (
             <div className="w-px h-10 bg-white/10 shrink-0" />
           )}
 
-          {/* Dynamic Rotating FAQs */}
-          {displaySettings.show_faqs && activeFaqs.length > 0 && (
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <div key={faqIndex} style={{ animation: "qd-faq-fade 0.4s ease-out" }}>
-                <p className="text-xs font-bold text-white/50 flex items-center gap-1.5">
-                  <span>💡</span>
-                  <span>{activeFaqs[faqIndex].q}</span>
+          {/* Oil Sell Price */}
+          {displaySettings.show_sell_price && season?.oil_sell_price != null && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center">
+              <p className="text-xs uppercase tracking-wider font-bold text-amber-300/80 mb-0.5">
+                بيع الزيت
+              </p>
+              <p className="text-2xl md:text-3xl font-black text-amber-300">
+                {season.oil_sell_price}{" "}
+                <span className="text-xs font-medium opacity-70">₪/كغم</span>
+              </p>
+            </div>
+          )}
+
+          {/* Plastic Container Price */}
+          {season?.plastic_container_price != null && season.plastic_container_price > 0 && (
+            <>
+              <div className="w-px h-10 bg-white/10 shrink-0" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
+                <p className="text-xs uppercase tracking-wider font-bold text-white/60 mb-0.5">
+                  سعر تنكة البلاستيك
                 </p>
-                <p className="text-lg md:text-xl font-bold mt-0.5 text-white/95 truncate">
-                  {activeFaqs[faqIndex].a}
+                <p className="text-2xl md:text-3xl font-black text-white">
+                  {season.plastic_container_price}{" "}
+                  <span className="text-xs font-medium opacity-70">₪</span>
                 </p>
               </div>
-            </div>
+            </>
+          )}
+
+          {/* Metal Container Price */}
+          {season?.metal_container_price != null && season.metal_container_price > 0 && (
+            <>
+              <div className="w-px h-10 bg-white/10 shrink-0" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
+                <p className="text-xs uppercase tracking-wider font-bold text-white/60 mb-0.5">
+                  سعر تنكة الحديد
+                </p>
+                <p className="text-2xl md:text-3xl font-black text-white">
+                  {season.metal_container_price}{" "}
+                  <span className="text-xs font-medium opacity-70">₪</span>
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* Return Percentage */}
+          {season?.return_percent != null && season.return_percent > 0 && (
+            <>
+              <div className="w-px h-10 bg-white/10 shrink-0" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
+                <p className="text-xs uppercase tracking-wider font-bold text-white/60 mb-0.5">
+                  نسبة الرد
+                </p>
+                <p className="text-2xl md:text-3xl font-black text-white">
+                  %{season.return_percent}
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* Dynamic Rotating FAQs / Tips */}
+          {displaySettings.show_faqs && activeFaqs.length > 0 && (
+            <>
+              <div className="w-px h-10 bg-white/10 shrink-0" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center overflow-hidden">
+                <div key={faqIndex} style={{ animation: "qd-faq-fade 0.4s ease-out" }}>
+                  <p className="text-xs font-bold text-white/50 flex items-center justify-center gap-1.5 mb-0.5">
+                    <span>💡</span>
+                    <span>{activeFaqs[faqIndex].q}</span>
+                  </p>
+                  <p className="text-base md:text-lg font-bold text-white/95 truncate">
+                    {activeFaqs[faqIndex].a}
+                  </p>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}
 
-      {/* News / Announcement Ticker */}
+      {/* News / Announcement Ticker — Larger Size and Faster Speed */}
       {displaySettings.ticker_text && displaySettings.ticker_text.trim() && (
-        <div className="w-full bg-emerald-950/95 border-t border-emerald-500/30 py-1.5 px-4 overflow-hidden flex items-center shrink-0 z-20">
-          <div className="flex items-center gap-2 shrink-0 z-10 pe-3 bg-emerald-950">
-            <span className="bg-emerald-400 text-black text-xs font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-black animate-ping" />
+        <div className="w-full bg-emerald-950 border-t-2 border-emerald-500/40 py-2.5 md:py-3 px-6 overflow-hidden flex items-center shrink-0 z-20 shadow-[0_-5px_25px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center gap-2.5 shrink-0 z-10 pe-5 bg-emerald-950">
+            <span className="bg-emerald-400 text-black text-sm md:text-base font-black px-3.5 py-1 rounded-xl uppercase tracking-wider flex items-center gap-2 shadow-md">
+              <span className="w-2.5 h-2.5 rounded-full bg-black animate-ping" />
               إعلان المعصرة
             </span>
           </div>
           <div className="flex-1 overflow-hidden whitespace-nowrap relative">
-            <div className="inline-block animate-marquee-arabic text-emerald-100 font-bold text-sm md:text-base">
+            <div className="inline-block animate-marquee-arabic text-emerald-100 font-extrabold text-xl md:text-2xl lg:text-3xl tracking-wide">
               {displaySettings.ticker_text}
             </div>
           </div>
@@ -681,7 +737,7 @@ export default function PublicQueueDisplay() {
         }
         .animate-marquee-arabic {
           display: inline-block;
-          animation: marquee-arabic 22s linear infinite;
+          animation: marquee-arabic 13s linear infinite;
         }
       `}</style>
     </div>
