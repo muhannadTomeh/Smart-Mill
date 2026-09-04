@@ -22,6 +22,7 @@ interface DisplaySettings {
   show_clock: boolean;
   show_bags_count: boolean;
   show_faqs: boolean;
+  traffic_light?: "green" | "orange" | "red";
   ticker_text?: string;
   custom_faqs?: Array<{ id?: string; q: string; a: string }>;
 }
@@ -34,6 +35,7 @@ const defaultDisplaySettings: DisplaySettings = {
   show_clock: true,
   show_bags_count: true,
   show_faqs: true,
+  traffic_light: "orange",
   ticker_text: "",
   custom_faqs: [],
 };
@@ -62,6 +64,7 @@ export default function PublicQueueDisplay() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(defaultDisplaySettings);
+  const [trafficLight, setTrafficLight] = useState<"green" | "orange" | "red">("orange");
   const [prevProcessingId, setPrevProcessingId] = useState<string | null>(null);
   const [fadeKey, setFadeKey] = useState(0);
   const [faqIndex, setFaqIndex] = useState(0);
@@ -77,6 +80,10 @@ export default function PublicQueueDisplay() {
       const cachedSettings = localStorage.getItem(`display_settings_${seasonId}`);
       if (cachedSettings) {
         setDisplaySettings({ ...defaultDisplaySettings, ...JSON.parse(cachedSettings) });
+      }
+      const cachedLight = localStorage.getItem(`traffic_light_${seasonId}`);
+      if (cachedLight === "green" || cachedLight === "orange" || cachedLight === "red") {
+        setTrafficLight(cachedLight);
       }
       const cachedQueue = localStorage.getItem(`active_queue_${seasonId}`);
       if (cachedQueue) {
@@ -105,7 +112,7 @@ export default function PublicQueueDisplay() {
     }
 
     // Map queue items and ensure estimated_minutes & started_at are extracted accurately
-    const mappedItems: QueueItem[] = rawQueue.map((i) => {
+    const mappedItems: QueueItem[] = rawQueue.map((i, idx) => {
       const localMatch = localItems.find((l) => l.id === i.id || (l.name && l.name.trim() === i.name?.trim()));
       
       const localEst = (i.id ? localStorage.getItem(`queue_est_${i.id}`) : null) ||
@@ -118,10 +125,15 @@ export default function PublicQueueDisplay() {
       const parsedEst = parseEstimatedMinutes(i) ?? (localEst ? Number(localEst) : null);
       const parsedStart = parseStartedAt(i) ?? (localStart ? (typeof localStart === "number" ? new Date(localStart).toISOString() : localStart) : null);
 
+      let pos = Number(i.queue_position ?? i.position);
+      if (isNaN(pos) || pos <= 0) {
+        pos = idx + 1;
+      }
+
       const item: QueueItem = {
         id: i.id,
         name: i.name,
-        position: i.queue_position ?? i.position,
+        position: pos,
         status: i.status,
         bags: i.bags,
         notes: i.notes || localMatch?.notes || null,
@@ -151,6 +163,9 @@ export default function PublicQueueDisplay() {
       setSeason(seasonRow);
       if (seasonRow.display_settings && typeof seasonRow.display_settings === "object") {
         setDisplaySettings({ ...defaultDisplaySettings, ...seasonRow.display_settings });
+        if (seasonRow.display_settings.traffic_light) {
+          setTrafficLight(seasonRow.display_settings.traffic_light);
+        }
       }
     }
   };
@@ -183,6 +198,11 @@ export default function PublicQueueDisplay() {
 
     // Cross-tab instant synchronization
     const handleStorage = (e: StorageEvent) => {
+      if (e.key === `traffic_light_${seasonId}` && e.newValue) {
+        if (e.newValue === "green" || e.newValue === "orange" || e.newValue === "red") {
+          setTrafficLight(e.newValue);
+        }
+      }
       if (
         e.key?.includes("display_settings") ||
         e.key?.includes("active_queue") ||
@@ -251,7 +271,6 @@ export default function PublicQueueDisplay() {
   const currentStartedAt = currentItem ? parseStartedAt(currentItem) : null;
 
   let currentRemainingSeconds: number | null = null;
-  let isCurrentNearCompletion = false;
   let remainingText = "30:00";
 
   if (currentItem && currentEstMin && currentEstMin > 0) {
@@ -283,9 +302,6 @@ export default function PublicQueueDisplay() {
     } else {
       remainingText = "00:00 (المراحل الأخيرة)";
     }
-
-    // Flash green warning if 5 minutes or less remain (300 seconds)
-    isCurrentNearCompletion = currentRemainingSeconds <= 5 * 60;
   }
 
   const hasBottomPrices =
@@ -304,9 +320,9 @@ export default function PublicQueueDisplay() {
       }}
     >
       {/* Top bar */}
-      <header className="flex items-center justify-between px-8 md:px-12 pt-6 pb-4">
+      <header className="flex items-center justify-between px-8 md:px-12 pt-6 pb-4 flex-wrap gap-4">
         <div className="flex items-center gap-3.5">
-          <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_12px_#34d399]" />
+          <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" />
           <div className="flex flex-col">
             <span className="text-white/90 text-2xl font-black tracking-wide">
               {season?.name || "المعصرة الذكية"}
@@ -315,6 +331,52 @@ export default function PublicQueueDisplay() {
               نظام إدارة الطابور المباشر
             </span>
           </div>
+        </div>
+
+        {/* Traffic Light Unit (إشارة المرور اليدوية للكاش) */}
+        <div className="flex items-center gap-4 bg-black/60 border border-white/10 px-5 py-2.5 rounded-2xl backdrop-blur-md shadow-2xl">
+          <span className="text-sm text-white/60 font-bold">إشارة المرور:</span>
+          {/* 3 LEDs */}
+          <div className="flex items-center gap-3 bg-black/80 px-3 py-1.5 rounded-xl border border-white/10">
+            <div
+              className={`w-7 h-7 rounded-full transition-all duration-300 ${
+                trafficLight === "red"
+                  ? "bg-rose-500 shadow-[0_0_20px_#f43f5e] border-2 border-rose-200"
+                  : "bg-rose-950/40 border border-rose-900/30 opacity-20"
+              }`}
+              title="أحمر: توقف مؤقت"
+            />
+            <div
+              className={`w-7 h-7 rounded-full transition-all duration-300 ${
+                trafficLight === "orange"
+                  ? "bg-amber-400 shadow-[0_0_20px_#fbbf24] border-2 border-amber-200"
+                  : "bg-amber-950/40 border border-amber-900/30 opacity-20"
+              }`}
+              title="برتقالي: قيد العصر"
+            />
+            <div
+              className={`w-7 h-7 rounded-full transition-all duration-300 ${
+                trafficLight === "green"
+                  ? "bg-emerald-400 shadow-[0_0_20px_#34d399] border-2 border-emerald-200"
+                  : "bg-emerald-950/40 border border-emerald-900/30 opacity-20"
+              }`}
+              title="أخضر: استعد لدورك"
+            />
+          </div>
+
+          <span
+            className={`text-base font-black px-4 py-1 rounded-xl border ${
+              trafficLight === "green"
+                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_rgba(52,211,153,0.3)]"
+                : trafficLight === "orange"
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_15px_rgba(251,191,36,0.3)]"
+                : "bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]"
+            }`}
+          >
+            {trafficLight === "green" && "🟢 استعد لدورك — مسموح بالدخول"}
+            {trafficLight === "orange" && "🟠 قيد العصر — يرجى الانتظار"}
+            {trafficLight === "red" && "🔴 توقف مؤقت — يرجى الانتظار"}
+          </span>
         </div>
 
         {displaySettings.show_clock && (
@@ -356,7 +418,7 @@ export default function PublicQueueDisplay() {
               style={{ animation: "qd-fade-scale 0.55s cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
               <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-black text-lg uppercase tracking-[0.25em] shadow-md">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                 الدور الحالي قيد العصر
               </div>
 
@@ -396,25 +458,13 @@ export default function PublicQueueDisplay() {
 
                   {displaySettings.show_estimated_time && (
                     <div className="flex flex-col items-center gap-2 mt-4 w-full">
-                      <span
-                        className={`inline-flex items-center justify-center gap-3 px-7 md:px-10 py-3 md:py-3.5 rounded-3xl text-xl md:text-2xl font-black border-2 shadow-2xl transition-all ${
-                          isCurrentNearCompletion
-                            ? "bg-emerald-500/30 text-emerald-100 border-emerald-400 animate-pulse shadow-[0_0_50px_rgba(52,211,153,0.85)]"
-                            : "bg-amber-500/20 text-amber-200 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.25)]"
-                        }`}
-                      >
+                      <span className="inline-flex items-center justify-center gap-3 px-7 md:px-10 py-3 md:py-3.5 rounded-3xl text-xl md:text-2xl font-black border-2 shadow-2xl bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-[0_0_25px_rgba(245,158,11,0.2)]">
                         <span className="text-3xl">⏳</span>
                         <span>الوقت التقديري المتبقي :</span>
                         <span className="text-white font-mono text-3xl md:text-5xl font-black tracking-widest drop-shadow" dir="ltr">
                           {remainingText}
                         </span>
                       </span>
-                      {isCurrentNearCompletion && (
-                        <span className="text-base md:text-lg font-black text-emerald-300 animate-pulse mt-1 flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
-                          متبقي أقل من 5 دقائق — مرحلة تفريغ وتجهيز الزيت
-                        </span>
-                      )}
                     </div>
                   )}
                 </div>
@@ -436,7 +486,7 @@ export default function PublicQueueDisplay() {
 
         {/* LEFT — Upcoming Queue (الأدوار القادمة) */}
         <div className="flex-1 flex flex-col p-6 md:p-8 rounded-3xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm overflow-hidden shadow-2xl">
-          <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/[0.08]">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
             <div className="flex items-center gap-3">
               <span className="text-3xl">⏳</span>
               <h2 className="text-3xl font-black tracking-wide text-amber-400" style={{ textShadow: "0 0 20px rgba(251,191,36,0.3)" }}>
@@ -457,6 +507,30 @@ export default function PublicQueueDisplay() {
             )}
           </div>
 
+          {/* Traffic Light Signal in Upcoming Panel */}
+          <div
+            className={`mb-4 px-5 py-2.5 rounded-2xl flex items-center justify-between border ${
+              trafficLight === "green"
+                ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200"
+                : trafficLight === "orange"
+                ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
+                : "bg-rose-950/40 border-rose-500/40 text-rose-200"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1 rounded-lg border border-white/10">
+                <span className={`w-3.5 h-3.5 rounded-full ${trafficLight === "red" ? "bg-rose-500 shadow-[0_0_8px_#f43f5e]" : "bg-rose-950/40 opacity-20"}`} />
+                <span className={`w-3.5 h-3.5 rounded-full ${trafficLight === "orange" ? "bg-amber-400 shadow-[0_0_8px_#fbbf24]" : "bg-amber-950/40 opacity-20"}`} />
+                <span className={`w-3.5 h-3.5 rounded-full ${trafficLight === "green" ? "bg-emerald-400 shadow-[0_0_8px_#34d399]" : "bg-emerald-950/40 opacity-20"}`} />
+              </div>
+              <span className="font-bold text-base md:text-lg">
+                {trafficLight === "green" && "إشارة المرور: 🟢 استعد لدورك — مسموح بالدخول"}
+                {trafficLight === "orange" && "إشارة المرور: 🟠 قيد العصر — يرجى الانتظار"}
+                {trafficLight === "red" && "إشارة المرور: 🔴 توقف مؤقت — يرجى الانتظار"}
+              </span>
+            </div>
+          </div>
+
           <div className="flex-1 flex flex-col gap-3.5 overflow-hidden">
             {nextFive.length > 0 ? (
               nextFive.map((item, idx) => {
@@ -467,19 +541,25 @@ export default function PublicQueueDisplay() {
                     className="flex items-center gap-5 rounded-2xl px-6 py-4 transition-all duration-300"
                     style={{
                       background: isNext
-                        ? (isCurrentNearCompletion
-                            ? "linear-gradient(135deg, rgba(16,185,129,0.35) 0%, rgba(5,150,105,0.2) 100%)"
-                            : "linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(180,83,9,0.12) 100%)")
+                        ? (trafficLight === "green"
+                            ? "linear-gradient(135deg, rgba(16,185,129,0.25) 0%, rgba(5,150,105,0.15) 100%)"
+                            : trafficLight === "orange"
+                            ? "linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(180,83,9,0.12) 100%)"
+                            : "linear-gradient(135deg, rgba(244,63,94,0.2) 0%, rgba(159,18,57,0.12) 100%)")
                         : "rgba(255,255,255,0.03)",
                       border: isNext
-                        ? (isCurrentNearCompletion
-                            ? "3px solid #34d399"
-                            : "2px solid rgba(251,191,36,0.45)")
+                        ? (trafficLight === "green"
+                            ? "2px solid rgba(52,211,153,0.7)"
+                            : trafficLight === "orange"
+                            ? "2px solid rgba(251,191,36,0.6)"
+                            : "2px solid rgba(244,63,94,0.6)")
                         : "1px solid rgba(255,255,255,0.06)",
                       boxShadow: isNext
-                        ? (isCurrentNearCompletion
-                            ? "0 0 55px rgba(52,211,153,0.55)"
-                            : "0 0 40px rgba(245,158,11,0.12)")
+                        ? (trafficLight === "green"
+                            ? "0 0 35px rgba(52,211,153,0.25)"
+                            : trafficLight === "orange"
+                            ? "0 0 35px rgba(245,158,11,0.2)"
+                            : "0 0 35px rgba(244,63,94,0.2)")
                         : "none",
                       animation: `qd-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.06}s both`,
                     }}
@@ -489,8 +569,16 @@ export default function PublicQueueDisplay() {
                       className="font-black leading-none flex-shrink-0 text-center"
                       style={{
                         fontSize: isNext ? "4.5rem" : "3.2rem",
-                        color: isNext ? (isCurrentNearCompletion ? "#a7f3d0" : "#fbbf24") : "rgba(255,255,255,0.4)",
-                        textShadow: isNext ? (isCurrentNearCompletion ? "0 0 30px rgba(52,211,153,0.6)" : "0 0 25px rgba(251,191,36,0.35)") : "none",
+                        color: isNext
+                          ? (trafficLight === "green" ? "#a7f3d0" : trafficLight === "orange" ? "#fbbf24" : "#fecdd3")
+                          : "rgba(255,255,255,0.4)",
+                        textShadow: isNext
+                          ? (trafficLight === "green"
+                              ? "0 0 25px rgba(52,211,153,0.5)"
+                              : trafficLight === "orange"
+                              ? "0 0 25px rgba(251,191,36,0.35)"
+                              : "0 0 25px rgba(244,63,94,0.4)")
+                          : "none",
                         minWidth: "4.5rem",
                       }}
                     >
@@ -514,10 +602,10 @@ export default function PublicQueueDisplay() {
                         {/* Estimated Time Badge (الوقت التقديري بجانب اسم الدور) */}
                         {displaySettings.show_estimated_time && item.estimated_minutes ? (
                           <span
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-black text-sm md:text-base border shadow-md animate-pulse"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-black text-sm md:text-base border shadow-md"
                             style={{
-                              background: isNext ? "rgba(251,191,36,0.25)" : "rgba(16,185,129,0.2)",
-                              borderColor: isNext ? "rgba(251,191,36,0.5)" : "rgba(16,185,129,0.4)",
+                              background: isNext ? "rgba(251,191,36,0.2)" : "rgba(16,185,129,0.15)",
+                              borderColor: isNext ? "rgba(251,191,36,0.4)" : "rgba(16,185,129,0.3)",
                               color: isNext ? "#fef08a" : "#6ee7b7",
                             }}
                           >
@@ -528,25 +616,19 @@ export default function PublicQueueDisplay() {
                       </div>
 
                       <div className="flex items-center gap-3 flex-wrap">
-                        {/* وميض أخضر كبير عند الدور التالي بعنوان استعد */}
-                        {isNext && isCurrentNearCompletion ? (
-                          <div
-                            className="inline-flex items-center gap-3 px-6 py-2.5 rounded-2xl text-white font-black text-2xl md:text-3xl tracking-wider shadow-2xl border-4 border-emerald-300 my-1"
-                            style={{
-                              animation: "qd-green-flash 0.8s ease-in-out infinite",
-                            }}
+                        {isNext ? (
+                          <span
+                            className={`text-sm md:text-base font-black px-3 py-1 rounded-xl border ${
+                              trafficLight === "green"
+                                ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/50"
+                                : trafficLight === "orange"
+                                ? "bg-amber-500/20 text-amber-200 border-amber-400/50"
+                                : "bg-rose-500/20 text-rose-200 border-rose-400/50"
+                            }`}
                           >
-                            <span className="text-3xl md:text-4xl animate-ping">🟢</span>
-                            <span className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
-                              استعد
-                            </span>
-                            <span className="text-sm md:text-base font-bold bg-black/40 px-3 py-1 rounded-xl text-emerald-100">
-                              متبقي أقل من 5 دقائق
-                            </span>
-                          </div>
-                        ) : isNext ? (
-                          <span className="text-xs md:text-sm font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                            الدور التالي مباشرة
+                            {trafficLight === "green" && "🟢 استعد لدورك — مسموح بالدخول"}
+                            {trafficLight === "orange" && "🟠 الدور التالي — بانتظار إشارة الدخول"}
+                            {trafficLight === "red" && "🔴 توقف مؤقت — يرجى الانتظار"}
                           </span>
                         ) : null}
 
@@ -672,18 +754,6 @@ export default function PublicQueueDisplay() {
         }
         .animate-marquee {
           animation: marquee 25s linear infinite;
-        }
-        @keyframes qd-green-flash {
-          0%, 100% {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            box-shadow: 0 0 50px rgba(52, 211, 153, 0.95), inset 0 0 15px rgba(255, 255, 255, 0.6);
-            transform: scale(1);
-          }
-          50% {
-            background: linear-gradient(135deg, #047857 0%, #065f46 100%);
-            box-shadow: 0 0 18px rgba(52, 211, 153, 0.4), inset 0 0 5px rgba(255, 255, 255, 0.2);
-            transform: scale(1.03);
-          }
         }
       `}</style>
     </div>
