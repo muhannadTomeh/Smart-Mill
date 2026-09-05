@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { calculatePaymentOptions } from "@/lib/invoiceCalculations";
+import { calculatePaymentOptions, calculateCustomMixedFromOil, calculateCustomMixedFromCash } from "@/lib/invoiceCalculations";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Droplets, Package, Wallet, CheckCircle2, Plus, Minus, Eye, Printer } from "lucide-react";
+import { Droplets, Package, Wallet, CheckCircle2, Plus, Minus, Eye, Printer, SlidersHorizontal, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,6 +43,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const [containerTypes, setContainerTypes] = useState<ContainerType[]>([]);
   const [containerCounts, setContainerCounts] = useState<Record<string, number>>({});
   const [paymentType, setPaymentType] = useState<PaymentType | null>(null);
+  const [customMixedOil, setCustomMixedOil] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -53,6 +54,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       setOilProduced(0);
       setContainerCounts({});
       setPaymentType(null);
+      setCustomMixedOil(null);
     }
   }, [open, targetUserId, activeSeason]);
 
@@ -90,12 +92,19 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const calc = useMemo(() => {
     if (!oilProduced) return null;
     const opts = calculatePaymentOptions(oilProduced, totalContainerCost, settings);
+
+    let mixedBreakdown = opts.mixed;
+    if (customMixedOil !== null) {
+      mixedBreakdown = calculateCustomMixedFromOil(oilProduced, totalContainerCost, settings, customMixedOil);
+    }
+
     return {
       oilOnly: { ...opts.oil, label: `${opts.oil.oilAmount.toFixed(2)} كغم زيت` },
       cashOnly: { ...opts.cash, label: `${opts.cash.cashAmount.toFixed(2)} ₪` },
-      mixed: { ...opts.mixed, label: `${opts.mixed.oilAmount.toFixed(2)} كغم + ${opts.mixed.cashAmount.toFixed(2)} ₪` },
+      mixed: { ...mixedBreakdown, label: `${mixedBreakdown.oilAmount.toFixed(2)} كغم + ${mixedBreakdown.cashAmount.toFixed(2)} ₪` },
+      defaultMixed: opts.mixed,
     };
-  }, [oilProduced, totalContainerCost, settings]);
+  }, [oilProduced, totalContainerCost, settings, customMixedOil]);
 
   const adjustContainer = (id: string, delta: number) => {
     setContainerCounts((p) => ({ ...p, [id]: Math.max(0, (p[id] || 0) + delta) }));
@@ -320,26 +329,197 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
             {!calc ? (
               <p className="text-sm text-muted-foreground text-center py-4">أدخل كمية الزيت أولاً</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {paymentCards.map((p) => {
-                  const data = p.type === "oil" ? calc.oilOnly : p.type === "cash" ? calc.cashOnly : calc.mixed;
-                  const selected = paymentType === p.type;
-                  return (
-                    <button
-                      key={p.type}
-                      onClick={() => setPaymentType(p.type)}
-                      className={`${p.bg} rounded-xl p-4 text-right transition-all ${selected ? `ring-2 ${p.ring} scale-[1.02]` : "hover:scale-[1.01]"}`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <p.icon className={`h-5 w-5 ${p.color}`} />
-                        {selected && <CheckCircle2 className={`h-5 w-5 ${p.color}`} />}
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {paymentCards.map((p) => {
+                    const data = p.type === "oil" ? calc.oilOnly : p.type === "cash" ? calc.cashOnly : calc.mixed;
+                    const selected = paymentType === p.type;
+                    return (
+                      <button
+                        key={p.type}
+                        onClick={() => setPaymentType(p.type)}
+                        className={`${p.bg} rounded-xl p-4 text-right transition-all ${selected ? `ring-2 ${p.ring} scale-[1.02]` : "hover:scale-[1.01]"}`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <p.icon className={`h-5 w-5 ${p.color}`} />
+                          {selected && <CheckCircle2 className={`h-5 w-5 ${p.color}`} />}
+                        </div>
+                        <p className="text-sm font-medium text-muted-foreground">{p.title}</p>
+                        <p className={`text-lg font-bold mt-1 ${p.color}`}>{data.label}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Mixed payment customization panel */}
+                {paymentType === "mixed" && (
+                  <div className="mt-3 p-4 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <SlidersHorizontal className="h-4 w-4 text-amber-600" />
+                        <span className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                          تخصيص الدفع المختلط (تعديل حصة الزيت أو النقد)
+                        </span>
                       </div>
-                      <p className="text-sm font-medium text-muted-foreground">{p.title}</p>
-                      <p className={`text-lg font-bold mt-1 ${p.color}`}>{data.label}</p>
-                    </button>
-                  );
-                })}
-              </div>
+                      {customMixedOil !== null && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setCustomMixedOil(null)}
+                          className="h-7 px-2 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-400"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5 me-1" />
+                          استعادة الافتراضي ({calc.defaultMixed.oilAmount.toFixed(2)} كغم)
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Oil amount input */}
+                      <div className="space-y-1.5 bg-background/90 dark:bg-card p-3 rounded-lg border border-amber-200/60 dark:border-amber-900/40">
+                        <div className="flex justify-between items-center text-xs">
+                          <Label className="font-semibold text-foreground">كمية الزيت (كغم)</Label>
+                          <span className="text-muted-foreground text-[11px]">الافتراضي: {calc.defaultMixed.oilAmount.toFixed(2)} كغم</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() => {
+                              const cur = calc.mixed.oilAmount;
+                              const next = Math.max(0, +(cur - 0.5).toFixed(2));
+                              setCustomMixedOil(next);
+                            }}
+                            disabled={calc.mixed.oilAmount <= 0}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max={calc.oilOnly.oilAmount}
+                            value={calc.mixed.oilAmount}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setCustomMixedOil(isNaN(val) ? 0 : Math.max(0, val));
+                            }}
+                            className="text-center font-bold text-base h-9 text-amber-700 dark:text-amber-400"
+                          />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() => {
+                              const cur = calc.mixed.oilAmount;
+                              const next = Math.min(calc.oilOnly.oilAmount, +(cur + 0.5).toFixed(2));
+                              setCustomMixedOil(next);
+                            }}
+                            disabled={calc.mixed.oilAmount >= calc.oilOnly.oilAmount}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex gap-1 pt-1 justify-center flex-wrap">
+                          {[1, 2, 3].filter(v => v <= calc.oilOnly.oilAmount).map((v) => (
+                            <Button
+                              key={v}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                              onClick={() => setCustomMixedOil(v)}
+                            >
+                              {v} كغم
+                            </Button>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                            onClick={() => setCustomMixedOil(Math.floor(calc.defaultMixed.oilAmount))}
+                          >
+                            {Math.floor(calc.defaultMixed.oilAmount)} كغم
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Cash amount input */}
+                      <div className="space-y-1.5 bg-background/90 dark:bg-card p-3 rounded-lg border border-amber-200/60 dark:border-amber-900/40">
+                        <div className="flex justify-between items-center text-xs">
+                          <Label className="font-semibold text-foreground">المبلغ النقدي المتبقي (شيكل)</Label>
+                          <span className="text-muted-foreground text-[11px]">الافتراضي: {calc.defaultMixed.cashAmount.toFixed(2)} ₪</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() => {
+                              const cur = calc.mixed.cashAmount;
+                              const next = Math.max(0, +(cur - 5).toFixed(2));
+                              const res = calculateCustomMixedFromCash(oilProduced, totalContainerCost, settings, next);
+                              setCustomMixedOil(res.oilAmount);
+                            }}
+                            disabled={calc.mixed.cashAmount <= 0}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                          <Input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max={calc.cashOnly.cashAmount}
+                            value={calc.mixed.cashAmount}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              const next = isNaN(val) ? 0 : Math.max(0, val);
+                              const res = calculateCustomMixedFromCash(oilProduced, totalContainerCost, settings, next);
+                              setCustomMixedOil(res.oilAmount);
+                            }}
+                            className="text-center font-bold text-base h-9 text-amber-700 dark:text-amber-400"
+                          />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() => {
+                              const cur = calc.mixed.cashAmount;
+                              const next = Math.min(calc.cashOnly.cashAmount, +(cur + 5).toFixed(2));
+                              const res = calculateCustomMixedFromCash(oilProduced, totalContainerCost, settings, next);
+                              setCustomMixedOil(res.oilAmount);
+                            }}
+                            disabled={calc.mixed.cashAmount >= calc.cashOnly.cashAmount}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex gap-1 pt-1 justify-center">
+                          <p className="text-[11px] text-muted-foreground text-center py-0.5">
+                            يتم احتساب النقد تلقائياً لتغطية كامل الفاتورة
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-100/70 dark:bg-amber-900/40 rounded-lg p-2.5 flex items-center justify-between text-xs">
+                      <span className="font-medium text-amber-950 dark:text-amber-200">
+                        النتيجة النهائية للمختلط:
+                      </span>
+                      <span className="font-bold text-sm text-amber-900 dark:text-amber-100">
+                        {calc.mixed.oilAmount.toFixed(2)} كغم زيت + {calc.mixed.cashAmount.toFixed(2)} ₪ نقداً
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
