@@ -161,12 +161,12 @@ const Queue = () => {
       .select("*")
       .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
-      .neq("status", "done")
       .order("created_at", { ascending: true });
 
     const raw = (data as QueueItem[]) || [];
+    const activeRaw = raw.filter((item) => item.status !== "done");
     let curSeq = 1;
-    const items = raw.map((item) => {
+    const items = activeRaw.map((item) => {
       const pos = item.position && Number(item.position) > 0 ? Number(item.position) : curSeq;
       curSeq = Math.max(curSeq, pos) + 1;
       return { ...item, position: pos };

@@ -33,7 +33,7 @@ interface QuickInvoiceSheetProps {
 type PaymentType = "oil" | "cash" | "mixed";
 
 export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }: QuickInvoiceSheetProps) {
-  const { user, effectiveUserId } = useAuth();
+  const { user, effectiveUserId, profile } = useAuth();
   const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
