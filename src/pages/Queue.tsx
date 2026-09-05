@@ -12,9 +12,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Clock, UserPlus, Trash2, CheckCircle, Monitor, Play,
-  ChevronDown, Calculator, Users, Package, RefreshCw, Printer, Pencil
+  ChevronDown, Calculator, Users, Package, RefreshCw, Printer, Pencil,
+  GripVertical, Undo2, ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
@@ -54,6 +56,18 @@ const Queue = () => {
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [selectedForInvoice, setSelectedForInvoice] = useState<QueueItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QueueItem | null>(null);
+
+  // Drag & drop reorder state
+  const [draggedItem, setDraggedItem] = useState<QueueItem | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<QueueItem | null>(null);
+  const [reorderConfirm, setReorderConfirm] = useState<{
+    sourceCustomer: QueueItem;
+    targetCustomer: QueueItem;
+    newPosition: number;
+    reorderedQueue: QueueItem[];
+    updates: { id: string; position: number }[];
+  } | null>(null);
+
   const { user, effectiveUserId, profile } = useAuth();
   const { activeSeason } = useSeason();
 
@@ -458,6 +472,151 @@ const Queue = () => {
     await fetchQueue();
   };
 
+  const returnToQueue = async (id: string) => {
+    const target = allItems.find((i) => i.id === id);
+    if (!target) return;
+
+    try {
+      localStorage.removeItem(`processing_started_${id}`);
+    } catch {}
+
+    const cleanNotes = (target.notes || "")
+      .replace(/\[بدء_العصر:[^\]]*\]/gi, "")
+      .trim();
+
+    setAllItems((prev) => {
+      const updated = prev.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              status: "waiting",
+              started_at: null,
+              notes: cleanNotes || null,
+            }
+          : i
+      );
+      if (activeSeason) {
+        try {
+          localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+
+    const { error } = await supabase
+      .from("queue")
+      .update({
+        status: "waiting",
+        started_at: null,
+        notes: cleanNotes || null,
+      })
+      .eq("id", id);
+
+    if (error) {
+      toast.error("تعذر إرجاع الزبون: " + error.message);
+    } else {
+      toast.success(`تم إرجاع الزبون "${target.name}" إلى قائمة الانتظار`);
+    }
+    await fetchQueue();
+  };
+
+  const handleDragStart = (e: React.DragEvent, item: QueueItem) => {
+    setDraggedItem(item);
+    e.dataTransfer.setData("text/plain", item.id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent, item: QueueItem) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverItem?.id !== item.id) {
+      setDragOverItem(item);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, targetItem: QueueItem) => {
+    e.preventDefault();
+    setDragOverItem(null);
+    if (!draggedItem || draggedItem.id === targetItem.id) {
+      setDraggedItem(null);
+      return;
+    }
+
+    // Sort current waiting items by position
+    const waitingList = allItems
+      .filter((i) => i.status === "waiting")
+      .sort((a, b) => Number(a.position) - Number(b.position));
+
+    const sourceIdx = waitingList.findIndex((i) => i.id === draggedItem.id);
+    const targetIdx = waitingList.findIndex((i) => i.id === targetItem.id);
+    if (sourceIdx === -1 || targetIdx === -1) {
+      setDraggedItem(null);
+      return;
+    }
+
+    const newWaiting = [...waitingList];
+    const [moved] = newWaiting.splice(sourceIdx, 1);
+    newWaiting.splice(targetIdx, 0, moved);
+
+    // Re-assign existing ascending positions
+    const originalPositions = waitingList.map((w) => Number(w.position));
+    const updates: { id: string; position: number }[] = [];
+    const reorderedWithPositions = newWaiting.map((item, idx) => {
+      const newPos = originalPositions[idx] || (idx + 1);
+      if (item.position !== newPos) {
+        updates.push({ id: item.id, position: newPos });
+      }
+      return { ...item, position: newPos };
+    });
+
+    const newSourcePosition =
+      reorderedWithPositions.find((i) => i.id === draggedItem.id)?.position ?? targetItem.position;
+
+    // Combine with non-waiting items
+    const nonWaiting = allItems.filter((i) => i.status !== "waiting");
+    const combinedQueue = [...nonWaiting, ...reorderedWithPositions];
+
+    setReorderConfirm({
+      sourceCustomer: draggedItem,
+      targetCustomer: targetItem,
+      newPosition: newSourcePosition,
+      reorderedQueue: combinedQueue,
+      updates,
+    });
+
+    setDraggedItem(null);
+  };
+
+  const applyReorder = async () => {
+    if (!reorderConfirm) return;
+    const { sourceCustomer, newPosition, reorderedQueue, updates } = reorderConfirm;
+
+    setAllItems(reorderedQueue);
+    if (activeSeason) {
+      try {
+        localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(reorderedQueue));
+      } catch {}
+    }
+    setReorderConfirm(null);
+
+    try {
+      await Promise.all(
+        updates.map((u) =>
+          supabase.from("queue").update({ position: u.position }).eq("id", u.id)
+        )
+      );
+      toast.success(`تم تبديل الدور — أصبح دور "${sourceCustomer.name}" رقم #${newPosition}`);
+    } catch {
+      toast.error("حدث خطأ أثناء حفظ الترتيب الجديد في قاعدة البيانات");
+    }
+
+    await fetchQueue();
+  };
+
   const openInvoiceFor = (customer: QueueItem) => {
     setSelectedForInvoice(customer);
     setInvoiceSheetOpen(true);
@@ -667,11 +826,25 @@ const Queue = () => {
                   return (
                     <div
                       key={customer.id}
-                      className="p-3 border border-border rounded-xl bg-card space-y-2.5 shadow-xs hover:border-primary/40 transition-colors"
+                      draggable={true}
+                      onDragStart={(e) => handleDragStart(e, customer)}
+                      onDragOver={(e) => handleDragOver(e, customer)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, customer)}
+                      className={cn(
+                        "p-3 border rounded-xl bg-card space-y-2.5 shadow-xs transition-all select-none",
+                        dragOverItem?.id === customer.id
+                          ? "border-primary ring-2 ring-primary/30 scale-[1.01] bg-primary/5 shadow-md"
+                          : "border-border hover:border-primary/40"
+                      )}
                     >
-                      {/* Row 1: #Position + Customer Name + Est Time + Trash Button */}
+                      {/* Row 1: #Position + Customer Name + Est Time + Drag Handle + Action Buttons */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <GripVertical
+                            className="h-4 w-4 text-muted-foreground/40 hover:text-foreground cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                            title="اسحب لتبديل الدور لأعلى أو لأسفل"
+                          />
                           <span className="inline-flex items-center justify-center h-6 min-w-[1.75rem] px-1.5 rounded-md bg-amber-500/15 text-amber-800 dark:text-amber-200 font-bold text-xs shrink-0">
                             #{customer.position}
                           </span>
@@ -830,14 +1003,27 @@ const Queue = () => {
                         ))}
                       </div>
 
-                      {/* Main Action: ✓ تم العصر */}
-                      <Button
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-10 rounded-lg shadow-xs text-sm gap-2 transition-colors"
-                        onClick={() => completeProcessing(p.id)}
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span>تم العصر</span>
-                      </Button>
+                      {/* Main Action: إرجاع إلى الطابور + تم العصر */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-10 rounded-lg text-xs font-semibold border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 gap-1.5 transition-colors"
+                          onClick={() => returnToQueue(p.id)}
+                          title="إلغاء بدء العصر وإرجاع الزبون إلى قائمة الانتظار"
+                        >
+                          <Undo2 className="h-4 w-4" />
+                          <span>إرجاع إلى الطابور</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-xs text-xs gap-1.5 transition-colors"
+                          onClick={() => completeProcessing(p.id)}
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>تم العصر</span>
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -960,6 +1146,47 @@ const Queue = () => {
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg text-xs h-9 font-medium"
             >
               إزالة الزبون
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 5.5 Reorder Confirmation Dialog */}
+      <AlertDialog open={!!reorderConfirm} onOpenChange={(o) => !o && setReorderConfirm(null)}>
+        <AlertDialogContent dir="rtl" className="max-w-md rounded-2xl p-6">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+              <ArrowUpDown className="h-5 w-5 text-primary" />
+              تأكيد تبديل الدور
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-sm text-foreground pt-2 space-y-3">
+                <p className="text-foreground">
+                  هل تود تبديل الأدوار في الطابور للزبون{" "}
+                  <strong className="text-primary font-bold">"{reorderConfirm?.sourceCustomer.name}"</strong>؟
+                </p>
+                <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 text-center space-y-1">
+                  <div className="text-xs text-muted-foreground">الترتيب الجديد:</div>
+                  <div className="font-extrabold text-xl text-primary tracking-wide">
+                    سيصبح رقمه: #{reorderConfirm?.newPosition}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    (بدلاً من الدور #{reorderConfirm?.sourceCustomer.position})
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  سيتم تحديث ترتيب باقي الزبائن في قائمة الانتظار تلقائياً بناءً على هذا التبديل.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2.5 mt-4 pt-1">
+            <AlertDialogCancel className="rounded-lg text-xs h-9 font-medium">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={applyReorder}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-xs h-9 font-bold px-4 shadow-sm"
+            >
+              تأكيد التبديل
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
