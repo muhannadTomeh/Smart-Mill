@@ -559,3 +559,218 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
 
   printHtmlViaIframe(zReportHtml);
 }
+
+export interface ThermalQueueTicketData {
+  turn_number: number | string;
+  customer_name: string;
+  bags_count: number;
+  notes?: string | null;
+  phone?: string | null;
+  created_at?: string;
+  season_name?: string;
+  estimated_minutes?: number | null;
+}
+
+export function printThermalQueueTicket(data: ThermalQueueTicketData, millName = "معصرة الزيتون") {
+  const dateObj = data.created_at ? new Date(data.created_at) : new Date();
+  const formattedDate = dateObj.toLocaleDateString("ar-EG", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const formattedTime = dateObj.toLocaleTimeString("ar-EG", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  // Strip internal tags from notes (e.g. [وقت_تقديري:30], [بدء_العصر:...])
+  const cleanNotes = data.notes
+    ? data.notes
+        .replace(/\[(?:وقت_تقديري|الوقت|est|بدء_العصر):?[^\]]*\]/gi, "")
+        .trim()
+    : "";
+
+  const ticketHtml = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تذكرة دور #${data.turn_number} - ${data.customer_name}</title>
+  <style>
+    @page {
+      size: 80mm auto;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, -apple-system, BlinkMacSystemFont;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      width: 78mm;
+      max-width: 78mm;
+      margin: 0 auto;
+      padding: 4mm 2.5mm 6mm 2.5mm;
+      font-size: 12px;
+      line-height: 1.35;
+      color: #000;
+      background: #fff;
+    }
+    .text-center { text-align: center; }
+    .bold { font-weight: 700; }
+    
+    .header {
+      text-align: center;
+      padding-bottom: 2px;
+    }
+    .ticket-badge {
+      display: inline-block;
+      border: 1.5px solid #000;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 2px 12px;
+      border-radius: 4px;
+      margin-bottom: 3px;
+    }
+    .subtitle {
+      font-size: 10px;
+      color: #444;
+    }
+    
+    .divider {
+      border-top: 1px dashed #000;
+      margin: 5px 0;
+    }
+    .divider-double {
+      border-top: 2px solid #000;
+      margin: 6px 0;
+    }
+
+    .turn-box {
+      border: 2.5px solid #000;
+      border-radius: 6px;
+      padding: 6px 4px;
+      margin: 6px 0;
+      text-align: center;
+      background: #fafafa;
+    }
+    .turn-label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .turn-number {
+      font-size: 46px;
+      font-weight: 900;
+      line-height: 1.05;
+      margin: 3px 0 1px 0;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2.5px 0;
+      font-size: 12.5px;
+    }
+    .info-label {
+      color: #222;
+      font-weight: 600;
+    }
+    .info-value {
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .notes-box {
+      border: 1px solid #666;
+      border-radius: 4px;
+      padding: 4px 6px;
+      margin: 5px 0;
+      font-size: 11.5px;
+      background: #f9f9f9;
+    }
+    .notes-title {
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .instruction {
+      text-align: center;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #222;
+      margin: 6px 0 4px 0;
+      line-height: 1.35;
+    }
+
+    .mill-footer {
+      text-align: center;
+      margin-top: 8px;
+      padding-top: 5px;
+      border-top: 1px dotted #888;
+      font-size: 10px;
+      font-weight: 600;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="ticket-badge">إيصال دور معصرة الزيتون</div>
+    ${data.season_name ? `<div class="subtitle">موسم: ${data.season_name}</div>` : ''}
+    <div class="subtitle">${formattedDate} — ${formattedTime}</div>
+  </div>
+
+  <!-- رقم الدور بشكل كبير وواضح -->
+  <div class="turn-box">
+    <div class="turn-label">رقم الدور</div>
+    <div class="turn-number">#${data.turn_number}</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- بيانات الزبون -->
+  <div class="info-row">
+    <span class="info-label">اسم الزبون:</span>
+    <span class="info-value bold" style="font-size: 13.5px;">${data.customer_name}</span>
+  </div>
+
+  <div class="info-row">
+    <span class="info-label">عدد الشوالات:</span>
+    <span class="info-value bold" style="font-size: 14px;">${data.bags_count} شوال</span>
+  </div>
+
+  ${data.phone ? `
+  <div class="info-row">
+    <span class="info-label">رقم الهاتف:</span>
+    <span class="info-value">${data.phone}</span>
+  </div>` : ''}
+
+  ${cleanNotes ? `
+  <div class="notes-box">
+    <div class="notes-title">الملاحظات:</div>
+    <div>${cleanNotes}</div>
+  </div>` : ''}
+
+  <div class="divider-double"></div>
+
+  <div class="instruction">
+    يرجى الاحتفاظ بالإيصال ومتابعة شاشة العرض الرئيسية عند وصول دوركم
+  </div>
+
+  <!-- خط صغير أخر شيء اسم المعصرة حسب طلب المستخدم -->
+  <div class="mill-footer">
+    ${millName}
+  </div>
+</body>
+</html>
+  `;
+
+  printHtmlViaIframe(ticketHtml);
+}
+

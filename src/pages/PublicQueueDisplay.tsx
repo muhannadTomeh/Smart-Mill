@@ -504,9 +504,9 @@ export default function PublicQueueDisplay() {
           )}
         </div>
 
-        {/* LEFT COLUMN — Next Turn (الدور التالي) - Twin Window Matching Right Window */}
+        {/* LEFT COLUMN — Next Turn & Upcoming Queue (الدور التالي والأدوار القادمة) */}
         <div
-          className="flex-1 flex flex-col justify-between items-center relative rounded-3xl p-5 md:p-7 shadow-2xl backdrop-blur-sm overflow-hidden text-center"
+          className="flex-1 flex flex-col justify-between items-center relative rounded-3xl p-4 md:p-6 shadow-2xl backdrop-blur-sm overflow-hidden text-center"
           style={{
             background: "linear-gradient(170deg, rgba(16,185,129,0.18) 0%, rgba(4,47,21,0.45) 100%)",
             border: "2px solid rgba(52,211,153,0.45)",
@@ -526,57 +526,152 @@ export default function PublicQueueDisplay() {
               className="relative z-10 flex flex-col justify-between items-center w-full h-full text-center"
               style={{ animation: "qd-fade-scale 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
-              {/* Header Badge */}
-              <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-base md:text-lg uppercase tracking-wider shadow-sm shrink-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-                <span>الدور التالي</span>
-              </div>
-
-              {/* Core Hero Info (Number + Name + Bags) — No 'الدور التالي' text beside name */}
-              <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto w-full py-2">
-                {/* Big Turn Number */}
-                <span
-                  className="font-black text-white leading-none drop-shadow-2xl select-none shrink-0"
-                  style={{
-                    fontSize: "clamp(5.5rem, 11vh, 9.5rem)",
-                    textShadow: "0 0 60px rgba(52,211,153,0.5), 0 4px 0 rgba(0,0,0,0.4)",
-                    lineHeight: 0.9,
-                  }}
-                >
-                  {nextItem.position}
-                </span>
-
-                {/* Customer Name (Only Position Number and beside/under it Name) */}
-                <span
-                  className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-3 tracking-wide truncate max-w-full px-4 drop-shadow"
-                  style={{ textShadow: "0 2px 10px rgba(0,0,0,0.7)" }}
-                >
-                  {nextItem.name}
-                </span>
-
-                {/* Bags Badge */}
-                {displaySettings.show_bags_count && nextItem.bags > 0 && (
-                  <span className="mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-white/10 text-white/95 text-base md:text-lg font-bold border border-white/15 backdrop-blur-md shadow-sm">
-                    🛍️ {nextItem.bags} شوال
-                  </span>
-                )}
-              </div>
-
-              {/* Bottom Operational Expected Time */}
-              {displaySettings.show_estimated_time && (
-                <div className="w-full shrink-0 pt-1">
-                  <div className="inline-flex items-center justify-center gap-3 md:gap-4 px-6 md:px-8 py-2 md:py-2.5 rounded-2xl border-2 shadow-xl bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.2)] max-w-full">
-                    <span className="text-xl md:text-2xl shrink-0">⏳</span>
-                    <span className="text-sm md:text-base font-bold whitespace-nowrap">
-                      الوقت المتوقع للدور:
-                    </span>
-                    <span
-                      className="text-white font-mono text-2xl md:text-3xl font-black tracking-widest drop-shadow shrink-0"
-                      dir="ltr"
-                    >
-                      {nextItem.estimated_minutes ? `${nextItem.estimated_minutes}:00` : "30:00"}
-                    </span>
+              {/* If there are NO subsequent items: Full Hero Mode */}
+              {waitingItems.length <= 1 ? (
+                <>
+                  {/* Header Badge */}
+                  <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-base md:text-lg uppercase tracking-wider shadow-sm shrink-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span>الدور التالي</span>
                   </div>
+
+                  {/* Core Hero Info (Number + Name + Bags) */}
+                  <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto w-full py-2">
+                    {/* Big Turn Number */}
+                    <span
+                      className="font-black text-white leading-none drop-shadow-2xl select-none shrink-0"
+                      style={{
+                        fontSize: "clamp(5.5rem, 11vh, 9.5rem)",
+                        textShadow: "0 0 60px rgba(52,211,153,0.5), 0 4px 0 rgba(0,0,0,0.4)",
+                        lineHeight: 0.9,
+                      }}
+                    >
+                      {nextItem.position}
+                    </span>
+
+                    {/* Customer Name */}
+                    <span
+                      className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-3 tracking-wide truncate max-w-full px-4 drop-shadow"
+                      style={{ textShadow: "0 2px 10px rgba(0,0,0,0.7)" }}
+                    >
+                      {nextItem.name}
+                    </span>
+
+                    {/* Bags Badge */}
+                    {displaySettings.show_bags_count && nextItem.bags > 0 && (
+                      <span className="mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-white/10 text-white/95 text-base md:text-lg font-bold border border-white/15 backdrop-blur-md shadow-sm">
+                        🛍️ {nextItem.bags} شوال
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Bottom Operational Expected Time */}
+                  {displaySettings.show_estimated_time && (
+                    <div className="w-full shrink-0 pt-1">
+                      <div className="inline-flex items-center justify-center gap-3 md:gap-4 px-6 md:px-8 py-2 md:py-2.5 rounded-2xl border-2 shadow-xl bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.2)] max-w-full">
+                        <span className="text-xl md:text-2xl shrink-0">⏳</span>
+                        <span className="text-sm md:text-base font-bold whitespace-nowrap">
+                          الوقت المتوقع للدور:
+                        </span>
+                        <span
+                          className="text-white font-mono text-2xl md:text-3xl font-black tracking-widest drop-shadow shrink-0"
+                          dir="ltr"
+                        >
+                          {nextItem.estimated_minutes ? `${nextItem.estimated_minutes}:00` : "30:00"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Multi-Turn Mode: Immediate Next Turn + Upcoming Queue Cards Grid */
+                <div className="flex flex-col w-full h-full min-h-0">
+                  {/* Top: Immediate Next Customer Card */}
+                  <div className="w-full rounded-2xl bg-white/[0.07] border border-amber-400/40 p-3.5 md:p-4 shadow-lg shrink-0">
+                    <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 font-bold text-xs md:text-sm uppercase tracking-wider">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                        <span>الدور القادم مباشرة</span>
+                      </div>
+
+                      {displaySettings.show_estimated_time && (
+                        <span className="text-xs md:text-sm font-bold text-amber-200 bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
+                          ⏳ ~{nextItem.estimated_minutes || 30} دقيقة
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                      {/* Big Turn Number Badge */}
+                      <div
+                        className="font-black text-amber-300 leading-none shrink-0"
+                        style={{
+                          fontSize: "clamp(3.2rem, 6vh, 4.8rem)",
+                          textShadow: "0 0 30px rgba(245,158,11,0.5)",
+                        }}
+                      >
+                        #{nextItem.position}
+                      </div>
+
+                      {/* Name & Bags */}
+                      <div className="flex flex-col text-right min-w-0 flex-1">
+                        <span className="text-white text-2xl md:text-3xl font-black truncate drop-shadow">
+                          {nextItem.name}
+                        </span>
+                        {displaySettings.show_bags_count && nextItem.bags > 0 && (
+                          <span className="text-emerald-300 text-sm md:text-base font-bold mt-1">
+                            🛍️ {nextItem.bags} شوال
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Middle Divider & Section Title */}
+                  <div className="w-full flex items-center gap-3 my-2.5 shrink-0">
+                    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
+                    <span className="text-xs md:text-sm font-bold text-emerald-200 bg-emerald-950/90 px-3 py-1 rounded-full border border-emerald-500/30 flex items-center gap-2 shadow-sm">
+                      <span>الأدوار التالية في الطابور</span>
+                      <span className="bg-emerald-400 text-black text-xs font-black px-2 py-0.5 rounded-full">
+                        {waitingItems.length - 1} بالانتظار
+                      </span>
+                    </span>
+                    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
+                  </div>
+
+                  {/* Bottom: Grid of Subsequent Waiting Customers */}
+                  <div className="w-full flex-1 min-h-0 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-0.5">
+                    {waitingItems.slice(1, 7).map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.12] shadow-sm backdrop-blur-sm transition-all"
+                      >
+                        {/* Turn Number Badge */}
+                        <div className="w-11 h-11 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 text-slate-950 font-black text-xl md:text-2xl flex items-center justify-center shrink-0 shadow-md">
+                          #{item.position}
+                        </div>
+
+                        {/* Customer Name & Bags */}
+                        <div className="flex flex-col text-right min-w-0 flex-1">
+                          <span className="text-white text-base md:text-lg font-bold truncate leading-tight">
+                            {item.name}
+                          </span>
+                          {displaySettings.show_bags_count && item.bags > 0 && (
+                            <span className="text-emerald-300 text-xs md:text-sm font-semibold mt-0.5">
+                              🛍️ {item.bags} شوال
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer note if more than 6 subsequent turns */}
+                  {waitingItems.length > 7 && (
+                    <div className="text-xs font-bold text-emerald-300/80 text-center mt-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 shrink-0">
+                      + يوجد {waitingItems.length - 7} زبائن إضافيين في قائمة الانتظار
+                    </div>
+                  )}
                 </div>
               )}
             </div>

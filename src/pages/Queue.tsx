@@ -13,13 +13,14 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Clock, UserPlus, Trash2, CheckCircle, Monitor, Play,
-  ChevronDown, Calculator, Users, Package, RefreshCw
+  ChevronDown, Calculator, Users, Package, RefreshCw, Printer
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { QuickInvoiceSheet } from "@/components/queue/QuickInvoiceSheet";
+import { printThermalQueueTicket } from "@/lib/thermalReceiptPrinter";
 
 interface QueueItem {
   id: string;
@@ -179,7 +180,7 @@ const Queue = () => {
     } catch {}
   };
 
-  const addToQueue = async () => {
+  const addToQueue = async (shouldPrint = false) => {
     if (!newCustomer.name.trim() || !newCustomer.bags) {
       toast.error("يرجى إدخال الاسم وعدد الشوالات");
       return;
@@ -226,6 +227,26 @@ const Queue = () => {
       if (newCustomer.name) {
         localStorage.setItem(`queue_est_name_${newCustomer.name.trim()}`, String(estMin || 30));
       }
+
+      if (shouldPrint) {
+        try {
+          printThermalQueueTicket(
+            {
+              turn_number: nextPosition,
+              customer_name: newCustomer.name.trim(),
+              bags_count: parseInt(newCustomer.bags),
+              notes: newCustomer.notes?.trim() || null,
+              phone: newCustomer.phone?.trim() || null,
+              season_name: activeSeason?.name,
+              estimated_minutes: estMin,
+            },
+            profile?.mill_name || localStorage.getItem("mill_name") || "معصرة الزيتون"
+          );
+        } catch (printErr) {
+          console.error("Queue ticket printing error:", printErr);
+        }
+      }
+
       setNewCustomer({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "30" });
       setShowExtra(false);
       setDialogOpen(false);
@@ -233,6 +254,26 @@ const Queue = () => {
       await fetchQueue();
     } else {
       toast.error("تعذر إضافة الزبون: " + error.message);
+    }
+  };
+
+  const handlePrintTicket = (customer: QueueItem) => {
+    try {
+      printThermalQueueTicket(
+        {
+          turn_number: customer.position,
+          customer_name: customer.name,
+          bags_count: customer.bags,
+          notes: customer.notes,
+          phone: customer.phone,
+          created_at: customer.created_at,
+          season_name: activeSeason?.name,
+          estimated_minutes: parseEstimatedMinutes(customer),
+        },
+        profile?.mill_name || localStorage.getItem("mill_name") || "معصرة الزيتون"
+      );
+    } catch (err) {
+      console.error("Print ticket error:", err);
     }
   };
 
@@ -488,13 +529,25 @@ const Queue = () => {
                   </CollapsibleContent>
                 </Collapsible>
 
-                <Button
-                  onClick={addToQueue}
-                  className="w-full h-10 rounded-lg text-sm font-semibold shadow-xs mt-2"
-                >
-                  <UserPlus className="h-4 w-4 me-1.5" />
-                  حفظ وإصدار رقم الدور
-                </Button>
+                <div className="grid grid-cols-2 gap-2.5 mt-3 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => addToQueue(false)}
+                    className="h-10 rounded-lg text-sm font-semibold border-border hover:bg-muted"
+                  >
+                    <UserPlus className="h-4 w-4 me-1.5" />
+                    حفظ فقط
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => addToQueue(true)}
+                    className="h-10 rounded-lg text-sm font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                  >
+                    <Printer className="h-4 w-4 me-1.5" />
+                    حفظ وطباعة
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -584,15 +637,26 @@ const Queue = () => {
                             </span>
                           ) : null}
                         </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                          onClick={() => setDeleteTarget(customer)}
-                          title="إزالة الزبون"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10 shrink-0"
+                            onClick={() => handlePrintTicket(customer)}
+                            title="طباعة إيصال الدور (80mm)"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                            onClick={() => setDeleteTarget(customer)}
+                            title="إزالة الزبون"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
 
                       {/* Row 2: Secondary info (Bags, Time, Phone) */}
