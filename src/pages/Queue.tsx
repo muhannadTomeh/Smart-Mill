@@ -86,9 +86,15 @@ const Queue = () => {
   }, []);
   const targetUserId = effectiveUserId || user?.id;
 
-  const processing = allItems.filter((i) => i.status === "processing");
-  const waiting = allItems.filter((i) => i.status === "waiting");
-  const completed = allItems.filter((i) => i.status === "completed");
+  const processing = allItems
+    .filter((i) => i.status === "processing")
+    .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+  const waiting = allItems
+    .filter((i) => i.status === "waiting")
+    .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+  const completed = allItems
+    .filter((i) => i.status === "completed")
+    .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
 
   useEffect(() => {
     if (targetUserId && activeSeason) fetchQueue();
@@ -117,12 +123,18 @@ const Queue = () => {
       .select("*")
       .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
-      .order("created_at", { ascending: true });
+      .order("position", { ascending: true });
 
     const raw = (data as QueueItem[]) || [];
     const activeRaw = raw.filter((item) => item.status !== "done");
+    
+    // Sort strictly by position ascending so physical place and turn number always match
+    const sorted = [...activeRaw].sort(
+      (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
+    );
+
     let curSeq = 1;
-    const items = activeRaw.map((item) => {
+    const items = sorted.map((item) => {
       const pos = item.position && Number(item.position) > 0 ? Number(item.position) : curSeq;
       curSeq = Math.max(curSeq, pos) + 1;
       return { ...item, position: pos };
@@ -595,10 +607,15 @@ const Queue = () => {
     if (!reorderConfirm) return;
     const { sourceCustomer, newPosition, reorderedQueue, updates } = reorderConfirm;
 
-    setAllItems(reorderedQueue);
+    // Ensure reordered items are strictly sorted by position so place switches immediately
+    const sortedCombined = [...reorderedQueue].sort(
+      (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
+    );
+
+    setAllItems(sortedCombined);
     if (activeSeason) {
       try {
-        localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(reorderedQueue));
+        localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(sortedCombined));
       } catch {}
     }
     setReorderConfirm(null);
@@ -609,7 +626,7 @@ const Queue = () => {
           supabase.from("queue").update({ position: u.position }).eq("id", u.id)
         )
       );
-      toast.success(`تم تبديل الدور — أصبح دور "${sourceCustomer.name}" رقم #${newPosition}`);
+      toast.success(`تم تبديل الدور والمكان — أصبح دور "${sourceCustomer.name}" رقم #${newPosition}`);
     } catch {
       toast.error("حدث خطأ أثناء حفظ الترتيب الجديد في قاعدة البيانات");
     }

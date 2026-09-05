@@ -169,7 +169,7 @@ export default function PublicQueueDisplay() {
       }
       return item;
     });
-
+    mappedItems.sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
     setItems(mappedItems);
 
     const seasonRow = (seasonRes.data as any[] | null)?.[0];
