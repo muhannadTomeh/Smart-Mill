@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Clock, UserPlus, Trash2, CheckCircle, Monitor, Play,
-  ChevronDown, Calculator, Users, Package, RefreshCw, Printer
+  ChevronDown, Calculator, Users, Package, RefreshCw, Printer, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -108,6 +108,16 @@ const Queue = () => {
   const [nowMs, setNowMs] = useState(Date.now());
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<{
+    id: string;
+    name: string;
+    phone: string;
+    bags: string;
+    notes: string;
+    estimatedMinutes: string;
+    position: number;
+  } | null>(null);
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [selectedForInvoice, setSelectedForInvoice] = useState<QueueItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QueueItem | null>(null);
@@ -275,6 +285,90 @@ const Queue = () => {
     }
   };
 
+  const openEditDialog = (customer: QueueItem) => {
+    const est = parseEstimatedMinutes(customer);
+    const cleanNotes = (customer.notes || "")
+      .replace(/\[(?:وقت_تقديري|الوقت|est|بدء_العصر):?[^\]]*\]/gi, "")
+      .trim();
+    setEditingCustomer({
+      id: customer.id,
+      name: customer.name || "",
+      phone: customer.phone || "",
+      bags: customer.bags && customer.bags > 0 ? String(customer.bags) : "",
+      notes: cleanNotes,
+      estimatedMinutes: est ? String(est) : "",
+      position: customer.position,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const saveEditCustomer = async () => {
+    if (!editingCustomer || !editingCustomer.name.trim()) {
+      toast.error("يرجى إدخال اسم الزبون");
+      return;
+    }
+
+    const estMin = editingCustomer.estimatedMinutes ? parseInt(editingCustomer.estimatedMinutes, 10) : null;
+    const bagsCount = editingCustomer.bags ? parseInt(editingCustomer.bags, 10) : 0;
+    const fallbackNotes = estMin 
+      ? `[وقت_تقديري:${estMin}] ${editingCustomer.notes?.trim() || ""}`.trim()
+      : (editingCustomer.notes?.trim() || null);
+
+    setAllItems((prev) => {
+      const updated = prev.map((i) =>
+        i.id === editingCustomer.id
+          ? {
+              ...i,
+              name: editingCustomer.name.trim(),
+              phone: editingCustomer.phone?.trim() || null,
+              bags: bagsCount,
+              notes: fallbackNotes,
+              estimated_minutes: estMin,
+            }
+          : i
+      );
+      if (activeSeason) {
+        try {
+          localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+
+    if (estMin) {
+      localStorage.setItem(`queue_est_${editingCustomer.id}`, String(estMin));
+      localStorage.setItem(`queue_est_name_${editingCustomer.name.trim()}`, String(estMin));
+    }
+
+    let { error } = await supabase
+      .from("queue")
+      .update({
+        name: editingCustomer.name.trim(),
+        phone: editingCustomer.phone?.trim() || null,
+        bags: bagsCount,
+        notes: fallbackNotes,
+        estimated_minutes: estMin,
+      } as any)
+      .eq("id", editingCustomer.id);
+
+    if (error) {
+      await supabase
+        .from("queue")
+        .update({
+          name: editingCustomer.name.trim(),
+          phone: editingCustomer.phone?.trim() || null,
+          bags: bagsCount,
+          notes: fallbackNotes,
+        })
+        .eq("id", editingCustomer.id);
+    }
+
+    toast.success(`تم تحديث بيانات الزبون "${editingCustomer.name.trim()}" بنجاح`);
+    setEditDialogOpen(false);
+    setEditingCustomer(null);
+    await fetchQueue();
+  };
+
   const completeProcessing = async (id: string) => {
     setAllItems((prev) => {
       const updated = prev.map((i) => (i.id === id ? { ...i, status: "completed" } : i));
@@ -431,7 +525,6 @@ const Queue = () => {
                   </Label>
                   <Input
                     id="name"
-                    placeholder="أدخل اسم الزبون..."
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, name: e.target.value }))}
                     className="h-10 rounded-lg text-sm"
@@ -441,27 +534,12 @@ const Queue = () => {
 
                 {/* عدد الشوالات (اختياري) */}
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="bags" className="text-xs font-medium text-muted-foreground">
-                      عدد الشوالات (اختياري)
-                    </Label>
-                    <div className="flex gap-1">
-                      {[10, 20, 30, 50].map((b) => (
-                        <button
-                          key={b}
-                          type="button"
-                          onClick={() => setNewCustomer((p) => ({ ...p, bags: String(b) }))}
-                          className="text-[11px] px-2 py-0.5 rounded border border-border bg-muted/50 hover:bg-muted text-muted-foreground font-medium transition-colors"
-                        >
-                          +{b}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <Label htmlFor="bags" className="text-xs font-medium text-muted-foreground">
+                    عدد الشوالات (اختياري)
+                  </Label>
                   <Input
                     id="bags"
                     type="number"
-                    placeholder="مثال: 15"
                     value={newCustomer.bags}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, bags: e.target.value }))}
                     min="0"
@@ -477,41 +555,21 @@ const Queue = () => {
                   <Input
                     id="phone"
                     type="tel"
-                    placeholder="رقم الهاتف..."
                     value={newCustomer.phone}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
                     className="h-10 rounded-lg text-sm"
                   />
                 </div>
 
-                {/* الوقت التقديري (اختياري - بدون قيمة افتراضية) */}
+                {/* الوقت التقديري (اختياري) */}
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="estimatedMinutes" className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5 text-primary" />
-                      الوقت التقديري بالدقائق (اختياري)
-                    </Label>
-                    <div className="flex gap-1">
-                      {[15, 30, 45, 60].map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
-                            newCustomer.estimatedMinutes === String(m)
-                              ? "bg-primary text-primary-foreground border-primary font-bold"
-                              : "border-border bg-muted/50 hover:bg-muted text-muted-foreground"
-                          }`}
-                          onClick={() => setNewCustomer((p) => ({ ...p, estimatedMinutes: String(m) }))}
-                        >
-                          {m} د
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <Label htmlFor="estimatedMinutes" className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-primary" />
+                    الوقت التقديري بالدقائق (اختياري)
+                  </Label>
                   <Input
                     id="estimatedMinutes"
                     type="number"
-                    placeholder="بدون قيمة افتراضية (اتركه فارغاً أو أدخل رقماً)"
                     value={newCustomer.estimatedMinutes}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, estimatedMinutes: e.target.value }))}
                     min="1"
@@ -526,7 +584,6 @@ const Queue = () => {
                   </Label>
                   <Textarea
                     id="notes"
-                    placeholder="أي ملاحظات حول الزبون أو العصر..."
                     value={newCustomer.notes}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))}
                     rows={2}
@@ -644,6 +701,15 @@ const Queue = () => {
                           ) : null}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
+                            onClick={() => openEditDialog(customer)}
+                            title="تعديل بيانات الزبون"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
                           <Button
                             size="icon"
                             variant="ghost"
@@ -914,6 +980,115 @@ const Queue = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 6. Edit Customer Dialog in Waiting Queue */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent dir="rtl" className="max-w-md rounded-xl p-5">
+          <DialogHeader className="text-right">
+            <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-primary" />
+              تعديل بيانات الزبون {editingCustomer?.position ? `(دور #${editingCustomer.position})` : ""}
+            </DialogTitle>
+          </DialogHeader>
+
+          {editingCustomer && (
+            <div className="space-y-3.5 mt-2">
+              {/* اسم الزبون (إلزامي فقط) */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-name" className="text-xs font-semibold">
+                  اسم الزبون <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="edit-name"
+                  value={editingCustomer.name}
+                  onChange={(e) => setEditingCustomer((p) => p ? { ...p, name: e.target.value } : null)}
+                  className="h-10 rounded-lg text-sm"
+                  autoFocus
+                />
+              </div>
+
+              {/* عدد الشوالات (اختياري) */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-bags" className="text-xs font-medium text-muted-foreground">
+                  عدد الشوالات (اختياري)
+                </Label>
+                <Input
+                  id="edit-bags"
+                  type="number"
+                  value={editingCustomer.bags}
+                  onChange={(e) => setEditingCustomer((p) => p ? { ...p, bags: e.target.value } : null)}
+                  min="0"
+                  className="h-10 rounded-lg text-sm"
+                />
+              </div>
+
+              {/* رقم التواصل (اختياري) */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-phone" className="text-xs font-medium text-muted-foreground">
+                  رقم التواصل (اختياري)
+                </Label>
+                <Input
+                  id="edit-phone"
+                  type="tel"
+                  value={editingCustomer.phone}
+                  onChange={(e) => setEditingCustomer((p) => p ? { ...p, phone: e.target.value } : null)}
+                  className="h-10 rounded-lg text-sm"
+                />
+              </div>
+
+              {/* الوقت التقديري (اختياري) */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-est" className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-primary" />
+                  الوقت التقديري بالدقائق (اختياري)
+                </Label>
+                <Input
+                  id="edit-est"
+                  type="number"
+                  value={editingCustomer.estimatedMinutes}
+                  onChange={(e) => setEditingCustomer((p) => p ? { ...p, estimatedMinutes: e.target.value } : null)}
+                  min="1"
+                  className="h-10 rounded-lg text-sm"
+                />
+              </div>
+
+              {/* ملاحظات (اختياري) */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-notes" className="text-xs font-medium text-muted-foreground">
+                  ملاحظات (اختياري)
+                </Label>
+                <Textarea
+                  id="edit-notes"
+                  value={editingCustomer.notes}
+                  onChange={(e) => setEditingCustomer((p) => p ? { ...p, notes: e.target.value } : null)}
+                  rows={2}
+                  className="rounded-lg resize-none text-sm"
+                />
+              </div>
+
+              {/* أزرار الحفظ والإلغاء */}
+              <div className="grid grid-cols-2 gap-2.5 mt-4 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditDialogOpen(false)}
+                  className="h-10 rounded-lg text-sm font-semibold border-border hover:bg-muted text-foreground"
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  type="button"
+                  onClick={saveEditCustomer}
+                  className="h-10 rounded-lg text-sm font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                >
+                  <CheckCircle className="h-4 w-4 me-1.5" />
+                  حفظ التعديلات
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
