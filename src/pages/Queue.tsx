@@ -884,11 +884,11 @@ const Queue = () => {
         </div>
       </div>
 
-      {/* 2. Operations Workflow Columns: 30% Waiting - 40% Processing - 30% Invoicing */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 md:gap-5 items-start">
-        {/* العمود 1 (اليمين): 1. قائمة الانتظار (30%) */}
-        <Card className="lg:col-span-3 border border-border shadow-xs rounded-xl overflow-hidden bg-card">
-          <CardHeader className="py-3 px-4 border-b border-border/80 bg-muted/20">
+      {/* 2. Operations Workflow Columns: 3 Balanced Equal Columns with Unified Board Height */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5 items-stretch min-h-[calc(100vh-210px)] max-w-[1700px] mx-auto">
+        {/* العمود 1 (اليمين): 1. قائمة الانتظار */}
+        <Card className="flex flex-col border border-border shadow-xs rounded-xl overflow-hidden bg-card">
+          <CardHeader className="py-3 px-4 border-b border-border/80 bg-muted/20 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -899,19 +899,20 @@ const Queue = () => {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-3">
+          <CardContent className="p-3 flex-1 flex flex-col min-h-0">
             {loading ? (
-              <div className="py-10 text-center text-muted-foreground text-xs flex flex-col items-center justify-center gap-2">
+              <div className="py-10 text-center text-muted-foreground text-xs flex flex-col items-center justify-center gap-2 my-auto">
                 <RefreshCw className="h-4 w-4 animate-spin text-primary" />
                 <span>جارٍ التحميل...</span>
               </div>
             ) : waiting.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground/30" />
-                <p className="text-xs font-medium">لا يوجد زبائن في الانتظار</p>
+              <div className="text-center py-12 text-muted-foreground my-auto flex flex-col items-center justify-center">
+                <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+                <p className="text-sm font-medium text-foreground/80">لا يوجد زبائن في الانتظار</p>
+                <p className="text-xs text-muted-foreground mt-1">اضغط على "+ إضافة زبون" لتسجيل دور جديد</p>
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-0.5">
+              <div className="space-y-2.5 flex-1 overflow-y-auto pr-1">
                 {waiting.map((customer, idx) => {
                   const estMin = parseEstimatedMinutes(customer);
                   return (
@@ -1037,9 +1038,9 @@ const Queue = () => {
           </CardContent>
         </Card>
 
-        {/* العمود 2 (الوسط): 2. قيد العصر حالياً (40% - Visual Focal Point) */}
-        <Card className="lg:col-span-4 border-2 border-primary/40 shadow-xs rounded-xl overflow-hidden bg-card">
-          <CardHeader className="py-3 px-4 border-b border-border/80 bg-primary/5">
+        {/* العمود 2 (الوسط): 2. قيد العصر حالياً */}
+        <Card className="flex flex-col border-2 border-primary/40 shadow-xs rounded-xl overflow-hidden bg-card">
+          <CardHeader className="py-3 px-4 border-b border-border/80 bg-primary/5 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Play className="h-4 w-4 text-primary" />
@@ -1052,14 +1053,19 @@ const Queue = () => {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-3.5">
+          <CardContent className="p-3.5 flex-1 flex flex-col min-h-0">
             {processing.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground">
-                <Play className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground/30" />
-                <p className="text-xs font-medium">لا يوجد زبون قيد العصر حالياً</p>
+              <div className="text-center py-12 text-muted-foreground my-auto flex flex-col items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3 text-primary">
+                  <Play className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">لا يوجد زبون قيد العصر حالياً</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                  يمكنك بدء عصر الزبون التالي بالضغط على "بدء العصر" في قائمة الانتظار
+                </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-0.5">
+              <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                 {processing.map((p) => {
                   const remSec = getRemainingSeconds(p, nowMs);
                   const estMin = parseEstimatedMinutes(p) || 30;
@@ -1151,9 +1157,9 @@ const Queue = () => {
           </CardContent>
         </Card>
 
-        {/* العمود 3 (اليسار): 3. بانتظار الفاتورة (30%) */}
-        <Card className="lg:col-span-3 border border-border shadow-xs rounded-xl overflow-hidden bg-card">
-          <CardHeader className="py-3 px-4 border-b border-border/80 bg-muted/20">
+        {/* العمود 3 (اليسار): 3. بانتظار الفاتورة */}
+        <Card className="flex flex-col border border-border shadow-xs rounded-xl overflow-hidden bg-card">
+          <CardHeader className="py-3 px-4 border-b border-border/80 bg-muted/20 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
@@ -1164,14 +1170,15 @@ const Queue = () => {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-3">
+          <CardContent className="p-3 flex-1 flex flex-col min-h-0">
             {completed.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground/30" />
-                <p className="text-xs font-medium">لا يوجد زبائن بانتظار الفاتورة</p>
+              <div className="text-center py-12 text-muted-foreground my-auto flex flex-col items-center justify-center">
+                <CheckCircle className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+                <p className="text-sm font-medium text-foreground/80">لا يوجد زبائن بانتظار الفاتورة</p>
+                <p className="text-xs text-muted-foreground mt-1">الأدوار المنجزة ستظهر هنا تلقائياً لفوترتها</p>
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-0.5">
+              <div className="space-y-2.5 flex-1 overflow-y-auto pr-1">
                 {completed.map((c) => (
                   <div
                     key={c.id}
