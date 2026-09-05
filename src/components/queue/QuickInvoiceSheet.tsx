@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Droplets, Package, Wallet, CheckCircle2, Plus, Minus, Eye } from "lucide-react";
+import { Droplets, Package, Wallet, CheckCircle2, Plus, Minus, Eye, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,6 +15,7 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
+import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 
 interface ContainerType {
   id: string;
@@ -26,7 +27,7 @@ interface QuickInvoiceSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customer: { id: string; name: string; phone: string | null } | null;
-  onCompleted: () => void;
+  onCompleted: (invoicedQueueId?: string) => void;
 }
 
 type PaymentType = "oil" | "cash" | "mixed";
@@ -102,7 +103,9 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
 
   const addOil = (delta: number) => setOilProduced((v) => Math.max(0, +(v + delta).toFixed(2)));
 
-  const handleConfirm = async () => {
+  const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
+
+  const handleConfirm = async (shouldPrint = false) => {
     if (!customer || !paymentType || !calc) return;
     if (oilProduced <= 0) {
       toast.error("يرجى إدخال كمية الزيت");
@@ -155,24 +158,56 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
 
     refetchInventory();
 
-    const shareMsg = `فاتورة ${customer.name}\nالزيت المنتج: ${oilProduced} كغم\nالتنكات: ${containerSummary}\nالمستحق: ${selected.label}`;
+    // Explicitly update the queue item status to 'done' in Supabase
+    if (customer?.id) {
+      const { error: queueUpdateErr } = await supabase
+        .from("queue")
+        .update({ status: "done" })
+        .eq("id", customer.id);
 
-    toast.success("تم تأكيد الفاتورة", {
-      description: selected.label,
-      action: customer.phone
-        ? {
-            label: "📱 واتساب",
-            onClick: () => {
-              const phone = customer.phone!.replace(/[^0-9]/g, "");
-              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(shareMsg)}`, "_blank");
-            },
+      if (queueUpdateErr) {
+        console.warn("Could not update queue status to done, attempting delete:", queueUpdateErr);
+        await supabase.from("queue").delete().eq("id", customer.id);
+      }
+
+      // Update cached active_queue in localStorage
+      if (activeSeason) {
+        try {
+          const cached = localStorage.getItem(`active_queue_${activeSeason.id}`);
+          if (cached) {
+            const list = JSON.parse(cached);
+            if (Array.isArray(list)) {
+              const filtered = list.filter((item: any) => item.id !== customer.id);
+              localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(filtered));
+            }
           }
-        : undefined,
+        } catch {}
+      }
+    }
+
+    if (shouldPrint) {
+      printThermalReceipt({
+        customer_name: customer.name,
+        customer_phone: customer.phone,
+        oil_produced: oilProduced,
+        container_count: totalContainerCount,
+        container_type: containerSummary,
+        payment_type: paymentType,
+        oil_amount: selected.oilAmount,
+        cash_amount: selected.cashAmount,
+        total_display: selected.label,
+        season_name: activeSeason?.name,
+      }, millName);
+    }
+
+    toast.success(shouldPrint ? "تم حفظ الفاتورة وإرسال أمر الطباعة" : "تم تأكيد الفاتورة بنجاح", {
+      description: selected.label,
     });
 
+    const invoicedId = customer.id;
     setSaving(false);
     onOpenChange(false);
-    onCompleted();
+    onCompleted(invoicedId);
   };
 
   const paymentCards: { type: PaymentType; icon: any; title: string; color: string; bg: string; ring: string }[] = [
@@ -286,7 +321,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
 
           <Separator />
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             <Button
               variant="outline"
               size="lg"
@@ -295,16 +330,26 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
               onClick={() => setShowPreview(true)}
             >
               <Eye className="h-5 w-5 me-2" />
-              إظهار الفاتورة
+              معاينة
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="sm:w-auto h-14 text-base font-semibold"
+              disabled={!paymentType || !oilProduced || saving}
+              onClick={() => handleConfirm(false)}
+            >
+              <CheckCircle2 className="h-5 w-5 me-2" />
+              {saving ? "جارٍ الحفظ..." : "حفظ فقط"}
             </Button>
             <Button
               size="lg"
-              className="flex-1 h-14 text-lg font-bold"
+              className="flex-1 h-14 text-lg font-bold gap-2 shadow-md hover:shadow-lg transition-all"
               disabled={!paymentType || !oilProduced || saving}
-              onClick={handleConfirm}
+              onClick={() => handleConfirm(true)}
             >
-              <CheckCircle2 className="h-5 w-5 me-2" />
-              {saving ? "جارٍ الحفظ..." : "تأكيد الفاتورة وإنهاء الدور"}
+              <Printer className="h-5 w-5" />
+              {saving ? "جارٍ الحفظ..." : "تأكيد وطباعة الإيصال (80mm)"}
             </Button>
           </div>
         </div>
@@ -317,12 +362,15 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
             </DialogHeader>
             {customer && paymentType && calc && (
               <InvoicePreview
+                millName={millName}
                 data={{
                   customer_name: customer.name,
+                  customer_phone: customer.phone,
                   oil_produced: oilProduced,
                   container_count: totalContainerCount,
                   container_type: containerSummary,
                   payment_type: paymentType,
+                  season_name: activeSeason?.name,
                   oil_amount:
                     paymentType === "oil"
                       ? calc.oilOnly.oilAmount

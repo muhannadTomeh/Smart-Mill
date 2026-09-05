@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Receipt, FileText, Calendar, CheckCircle, Eye } from "lucide-react";
+import { Receipt, FileText, Calendar, CheckCircle, Eye, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
@@ -20,6 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { calculatePaymentOptions, type PaymentBreakdown } from "@/lib/invoiceCalculations";
+import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 
 interface PaymentMethod extends PaymentBreakdown {
   total: string;
@@ -51,7 +52,8 @@ const paymentLabel = (type: string) => {
 };
 
 const Invoices = () => {
-  const { user, effectiveUserId } = useAuth();
+  const { user, effectiveUserId, profile } = useAuth();
+  const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
   const { refetch: refetchInventory } = useInventory();
@@ -141,7 +143,7 @@ const Invoices = () => {
       .select("id, name, phone, position")
       .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
-      .eq("status", "waiting")
+      .neq("status", "done")
       .order("position", { ascending: true });
     setQueueCustomers(data || []);
   };
@@ -177,7 +179,7 @@ const Invoices = () => {
   };
 
 
-  const confirmInvoice = async () => {
+  const confirmInvoice = async (shouldPrint = false) => {
     if (!selectedPayment) return;
     if (!invoiceData.customerName) {
       toast({ title: "خطأ", description: "يرجى إدخال اسم الزبون", variant: "destructive" });
@@ -226,9 +228,34 @@ const Invoices = () => {
       return;
     }
 
-    if (queueId && queueId !== "manual") setQueueId(null);
+    if (shouldPrint) {
+      printThermalReceipt({
+        customer_name: invoiceData.customerName,
+        customer_phone: invoiceData.customerPhone || null,
+        oil_produced: invoiceData.oilProduced,
+        container_count: getTotalContainerCount(),
+        container_type: containerSummary,
+        payment_type: selectedPayment.type,
+        oil_amount: selectedPayment.oilAmount,
+        cash_amount: selectedPayment.cashAmount,
+        total_display: selectedPayment.total,
+        notes: invoiceData.notes || undefined,
+        season_name: activeSeason?.name,
+      }, millName);
+    }
 
-    toast({ title: "تم تأكيد الفاتورة", description: `تم إنشاء فاتورة لـ ${invoiceData.customerName}` });
+    if (queueId && queueId !== "manual") {
+      const { error: qErr } = await supabase.from("queue").update({ status: "done" }).eq("id", queueId);
+      if (qErr) {
+        await supabase.from("queue").delete().eq("id", queueId);
+      }
+      setQueueId(null);
+    }
+
+    toast({ 
+      title: shouldPrint ? "تم تأكيد الفاتورة وإرسال أمر الطباعة" : "تم تأكيد الفاتورة", 
+      description: `تم إنشاء فاتورة لـ ${invoiceData.customerName}` 
+    });
     setInvoiceData({ customerName: "", customerPhone: "", oilProduced: 0, notes: "" });
     const resetCounts: Record<string, number> = {};
     containerTypes.forEach(ct => { resetCounts[ct.id] = 0; });
@@ -484,15 +511,27 @@ const Invoices = () => {
                   </div>
                 </div>
 
-                <Button
-                  onClick={confirmInvoice}
-                  disabled={!selectedPayment || !invoiceData.customerName}
-                  className="w-full mt-4"
-                  size="lg"
-                >
-                  <CheckCircle className="h-5 w-5 me-2" />
-                  تأكيد الفاتورة
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-2.5 mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => confirmInvoice(false)}
+                    disabled={!selectedPayment || !invoiceData.customerName}
+                    className="sm:w-auto h-12 text-base font-semibold"
+                    size="lg"
+                  >
+                    <CheckCircle className="h-5 w-5 me-2" />
+                    تأكيد فقط
+                  </Button>
+                  <Button
+                    onClick={() => confirmInvoice(true)}
+                    disabled={!selectedPayment || !invoiceData.customerName}
+                    className="flex-1 h-12 text-base font-bold shadow-md hover:shadow-lg transition-all"
+                    size="lg"
+                  >
+                    <Printer className="h-5 w-5 me-2" />
+                    تأكيد وطباعة الإيصال (80mm)
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -545,10 +584,32 @@ const Invoices = () => {
                         </TableCell>
                         <TableCell className="text-right font-semibold">{inv.total_display}</TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="outline" onClick={() => setPreviewInvoice(inv)}>
-                            <Eye className="h-4 w-4 me-1" />
-                            إظهار
-                          </Button>
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <Button size="sm" variant="outline" onClick={() => setPreviewInvoice(inv)}>
+                              <Eye className="h-4 w-4 me-1" />
+                              معاينة
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              className="gap-1 shadow-sm"
+                              onClick={() => printThermalReceipt({
+                                customer_name: inv.customer_name,
+                                oil_produced: inv.oil_produced,
+                                container_count: inv.container_count,
+                                container_type: inv.container_type,
+                                payment_type: inv.payment_type,
+                                oil_amount: inv.oil_amount,
+                                cash_amount: inv.cash_amount,
+                                total_display: inv.total_display,
+                                created_at: inv.created_at,
+                                season_name: activeSeason?.name,
+                              }, millName)}
+                              title="طباعة إيصال حراري (80mm)"
+                            >
+                              <Printer className="h-4 w-4" />
+                              طباعة
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -565,7 +626,15 @@ const Invoices = () => {
           <DialogHeader>
             <DialogTitle>الفاتورة</DialogTitle>
           </DialogHeader>
-          {previewInvoice && <InvoicePreview data={previewInvoice} />}
+          {previewInvoice && (
+            <InvoicePreview 
+              millName={millName}
+              data={{
+                ...previewInvoice,
+                season_name: activeSeason?.name,
+              }} 
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

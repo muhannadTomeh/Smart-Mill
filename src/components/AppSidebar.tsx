@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   MessageSquare,
   Building2,
+  Calculator,
 } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useRole } from "@/contexts/RoleContext"
@@ -44,6 +45,7 @@ const mainItems = [
   { title: "الرئيسية", url: "/dashboard", icon: LayoutDashboard },
   { title: "الطابور", url: "/queue", icon: Clock },
   { title: "حساب الرد", url: "/invoices", icon: Receipt },
+  { title: "إغلاق الصندوق", url: "/daily-closing", icon: Calculator },
   { title: "الزبائن", url: "/customers", icon: Users },
   { title: "العمال", url: "/workers", icon: UserCheck },
 ]
@@ -159,7 +161,7 @@ export function AppSidebar() {
           <>
             <MenuGroup 
               label="الرئيسية" 
-              items={isEmployee ? mainItems.filter(i => ['الطابور', 'حساب الرد'].includes(i.title)) : mainItems} 
+              items={isEmployee ? mainItems.filter(i => ['الطابور', 'حساب الرد', 'إغلاق الصندوق'].includes(i.title)) : mainItems} 
               isCollapsed={isCollapsed} 
             />
             {!isEmployee && (

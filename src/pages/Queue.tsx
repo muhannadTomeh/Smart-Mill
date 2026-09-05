@@ -161,6 +161,7 @@ const Queue = () => {
       .select("*")
       .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
+      .neq("status", "done")
       .order("created_at", { ascending: true });
 
     const raw = (data as QueueItem[]) || [];
@@ -805,7 +806,19 @@ const Queue = () => {
         open={invoiceSheetOpen}
         onOpenChange={setInvoiceSheetOpen}
         customer={selectedForInvoice}
-        onCompleted={() => {
+        onCompleted={(invoicedQueueId?: string) => {
+          const finishedId = invoicedQueueId || selectedForInvoice?.id;
+          if (finishedId) {
+            setAllItems((prev) => {
+              const updated = prev.filter((item) => item.id !== finishedId);
+              if (activeSeason) {
+                try {
+                  localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
+                } catch {}
+              }
+              return updated;
+            });
+          }
           setSelectedForInvoice(null);
           fetchQueue();
         }}
