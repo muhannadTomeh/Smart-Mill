@@ -45,39 +45,70 @@ const paymentTypeArabic = (type: string) => {
 };
 
 function printHtmlViaIframe(html: string) {
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  document.body.appendChild(iframe);
+  try {
+    const iframe = document.createElement("iframe");
+    iframe.id = "thermal-print-" + Date.now();
+    iframe.style.position = "fixed";
+    iframe.style.top = "-9999px";
+    iframe.style.left = "-9999px";
+    iframe.style.width = "80mm";
+    iframe.style.height = "120mm";
+    iframe.style.border = "none";
+    iframe.style.opacity = "0.01";
+    iframe.style.pointerEvents = "none";
+    document.body.appendChild(iframe);
 
-  const doc = iframe.contentWindow?.document;
-  if (!doc) {
-    console.error("Failed to access print iframe document");
-    return;
-  }
-
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  setTimeout(() => {
-    try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    } catch (e) {
-      console.error("Printing failed:", e);
-    } finally {
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 2000);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) {
+      console.warn("Failed to access iframe document, falling back to window.open");
+      const win = window.open("", "_blank", "width=450,height=650");
+      if (win) {
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        setTimeout(() => {
+          win.print();
+          win.close();
+        }, 500);
+      }
+      return;
     }
-  }, 250);
+
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (e) {
+        console.error("Iframe print failed, trying window.open", e);
+        const win = window.open("", "_blank", "width=450,height=650");
+        if (win) {
+          win.document.open();
+          win.document.write(html);
+          win.document.close();
+          win.focus();
+          setTimeout(() => {
+            win.print();
+            win.close();
+          }, 500);
+        }
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 3000);
+      }
+    };
+
+    setTimeout(doPrint, 350);
+  } catch (err) {
+    console.error("printHtmlViaIframe fatal error:", err);
+  }
 }
 
 export function printThermalReceipt(data: ThermalReceiptData, millName = "المعصرة الذكية") {
@@ -742,7 +773,7 @@ export function printThermalQueueTicket(data: ThermalQueueTicketData, millName =
 
   <div class="info-row">
     <span class="info-label">عدد الشوالات:</span>
-    <span class="info-value bold" style="font-size: 14px;">${data.bags_count} شوال</span>
+    <span class="info-value bold" style="font-size: 14px;">${data.bags_count && Number(data.bags_count) > 0 ? `${data.bags_count} شوال` : 'غير محدد'}</span>
   </div>
 
   ${data.phone ? `

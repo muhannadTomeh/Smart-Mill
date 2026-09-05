@@ -10,7 +10,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Clock, UserPlus, Trash2, CheckCircle, Monitor, Play,
   ChevronDown, Calculator, Users, Package, RefreshCw, Printer
@@ -107,8 +106,7 @@ const Queue = () => {
   const [allItems, setAllItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
-  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "30" });
-  const [showExtra, setShowExtra] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [selectedForInvoice, setSelectedForInvoice] = useState<QueueItem | null>(null);
@@ -181,12 +179,13 @@ const Queue = () => {
   };
 
   const addToQueue = async (shouldPrint = false) => {
-    if (!newCustomer.name.trim() || !newCustomer.bags) {
-      toast.error("يرجى إدخال الاسم وعدد الشوالات");
+    if (!newCustomer.name.trim()) {
+      toast.error("يرجى إدخال اسم الزبون");
       return;
     }
 
-    const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes) : 30;
+    const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes, 10) : null;
+    const bagsCount = newCustomer.bags ? parseInt(newCustomer.bags, 10) : 0;
     const fallbackNotes = estMin 
       ? `[وقت_تقديري:${estMin}] ${newCustomer.notes?.trim() || ""}`.trim()
       : (newCustomer.notes?.trim() || null);
@@ -200,7 +199,7 @@ const Queue = () => {
       season_id: activeSeason!.id,
       name: newCustomer.name.trim(),
       phone: newCustomer.phone?.trim() || null,
-      bags: parseInt(newCustomer.bags),
+      bags: bagsCount,
       notes: fallbackNotes,
       status: "waiting",
       position: nextPosition,
@@ -224,8 +223,8 @@ const Queue = () => {
       if (insertedData?.id && estMin) {
         localStorage.setItem(`queue_est_${insertedData.id}`, String(estMin));
       }
-      if (newCustomer.name) {
-        localStorage.setItem(`queue_est_name_${newCustomer.name.trim()}`, String(estMin || 30));
+      if (newCustomer.name && estMin) {
+        localStorage.setItem(`queue_est_name_${newCustomer.name.trim()}`, String(estMin));
       }
 
       if (shouldPrint) {
@@ -234,7 +233,7 @@ const Queue = () => {
             {
               turn_number: nextPosition,
               customer_name: newCustomer.name.trim(),
-              bags_count: parseInt(newCustomer.bags),
+              bags_count: bagsCount,
               notes: newCustomer.notes?.trim() || null,
               phone: newCustomer.phone?.trim() || null,
               season_name: activeSeason?.name,
@@ -247,8 +246,7 @@ const Queue = () => {
         }
       }
 
-      setNewCustomer({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "30" });
-      setShowExtra(false);
+      setNewCustomer({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
       setDialogOpen(false);
       toast.success(`تمت إضافة الزبون "${newCustomer.name.trim()}" برقم دور #${nextPosition}`);
       await fetchQueue();
@@ -426,11 +424,14 @@ const Queue = () => {
               </DialogHeader>
 
               <div className="space-y-3.5 mt-2">
-                {/* اسم الزبون */}
+                {/* اسم الزبون (إلزامي فقط) */}
                 <div className="space-y-1">
-                  <Label htmlFor="name" className="text-xs font-medium">اسم الزبون *</Label>
+                  <Label htmlFor="name" className="text-xs font-semibold">
+                    اسم الزبون <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     id="name"
+                    placeholder="أدخل اسم الزبون..."
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, name: e.target.value }))}
                     className="h-10 rounded-lg text-sm"
@@ -438,21 +439,12 @@ const Queue = () => {
                   />
                 </div>
 
-                {/* رقم التواصل (إختياري) */}
-                <div className="space-y-1">
-                  <Label htmlFor="phone" className="text-xs font-medium">رقم التواصل (إختياري)</Label>
-                  <Input
-                    id="phone"
-                    value={newCustomer.phone}
-                    onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
-                    className="h-10 rounded-lg text-sm"
-                  />
-                </div>
-
-                {/* عدد الشوالات */}
+                {/* عدد الشوالات (اختياري) */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="bags" className="text-xs font-medium">عدد الشوالات *</Label>
+                    <Label htmlFor="bags" className="text-xs font-medium text-muted-foreground">
+                      عدد الشوالات (اختياري)
+                    </Label>
                     <div className="flex gap-1">
                       {[10, 20, 30, 50].map((b) => (
                         <button
@@ -469,75 +461,89 @@ const Queue = () => {
                   <Input
                     id="bags"
                     type="number"
+                    placeholder="مثال: 15"
                     value={newCustomer.bags}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, bags: e.target.value }))}
+                    min="0"
+                    className="h-10 rounded-lg text-sm"
+                  />
+                </div>
+
+                {/* رقم التواصل (اختياري) */}
+                <div className="space-y-1">
+                  <Label htmlFor="phone" className="text-xs font-medium text-muted-foreground">
+                    رقم التواصل (اختياري)
+                  </Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="رقم الهاتف..."
+                    value={newCustomer.phone}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
+                    className="h-10 rounded-lg text-sm"
+                  />
+                </div>
+
+                {/* الوقت التقديري (اختياري - بدون قيمة افتراضية) */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="estimatedMinutes" className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-primary" />
+                      الوقت التقديري بالدقائق (اختياري)
+                    </Label>
+                    <div className="flex gap-1">
+                      {[15, 30, 45, 60].map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                            newCustomer.estimatedMinutes === String(m)
+                              ? "bg-primary text-primary-foreground border-primary font-bold"
+                              : "border-border bg-muted/50 hover:bg-muted text-muted-foreground"
+                          }`}
+                          onClick={() => setNewCustomer((p) => ({ ...p, estimatedMinutes: String(m) }))}
+                        >
+                          {m} د
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Input
+                    id="estimatedMinutes"
+                    type="number"
+                    placeholder="بدون قيمة افتراضية (اتركه فارغاً أو أدخل رقماً)"
+                    value={newCustomer.estimatedMinutes}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, estimatedMinutes: e.target.value }))}
                     min="1"
                     className="h-10 rounded-lg text-sm"
                   />
                 </div>
 
-                {/* طي: الوقت التقديري (افتراضي نص ساعة) + ملاحظات */}
-                <Collapsible open={showExtra} onOpenChange={setShowExtra}>
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full justify-between rounded-lg text-muted-foreground hover:text-foreground h-8 px-2">
-                      <span className="text-xs font-medium">خيارات إضافية (الوقت التقديري، ملاحظات)</span>
-                      <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showExtra ? "rotate-180" : ""}`} />
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-3 pt-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="estimatedMinutes" className="text-xs font-medium flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5 text-primary" />
-                          الوقت التقديري (بالدقائق)
-                        </Label>
-                        <div className="flex gap-1">
-                          {[15, 30, 45, 60].map((m) => (
-                            <Button
-                              key={m}
-                              type="button"
-                              size="sm"
-                              variant={newCustomer.estimatedMinutes === String(m) ? "default" : "outline"}
-                              className="h-6 px-2 text-[11px] rounded"
-                              onClick={() => setNewCustomer((p) => ({ ...p, estimatedMinutes: String(m) }))}
-                            >
-                              {m} د
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                      <Input
-                        id="estimatedMinutes"
-                        type="number"
-                        value={newCustomer.estimatedMinutes}
-                        onChange={(e) => setNewCustomer((p) => ({ ...p, estimatedMinutes: e.target.value }))}
-                        min="1"
-                        className="h-9 rounded-lg text-sm"
-                      />
-                    </div>
+                {/* ملاحظات (اختياري) */}
+                <div className="space-y-1">
+                  <Label htmlFor="notes" className="text-xs font-medium text-muted-foreground">
+                    ملاحظات (اختياري)
+                  </Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="أي ملاحظات حول الزبون أو العصر..."
+                    value={newCustomer.notes}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))}
+                    rows={2}
+                    className="rounded-lg resize-none text-sm"
+                  />
+                </div>
 
-                    <div className="space-y-1">
-                      <Label htmlFor="notes" className="text-xs font-medium">ملاحظات</Label>
-                      <Textarea
-                        id="notes"
-                        value={newCustomer.notes}
-                        onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))}
-                        rows={2}
-                        className="rounded-lg resize-none text-sm"
-                      />
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-
-                <div className="grid grid-cols-2 gap-2.5 mt-3 pt-1">
+                {/* أزرار تأكيد / تأكيد وطباعة */}
+                <div className="grid grid-cols-2 gap-2.5 mt-4 pt-1">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => addToQueue(false)}
-                    className="h-10 rounded-lg text-sm font-semibold border-border hover:bg-muted"
+                    className="h-10 rounded-lg text-sm font-semibold border-border hover:bg-muted text-foreground"
                   >
-                    <UserPlus className="h-4 w-4 me-1.5" />
-                    حفظ فقط
+                    <CheckCircle className="h-4 w-4 me-1.5 text-muted-foreground" />
+                    تأكيد
                   </Button>
                   <Button
                     type="button"
@@ -545,7 +551,7 @@ const Queue = () => {
                     className="h-10 rounded-lg text-sm font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
                   >
                     <Printer className="h-4 w-4 me-1.5" />
-                    حفظ وطباعة
+                    تأكيد وطباعة
                   </Button>
                 </div>
               </div>
