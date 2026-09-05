@@ -36,7 +36,6 @@ export default function Dashboard() {
     waitingCount: 0,
     doneCount: 0,
     todayExpenses: 0,
-    todayBags: 0,
   });
   const [currentProcessing, setCurrentProcessing] = useState<QueueItem | null>(null);
   const [queuePreview, setQueuePreview] = useState<QueueItem[]>([]);
@@ -57,7 +56,7 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     const today = new Date().toISOString().split("T")[0];
-    const [waitingRes, doneRes, expenseRes, todayQueueRes] = await Promise.all([
+    const [waitingRes, doneRes, expenseRes] = await Promise.all([
       supabase
         .from("queue")
         .select("id", { count: "exact", head: true })
@@ -77,24 +76,12 @@ export default function Dashboard() {
         .eq("user_id", targetUserId!)
         .eq("season_id", activeSeason!.id)
         .gte("created_at", today),
-      supabase
-        .from("queue")
-        .select("bags")
-        .eq("user_id", targetUserId!)
-        .eq("season_id", activeSeason!.id)
-        .gte("created_at", today),
     ]);
-
-    const bagsTotal = (todayQueueRes.data || []).reduce(
-      (sum: number, q: any) => sum + (Number(q.bags) || 0),
-      0
-    );
 
     setStats({
       waitingCount: waitingRes.count || 0,
       doneCount: doneRes.count || 0,
       todayExpenses: (expenseRes.data || []).reduce((s: number, e: any) => s + Number(e.amount), 0),
-      todayBags: bagsTotal,
     });
   };
 
@@ -130,7 +117,6 @@ export default function Dashboard() {
     { label: "في الطابور", hint: "زبون بانتظار العصر", value: stats.waitingCount, icon: Clock, tone: "text-[hsl(var(--warning))]", bg: "bg-[hsl(var(--warning))]/12" },
     { label: "تم الإنجاز", hint: "اليوم", value: stats.doneCount, icon: CheckCircle, tone: "text-[hsl(var(--success))]", bg: "bg-[hsl(var(--success))]/12" },
     { label: "مصاريف اليوم", hint: "شيكل", value: `${stats.todayExpenses} ₪`, icon: Wallet, tone: "text-destructive", bg: "bg-destructive/10", sensitive: true },
-    { label: "شوالات اليوم", hint: "استلام وعصر", value: stats.todayBags, icon: Package, tone: "text-[hsl(var(--info))]", bg: "bg-[hsl(var(--info))]/12" },
   ];
 
   const quickActions = [
@@ -163,8 +149,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* Stats Grid: 5 Core Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {statCards.map((card, i) => (
           <div
             key={i}
