@@ -37,6 +37,13 @@ export type { QueueItem };
 
 const formatTime = formatTimeSafe;
 
+const sortByPosition = (a: QueueItem, b: QueueItem) => {
+  const posA = Number(a.position) || 0;
+  const posB = Number(b.position) || 0;
+  if (posA !== posB) return posA - posB;
+  return (new Date(a.created_at).getTime() || 0) - (new Date(b.created_at).getTime() || 0);
+};
+
 const Queue = () => {
   const [allItems, setAllItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,13 +95,13 @@ const Queue = () => {
 
   const processing = allItems
     .filter((i) => i.status === "processing")
-    .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+    .sort(sortByPosition);
   const waiting = allItems
     .filter((i) => i.status === "waiting")
-    .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+    .sort(sortByPosition);
   const completed = allItems
     .filter((i) => i.status === "completed")
-    .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+    .sort(sortByPosition);
 
   useEffect(() => {
     if (targetUserId && activeSeason) fetchQueue();
@@ -128,17 +135,15 @@ const Queue = () => {
     const raw = (data as QueueItem[]) || [];
     const activeRaw = raw.filter((item) => item.status !== "done");
     
-    // Sort strictly by position ascending so physical place and turn number always match
-    const sorted = [...activeRaw].sort(
-      (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
-    );
+    // Strictly sort by position ascending so physical place and turn number always match
+    const sorted = [...activeRaw].sort(sortByPosition);
 
     let curSeq = 1;
     const items = sorted.map((item) => {
-      const pos = item.position && Number(item.position) > 0 ? Number(item.position) : curSeq;
+      const pos = item.position != null && !isNaN(Number(item.position)) && Number(item.position) > 0 ? Number(item.position) : curSeq;
       curSeq = Math.max(curSeq, pos) + 1;
       return { ...item, position: pos };
-    });
+    }).sort(sortByPosition);
 
     setAllItems(items);
     setLoading(false);
@@ -561,7 +566,7 @@ const Queue = () => {
     // Sort current waiting items by position
     const waitingList = allItems
       .filter((i) => i.status === "waiting")
-      .sort((a, b) => Number(a.position) - Number(b.position));
+      .sort(sortByPosition);
 
     const sourceIdx = waitingList.findIndex((i) => i.id === draggedItem.id);
     const targetIdx = waitingList.findIndex((i) => i.id === targetItem.id);
@@ -608,9 +613,7 @@ const Queue = () => {
     const { sourceCustomer, newPosition, reorderedQueue, updates } = reorderConfirm;
 
     // Ensure reordered items are strictly sorted by position so place switches immediately
-    const sortedCombined = [...reorderedQueue].sort(
-      (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
-    );
+    const sortedCombined = [...reorderedQueue].sort(sortByPosition);
 
     setAllItems(sortedCombined);
     if (activeSeason) {
