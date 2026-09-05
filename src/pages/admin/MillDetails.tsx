@@ -15,7 +15,7 @@ import {
   Info, ArrowRight, Receipt, Package, Calendar, ShieldCheck, ShieldAlert, 
   Save, Plus, History, Banknote, Building2, MapPin, Phone, User, Globe, 
   Clock, UserCheck, ShoppingCart, Wallet, Lock, Mail, Users, CheckCircle2,
-  RotateCcw, Copy
+  RotateCcw, Copy, Eye, EyeOff, Edit, Trash2, Key
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,16 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 
 export default function MillDetails() {
@@ -61,7 +71,17 @@ export default function MillDetails() {
   // New Employee Modal
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ name: "", username: "", password: "" });
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [creatingEmployee, setCreatingEmployee] = useState(false);
+
+  // Cashier Passwords Visibility & Edit / Delete State
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [editingEmployee, setEditingEmployee] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: "", username: "", password: "" });
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteTargetEmployee, setDeleteTargetEmployee] = useState<any>(null);
+  const [deletingEmployee, setDeletingEmployee] = useState(false);
 
   const [resolvedOwnerId, setResolvedOwnerId] = useState<string>(millId || "");
   const [currentMillRecord, setCurrentMillRecord] = useState<any>(null);
@@ -193,7 +213,7 @@ export default function MillDetails() {
         try {
           const { data: mems } = await supabase
             .from("mill_memberships")
-            .select("id, user_id, role, display_username, created_at, profiles(display_name, phone)")
+            .select("id, user_id, role, display_username, created_at, profiles(display_name, phone, employee_pin)")
             .eq("mill_id", millObj.id)
             .eq("role", "mill_employee");
           membershipsData = mems || [];
@@ -216,6 +236,7 @@ export default function MillDetails() {
             user_id: m.user_id,
             display_name: m.profiles?.display_name || m.display_username,
             phone: m.profiles?.phone || m.display_username,
+            employee_pin: m.profiles?.employee_pin || null,
             created_at: m.created_at,
             parent_mill_id: resolvedOwner,
           }));
@@ -472,6 +493,118 @@ export default function MillDetails() {
     }
   };
 
+  // Toggle Password Visibility in Table
+  const togglePasswordVisibility = (empId: string) => {
+    setVisiblePasswords((p) => ({ ...p, [empId]: !p[empId] }));
+  };
+
+  // Open Edit Employee Modal
+  const handleOpenEdit = (emp: any) => {
+    setEditingEmployee(emp);
+    setEditForm({
+      name: emp.display_name || "",
+      username: emp.phone || emp.display_username || "",
+      password: emp.employee_pin || "",
+    });
+    setShowEditPassword(false);
+  };
+
+  // Save Edit Employee
+  const handleSaveEdit = async () => {
+    if (!editingEmployee) return;
+    if (!editForm.name.trim() || !editForm.username.trim()) {
+      toast({ title: "خطأ", description: "يرجى كتابة اسم الموظف واسم المستخدم", variant: "destructive" });
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const cleanUsername = editForm.username.trim(); // Preserves exact casing (e.g. Casherraef2)
+      const cleanName = editForm.name.trim();
+      const cleanPass = editForm.password.trim();
+
+      const profileUpdates: any = {
+        display_name: cleanName,
+        phone: cleanUsername,
+      };
+      if (cleanPass) {
+        profileUpdates.employee_pin = cleanPass;
+      }
+
+      // Update in profiles table
+      if (editingEmployee.user_id) {
+        await supabase
+          .from("profiles")
+          .update(profileUpdates)
+          .eq("user_id", editingEmployee.user_id);
+      } else if (editingEmployee.id) {
+        await supabase
+          .from("profiles")
+          .update(profileUpdates)
+          .eq("id", editingEmployee.id);
+      }
+
+      // Update in mill_memberships table if exists
+      if (editingEmployee.user_id) {
+        try {
+          await supabase
+            .from("mill_memberships")
+            .update({ display_username: cleanUsername })
+            .eq("user_id", editingEmployee.user_id);
+        } catch {}
+      }
+
+      toast({
+        title: "تم حفظ التعديلات بنجاح",
+        description: `اسم المستخدم: ${cleanUsername} ${cleanPass ? `| كلمة المرور: ${cleanPass}` : ""}`,
+      });
+
+      setEditingEmployee(null);
+      fetchData();
+    } catch (err: any) {
+      toast({
+        title: "خطأ في التحديث",
+        description: err.message || "تعذر تحديث بيانات الحساب",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Delete Cashier Employee
+  const handleDeleteEmployee = async () => {
+    if (!deleteTargetEmployee) return;
+    setDeletingEmployee(true);
+    try {
+      const empUserId = deleteTargetEmployee.user_id;
+      const empId = deleteTargetEmployee.id;
+
+      if (empUserId) {
+        await supabase.from("mill_memberships").delete().eq("user_id", empUserId);
+        await supabase.from("profiles").delete().eq("user_id", empUserId);
+      } else if (empId) {
+        await supabase.from("mill_memberships").delete().eq("id", empId);
+        await supabase.from("profiles").delete().eq("id", empId);
+      }
+
+      toast({
+        title: "تم حذف الحساب",
+        description: `تم حذف حساب الكاشير (${deleteTargetEmployee.display_name || deleteTargetEmployee.phone})`,
+      });
+
+      setDeleteTargetEmployee(null);
+      fetchData();
+    } catch (err: any) {
+      toast({
+        title: "خطأ في الحذف",
+        description: err.message || "تعذر حذف الحساب",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingEmployee(false);
+    }
+  };
+
   // Create Employee Cashier Sub-account
   const handleCreateEmployee = async () => {
     if (!newEmployee.name.trim() || !newEmployee.username.trim() || !newEmployee.password.trim()) {
@@ -485,26 +618,33 @@ export default function MillDetails() {
 
     setCreatingEmployee(true);
     try {
+      const originalUsername = newEmployee.username.trim(); // Preserves exact casing (e.g. Casherraef2)
+      const originalPassword = newEmployee.password.trim();
+      const originalName = newEmployee.name.trim();
+
       // Call admin_create_cashier RPC with resolvedOwnerId
       const { data, error } = await supabase.rpc('admin_create_cashier', {
         p_parent_mill_id: resolvedOwnerId,
-        p_display_name: newEmployee.name.trim(),
-        p_username: newEmployee.username.trim(),
-        p_password: newEmployee.password,
+        p_display_name: originalName,
+        p_username: originalUsername,
+        p_password: originalPassword,
         p_mill_code: millCode.trim()
       });
+
+      let createdUserId = (data as any)?.user_id || (data as any)?.id;
 
       if (error) {
         // If the RPC is not yet created in DB, fallback to signUp
         if (error.message?.includes('admin_create_cashier') || error.message?.includes('function') && error.message?.includes('does not exist')) {
-          const email = normalizeUsernameToEmail(newEmployee.username, millCode);
-          const { error: signUpError } = await supabase.auth.signUp({
+          const email = normalizeUsernameToEmail(originalUsername, millCode);
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email,
-            password: newEmployee.password,
+            password: originalPassword,
             options: {
               data: {
-                display_name: newEmployee.name.trim(),
-                username: newEmployee.username.trim(),
+                display_name: originalName,
+                username: originalUsername,
+                phone: originalUsername,
                 parent_mill_id: resolvedOwnerId,
                 mill_name: millData?.profile?.mill_name,
                 mill_code: millCode.trim(),
@@ -512,18 +652,53 @@ export default function MillDetails() {
             }
           });
           if (signUpError) throw signUpError;
+          if (signUpData?.user?.id) createdUserId = signUpData.user.id;
         } else {
           throw error;
         }
       }
 
+      // Immediately ensure profiles has exact case for phone/username and stores employee_pin
+      try {
+        if (createdUserId) {
+          await supabase
+            .from("profiles")
+            .update({
+              phone: originalUsername,
+              employee_pin: originalPassword,
+              display_name: originalName,
+            })
+            .eq("user_id", createdUserId);
+
+          if (currentMillRecord?.id) {
+            await supabase
+              .from("mill_memberships")
+              .update({ display_username: originalUsername })
+              .eq("user_id", createdUserId);
+          }
+        } else {
+          await supabase
+            .from("profiles")
+            .update({
+              phone: originalUsername,
+              employee_pin: originalPassword,
+              display_name: originalName,
+            })
+            .eq("parent_mill_id", resolvedOwnerId)
+            .ilike("phone", originalUsername);
+        }
+      } catch (errSync) {
+        console.warn("Could not sync extra profile fields:", errSync);
+      }
+
       toast({
         title: "تم إنشاء حساب الكاشير بنجاح",
-        description: `اسم الدخول: ${newEmployee.username.trim()} | كلمة المرور: ${newEmployee.password}`
+        description: `اسم الدخول: ${originalUsername} | كلمة المرور: ${originalPassword}`
       });
 
       setIsEmployeeModalOpen(false);
       setNewEmployee({ name: "", username: "", password: "" });
+      setShowNewPassword(false);
       fetchData();
     } catch (err: any) {
       toast({
@@ -943,14 +1118,24 @@ export default function MillDetails() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-right block">كلمة المرور *</Label>
-                      <Input 
-                        type="text"
-                        value={newEmployee.password} 
-                        onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))} 
-                        placeholder="أدخل كلمة المرور (مثال: 123456)" 
-                        dir="ltr"
-                        className="text-left font-mono"
-                      />
+                      <div className="relative">
+                        <Input 
+                          type={showNewPassword ? "text" : "password"}
+                          value={newEmployee.password} 
+                          onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))} 
+                          placeholder="أدخل كلمة المرور (مثال: 123456)" 
+                          dir="ltr"
+                          className="text-left font-mono pe-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute inset-y-0 end-0 pe-3 flex items-center text-muted-foreground hover:text-foreground"
+                          title={showNewPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                        >
+                          {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <DialogFooter>
@@ -960,6 +1145,90 @@ export default function MillDetails() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              {/* Edit Employee Dialog */}
+              <Dialog open={!!editingEmployee} onOpenChange={(o) => !o && setEditingEmployee(null)}>
+                <DialogContent dir="rtl" className="text-right sm:max-w-[450px]">
+                  <DialogHeader className="text-right sm:text-right">
+                    <DialogTitle className="text-right">تعديل حساب الكاشير</DialogTitle>
+                    <DialogDescription className="text-right">
+                      يمكنك تعديل اسم الموظف، وضبط أحرف اسم المستخدم (Capital / Small)، وتعيين أو إظهار كلمة المرور.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-3 text-right">
+                    <div className="space-y-2">
+                      <Label className="text-right block">اسم الموظف / الكاشير *</Label>
+                      <Input 
+                        value={editForm.name} 
+                        onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))} 
+                        placeholder="مثال: Casher" 
+                        className="text-right"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-right block">اسم المستخدم (Username) *</Label>
+                      <Input 
+                        type="text"
+                        value={editForm.username} 
+                        onChange={(e) => setEditForm(p => ({ ...p, username: e.target.value }))} 
+                        placeholder="مثال: Casherraef2" 
+                        dir="ltr"
+                        className="text-left font-mono"
+                      />
+                      <p className="text-[11px] text-muted-foreground text-right">يتم حفظ حالة الأحرف الكبيرة والصغيرة تماماً كما تكتبها (مثل: Casherraef2)</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-right block">كلمة المرور *</Label>
+                      <div className="relative">
+                        <Input 
+                          type={showEditPassword ? "text" : "password"}
+                          value={editForm.password} 
+                          onChange={(e) => setEditForm(p => ({ ...p, password: e.target.value }))} 
+                          placeholder="أدخل كلمة المرور" 
+                          dir="ltr"
+                          className="text-left font-mono pe-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowEditPassword(!showEditPassword)}
+                          className="absolute inset-y-0 end-0 pe-3 flex items-center text-muted-foreground hover:text-foreground"
+                          title={showEditPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                        >
+                          {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter className="gap-2">
+                    <Button variant="outline" onClick={() => setEditingEmployee(null)}>إلغاء</Button>
+                    <Button onClick={handleSaveEdit} disabled={savingEdit}>
+                      {savingEdit ? "جارٍ الحفظ..." : "حفظ التعديلات"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Delete Employee Confirmation */}
+              <AlertDialog open={!!deleteTargetEmployee} onOpenChange={(o) => !o && setDeleteTargetEmployee(null)}>
+                <AlertDialogContent dir="rtl">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>تأكيد حذف حساب الكاشير</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      هل أنت متأكد من حذف حساب الكاشير <strong>{deleteTargetEmployee?.display_name || deleteTargetEmployee?.phone}</strong>؟ لن يتمكن من تسجيل الدخول للنظام بعد الحذف.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter className="gap-2">
+                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDeleteEmployee}
+                      disabled={deletingEmployee}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {deletingEmployee ? "جارٍ الحذف..." : "تأكيد الحذف"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </CardHeader>
             <CardContent>
               <Table dir="rtl">
@@ -971,12 +1240,15 @@ export default function MillDetails() {
                     <TableHead className="text-right">الصلاحيات</TableHead>
                     <TableHead className="text-right">تاريخ الإنشاء</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
+                    <TableHead className="text-right">الإجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {employees.map((emp: any) => {
-                    const displayUser = safeText(emp.phone, safeText(getDisplayUsername(emp.display_name, null), 'موظف'));
-                    const displayPass = safeText(emp.employee_pin, "••••••");
+                    const displayUser = safeText(emp.phone || emp.display_username, safeText(getDisplayUsername(emp.display_name, null), 'موظف'));
+                    const isPassVisible = visiblePasswords[emp.id] || false;
+                    const hasPass = Boolean(emp.employee_pin && String(emp.employee_pin).trim());
+
                     return (
                       <TableRow key={emp.id}>
                         <TableCell className="font-bold text-foreground text-right">{safeText(emp.display_name, 'موظف كاشير')}</TableCell>
@@ -999,22 +1271,49 @@ export default function MillDetails() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center gap-1.5 justify-start">
-                            <code className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-mono font-bold px-2 py-0.5 rounded text-xs">
-                              {displayPass}
-                            </code>
-                            {emp.employee_pin && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                title="نسخ كلمة المرور"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(displayPass);
-                                  toast({ title: "تم النسخ", description: "تم نسخ كلمة المرور إلى الحافظة" });
-                                }}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
+                            {hasPass ? (
+                              <>
+                                <code className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-mono font-bold px-2 py-0.5 rounded text-xs select-all">
+                                  {isPassVisible ? emp.employee_pin : "••••••"}
+                                </code>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                  title={isPassVisible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                                  onClick={() => togglePasswordVisibility(emp.id)}
+                                >
+                                  {isPassVisible ? <EyeOff className="h-3.5 w-3.5 text-amber-600" /> : <Eye className="h-3.5 w-3.5" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                  title="نسخ كلمة المرور"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(emp.employee_pin);
+                                    toast({ title: "تم النسخ", description: "تم نسخ كلمة المرور إلى الحافظة" });
+                                  }}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <code className="bg-muted text-muted-foreground font-mono px-2 py-0.5 rounded text-xs">
+                                  ••••••
+                                </code>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] gap-1 text-primary hover:text-primary"
+                                  title="تعيين كلمة المرور لإظهارها"
+                                  onClick={() => handleOpenEdit(emp)}
+                                >
+                                  <Key className="h-3 w-3" />
+                                  <span>تعيين/إظهار</span>
+                                </Button>
+                              </div>
                             )}
                           </div>
                         </TableCell>
@@ -1029,12 +1328,34 @@ export default function MillDetails() {
                         <TableCell className="text-right">
                           <Badge className="bg-green-100 text-green-700">مفعّل</Badge>
                         </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center gap-1 justify-start">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-primary"
+                              title="تعديل الحساب / اسم المستخدم / كلمة المرور"
+                              onClick={() => handleOpenEdit(emp)}
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              title="حذف حساب الكاشير"
+                              onClick={() => setDeleteTargetEmployee(emp)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
                   {employees.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                         لا توجد حسابات موظفين مسجلة لهذه المعصرة بعد. اضغط "إنشاء حساب كاشير جديد" لإنشاء أول حساب.
                       </TableCell>
                     </TableRow>
