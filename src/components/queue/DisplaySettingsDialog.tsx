@@ -37,6 +37,7 @@ export function DisplaySettingsDialog({ seasonId, trigger }: DisplaySettingsDial
   const [copied, setCopied] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDetails, setNewDetails] = useState("");
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const { toast } = useToast();
   const { displaySettings, updateSetting, saving } = useDisplaySettings(seasonId);
 
@@ -69,6 +70,7 @@ export function DisplaySettingsDialog({ seasonId, trigger }: DisplaySettingsDial
     updateSetting("custom_faqs", updated.map((i) => ({ id: i.id, q: i.title, a: i.details })));
     setNewTitle("");
     setNewDetails("");
+    setAddModalOpen(false);
     toast({ title: "تمت الإضافة", description: `تمت إضافة "${newTitle}" لشاشة العرض` });
   };
 
@@ -148,69 +150,99 @@ export function DisplaySettingsDialog({ seasonId, trigger }: DisplaySettingsDial
           </div>
         </div>
 
-        {/* Add New Dynamic Item Form */}
-        <div className="p-3.5 rounded-xl border-2 border-dashed border-primary/20 bg-primary/5 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-              <Plus className="h-4 w-4 text-primary" />
-              <span>إضافة عنصر جديد للشاشة:</span>
-            </div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground font-semibold">العنوان</Label>
-              <Input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="مثال: سعر الزيت بيع"
-                className="h-8 text-xs font-medium bg-background"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAddDynamicItem();
-                }}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground font-semibold">التفاصيل / القيمة</Label>
-              <Input
-                value={newDetails}
-                onChange={(e) => setNewDetails(e.target.value)}
-                placeholder="مثال: 25"
-                className="h-8 text-xs font-medium bg-background"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAddDynamicItem();
-                }}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end pt-1">
-            <Button
-              size="sm"
-              onClick={handleAddDynamicItem}
-              disabled={!newTitle.trim() || !newDetails.trim()}
-              className="h-8 px-3 text-xs font-bold gap-1.5"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              إضافة للشاشة
-            </Button>
-          </div>
-        </div>
+        {/* Add Item Nested Dialog */}
+        <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
+          <DialogContent className="sm:max-w-md" dir="rtl">
+            <DialogHeader className="text-right">
+              <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                <Plus className="h-4 w-4 text-primary" />
+                إضافة عنصر جديد لشاشة العرض
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                أدخل العنوان والقيمة لعرضها على شاشة التلفاز
+              </DialogDescription>
+            </DialogHeader>
 
-        {/* Dynamic Items List */}
+            <div className="space-y-3 py-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-foreground">العنوان</Label>
+                <Input
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="مثال: سعر الزيت بيع"
+                  className="h-8 text-xs font-medium"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddDynamicItem();
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-foreground">التفاصيل / القيمة</Label>
+                <Input
+                  value={newDetails}
+                  onChange={(e) => setNewDetails(e.target.value)}
+                  placeholder="مثال: 25"
+                  className="h-8 text-xs font-medium"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddDynamicItem();
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setAddModalOpen(false);
+                  setNewTitle("");
+                  setNewDetails("");
+                }}
+                className="h-8 text-xs"
+              >
+                إلغاء
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAddDynamicItem}
+                disabled={!newTitle.trim() || !newDetails.trim()}
+                className="h-8 px-3 text-xs font-bold gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                إضافة للشاشة
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dynamic Items List Header */}
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
             <Label className="text-xs font-bold text-foreground">
               العناصر المضافة ({dynamicItems.length}):
             </Label>
-            {dynamicItems.length > 0 && (
+            <div className="flex items-center gap-1.5">
               <Button
-                variant="ghost"
                 size="sm"
-                onClick={handleClearAll}
-                className="text-destructive text-[11px] h-6 px-2 hover:bg-destructive/10"
+                onClick={() => setAddModalOpen(true)}
+                className="h-7 px-2.5 text-xs font-bold gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                حذف الكل
+                <Plus className="h-3.5 w-3.5" />
+                إضافة عنصر
               </Button>
-            )}
+              {dynamicItems.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearAll}
+                  className="text-destructive text-[11px] h-7 px-2 hover:bg-destructive/10"
+                >
+                  حذف الكل
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2 max-h-56 overflow-y-auto pe-1">
@@ -263,11 +295,19 @@ export function DisplaySettingsDialog({ seasonId, trigger }: DisplaySettingsDial
             ))}
 
             {dynamicItems.length === 0 && (
-              <div className="text-center py-6 px-3 rounded-lg border border-dashed bg-muted/10">
+              <div className="text-center py-6 px-3 rounded-lg border border-dashed bg-muted/10 space-y-2">
                 <p className="text-xs font-semibold text-foreground">لا توجد عناصر مضافة للشاشة</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  اكتب العنوان والقيمة أعلاه واضغط "إضافة للشاشة".
+                <p className="text-[11px] text-muted-foreground">
+                  اضغط على زر "إضافة عنصر" لإدخال عنوان وقيمة للعرض.
                 </p>
+                <Button
+                  size="sm"
+                  onClick={() => setAddModalOpen(true)}
+                  className="h-7 px-3 text-xs font-bold gap-1"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  إضافة عنصر الآن
+                </Button>
               </div>
             )}
           </div>

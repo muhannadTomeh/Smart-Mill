@@ -102,6 +102,7 @@ export default function Settings() {
   const [savingDisplay, setSavingDisplay] = useState(false);
   const [newItemTitle, setNewItemTitle] = useState("");
   const [newItemDetails, setNewItemDetails] = useState("");
+  const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
   const loadedSeasonIdRef = useRef<string | null>(null);
 
   const displayUrl = activeSeason ? `${window.location.origin}/display/${activeSeason.id}` : "";
@@ -243,6 +244,7 @@ export default function Settings() {
     });
     setNewItemTitle("");
     setNewItemDetails("");
+    setAddItemDialogOpen(false);
     toast({ title: "تمت الإضافة بنجاح", description: `تمت إضافة "${newItem.title}" للشاشة بنجاح` });
   };
 
@@ -761,73 +763,111 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-6 pt-5">
           {/* Section Header & Description */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
             <div>
               <h3 className="font-bold text-base text-foreground flex items-center gap-2">
                 <Tv className="h-5 w-5 text-primary" />
                 عناصر وإعلانات شاشة العرض (ديناميكية)
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                أضف أي عنصر تريده على الشاشة بكتابة (العنوان والتفاصيل) ثم اضغط "إضافة للشاشة"، مع زر إظهار وإخفاء مباشر لكل عنصر.
+                أضف أي عنصر تريده على الشاشة مع زر إظهار وإخفاء مباشر لكل عنصر.
               </p>
             </div>
-            {getDynamicItems(displaySettings).length > 0 && (
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
               <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearAllDynamicItems}
-                className="text-destructive text-xs hover:bg-destructive/10 self-start sm:self-auto"
-              >
-                <Trash2 className="h-3.5 w-3.5 me-1" />
-                حذف الكل
-              </Button>
-            )}
-          </div>
-
-          {/* Add New Dynamic Item Form */}
-          <div className="p-4 rounded-xl border-2 border-dashed border-primary/20 bg-primary/5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Plus className="h-4 w-4 text-primary font-bold" />
-              <Label className="text-sm font-bold text-foreground">إضافة عنصر جديد للشاشة:</Label>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground font-semibold">العنوان</Label>
-                <Input
-                  value={newItemTitle}
-                  onChange={(e) => setNewItemTitle(e.target.value)}
-                  placeholder="مثال: سعر الزيت بيع"
-                  className="bg-background text-sm font-medium"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") addDynamicItem();
-                  }}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground font-semibold">التفاصيل / القيمة</Label>
-                <Input
-                  value={newItemDetails}
-                  onChange={(e) => setNewItemDetails(e.target.value)}
-                  placeholder="مثال: 25"
-                  className="bg-background text-sm font-medium"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") addDynamicItem();
-                  }}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end pt-1">
-              <Button
-                onClick={addDynamicItem}
-                disabled={!newItemTitle.trim() || !newItemDetails.trim()}
-                className="gap-2 bg-primary text-primary-foreground font-bold hover:bg-primary/90 shadow-sm"
+                onClick={() => setAddItemDialogOpen(true)}
+                className="gap-1.5 bg-primary text-primary-foreground font-bold hover:bg-primary/90 shadow-sm text-xs sm:text-sm"
                 size="sm"
               >
                 <Plus className="h-4 w-4" />
-                إضافة للشاشة
+                إضافة عنصر للشاشة
               </Button>
+              {getDynamicItems(displaySettings).length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllDynamicItems}
+                  className="text-destructive text-xs hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5 me-1" />
+                  حذف الكل
+                </Button>
+              )}
             </div>
           </div>
+
+          {/* Add New Dynamic Item Popup Dialog */}
+          <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>
+            <DialogContent className="sm:max-w-md" dir="rtl">
+              <DialogHeader className="text-right">
+                <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                  <Plus className="h-5 w-5 text-primary" />
+                  إضافة عنصر جديد لشاشة العرض
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  أدخل العنوان والتفاصيل التي ترغب بعرضها للمنتظرين على شاشة التلفاز
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-foreground">العنوان</Label>
+                  <Input
+                    value={newItemTitle}
+                    onChange={(e) => setNewItemTitle(e.target.value)}
+                    placeholder="مثال: سعر الزيت بيع"
+                    className="text-sm font-medium"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addDynamicItem();
+                    }}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    العنوان أو التسمية المعروضة بلون بارز (مثال: سعر الزيت بيع، رقم التواصل)
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-foreground">التفاصيل / القيمة</Label>
+                  <Input
+                    value={newItemDetails}
+                    onChange={(e) => setNewItemDetails(e.target.value)}
+                    placeholder="مثال: 25"
+                    className="text-sm font-medium"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addDynamicItem();
+                    }}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    القيمة أو التفاصيل التي ستظهر بخط كبير ومقروء
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAddItemDialogOpen(false);
+                    setNewItemTitle("");
+                    setNewItemDetails("");
+                  }}
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={addDynamicItem}
+                  disabled={!newItemTitle.trim() || !newItemDetails.trim()}
+                  className="gap-1.5 bg-primary text-primary-foreground font-bold hover:bg-primary/90"
+                >
+                  <Plus className="h-4 w-4" />
+                  إضافة للشاشة
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Dynamic Items List */}
           <div className="space-y-3">
@@ -895,11 +935,19 @@ export default function Settings() {
               ))}
 
               {getDynamicItems(displaySettings).length === 0 && (
-                <div className="text-center py-8 px-4 rounded-xl border border-dashed bg-muted/10">
+                <div className="text-center py-8 px-4 rounded-xl border border-dashed bg-muted/10 space-y-3">
                   <p className="text-sm font-semibold text-foreground">لا توجد عناصر مضافة للشاشة حالياً</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    أضف مثلاً: العنوان "سعر الزيت بيع" والتفاصيل "25" ثم اضغط "إضافة للشاشة".
+                  <p className="text-xs text-muted-foreground">
+                    اضغط على الزر أدناه لإضافة أي عنوان وتفاصيل لعرضها على شاشة التلفاز.
                   </p>
+                  <Button
+                    size="sm"
+                    onClick={() => setAddItemDialogOpen(true)}
+                    className="gap-1.5 bg-primary text-primary-foreground font-bold hover:bg-primary/90"
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة عنصر للشاشة
+                  </Button>
                 </div>
               )}
             </div>
