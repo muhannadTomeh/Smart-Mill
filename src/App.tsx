@@ -23,6 +23,7 @@ import {
 import Dashboard from "./pages/Dashboard";
 import Queue from "./pages/Queue";
 import Invoices from "./pages/Invoices";
+import InvoicesHistory from "./pages/InvoicesHistory";
 import DailyClosing from "./pages/DailyClosing";
 import Customers from "./pages/Customers";
 import Workers from "./pages/Workers";
@@ -342,6 +343,7 @@ const EmployeeLayout = () => {
       <Routes>
         <Route path="/queue" element={<Queue />} />
         <Route path="/invoices" element={<Invoices />} />
+        <Route path="/invoices-history" element={<InvoicesHistory />} />
         <Route path="/daily-closing" element={<DailyClosing />} />
         <Route path="*" element={<Navigate to="/queue" replace />} />
       </Routes>
@@ -373,6 +375,7 @@ const SeasonGateContent = () => {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/queue" element={<Queue />} />
         <Route path="/invoices" element={<Invoices />} />
+        <Route path="/invoices-history" element={<InvoicesHistory />} />
         <Route path="/daily-closing" element={<DailyClosing />} />
         <Route path="/customers" element={<Customers />} />
         <Route path="/workers" element={<Workers />} />
