@@ -187,23 +187,48 @@ const Invoices = () => {
     }
 
     let customerId: string | null = null;
-    const { data: existing } = await supabase
-      .from("customers")
-      .select("id")
-      .eq("user_id", targetUserId!)
-      .eq("season_id", activeSeason!.id)
-      .eq("name", invoiceData.customerName)
-      .maybeSingle();
+    if (queueId && queueId !== "manual") {
+      customerId = localStorage.getItem(`queue_cust_${queueId}`);
+      if (!customerId) {
+        const qCust = queueCustomers.find(q => q.id === queueId);
+        if (qCust && (qCust as any).notes) {
+          const match = (qCust as any).notes.match(/\[cust_id:([^\]]+)\]/);
+          if (match) customerId = match[1];
+        }
+      }
+    }
 
-    if (existing) {
-      customerId = existing.id;
-    } else {
-      const { data: newCust } = await supabase
-        .from("customers")
-        .insert({ user_id: targetUserId!, season_id: activeSeason!.id, name: invoiceData.customerName, phone: invoiceData.customerPhone || null })
-        .select("id")
-        .single();
-      if (newCust) customerId = newCust.id;
+    if (!customerId) {
+      const cleanPhone = invoiceData.customerPhone?.trim();
+      let existingCust: any = null;
+      // Match existing customer ONLY if a valid phone number is provided and matches
+      if (cleanPhone && cleanPhone.length >= 7) {
+        const { data } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("user_id", targetUserId!)
+          .eq("season_id", activeSeason!.id)
+          .eq("name", invoiceData.customerName.trim())
+          .eq("phone", cleanPhone)
+          .maybeSingle();
+        existingCust = data;
+      }
+
+      if (existingCust) {
+        customerId = existingCust.id;
+      } else {
+        const { data: newCust } = await supabase
+          .from("customers")
+          .insert({
+            user_id: targetUserId!,
+            season_id: activeSeason!.id,
+            name: invoiceData.customerName.trim(),
+            phone: cleanPhone || null,
+          })
+          .select("id")
+          .single();
+        if (newCust) customerId = newCust.id;
+      }
     }
 
     const containerSummary = getContainerSummary() || "بدون تنكات";

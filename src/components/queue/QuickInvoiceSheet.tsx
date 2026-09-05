@@ -115,24 +115,48 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
 
     const selected = paymentType === "oil" ? calc.oilOnly : paymentType === "cash" ? calc.cashOnly : calc.mixed;
 
-    // Ensure customer record
+    // Ensure customer record (Keep distinct per queue customer)
     let customerId: string | null = null;
-    const { data: existing } = await supabase
-      .from("customers")
-      .select("id")
-      .eq("user_id", user!.id)
-      .eq("season_id", activeSeason!.id)
-      .eq("name", customer.name)
-      .maybeSingle();
-    if (existing) {
-      customerId = existing.id;
-    } else {
-      const { data: newCust } = await supabase
-        .from("customers")
-        .insert({ user_id: targetUserId!, season_id: activeSeason!.id, name: customer.name, phone: customer.phone })
-        .select("id")
-        .single();
-      if (newCust) customerId = newCust.id;
+    if (customer.id) {
+      customerId = localStorage.getItem(`queue_cust_${customer.id}`);
+    }
+    if (!customerId && customer.notes) {
+      const match = customer.notes.match(/\[cust_id:([^\]]+)\]/);
+      if (match) customerId = match[1];
+    }
+
+    if (!customerId) {
+      const cleanPhone = customer.phone?.trim();
+      let existingCust: any = null;
+      // Match existing customer ONLY if a valid phone number is provided and matches
+      if (cleanPhone && cleanPhone.length >= 7) {
+        const { data } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("user_id", targetUserId!)
+          .eq("season_id", activeSeason!.id)
+          .eq("name", customer.name.trim())
+          .eq("phone", cleanPhone)
+          .maybeSingle();
+        existingCust = data;
+      }
+
+      if (existingCust) {
+        customerId = existingCust.id;
+      } else {
+        // Always create a new distinct customer record
+        const { data: newCust } = await supabase
+          .from("customers")
+          .insert({
+            user_id: targetUserId!,
+            season_id: activeSeason!.id,
+            name: customer.name.trim(),
+            phone: cleanPhone || null,
+          })
+          .select("id")
+          .single();
+        if (newCust) customerId = newCust.id;
+      }
     }
 
     const { error } = await supabase.rpc("create_invoice_and_settle", {

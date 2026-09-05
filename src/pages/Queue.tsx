@@ -201,9 +201,32 @@ const Queue = () => {
 
     const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes, 10) : null;
     const bagsCount = newCustomer.bags ? parseInt(newCustomer.bags, 10) : 0;
-    const fallbackNotes = estMin 
-      ? `[وقت_تقديري:${estMin}] ${newCustomer.notes?.trim() || ""}`.trim()
-      : (newCustomer.notes?.trim() || null);
+
+    // Create a distinct customer record for this person in the customers table
+    let createdCustId: string | null = null;
+    try {
+      const { data: newCustRecord } = await supabase
+        .from("customers")
+        .insert({
+          user_id: targetUserId!,
+          season_id: activeSeason!.id,
+          name: newCustomer.name.trim(),
+          phone: newCustomer.phone?.trim() || null,
+        })
+        .select("id")
+        .single();
+      if (newCustRecord?.id) {
+        createdCustId = newCustRecord.id;
+      }
+    } catch (cErr) {
+      console.warn("Could not pre-create customer:", cErr);
+    }
+
+    const fallbackNotes = [
+      estMin ? `[وقت_تقديري:${estMin}]` : null,
+      createdCustId ? `[cust_id:${createdCustId}]` : null,
+      newCustomer.notes?.trim() || null,
+    ].filter(Boolean).join(" ") || null;
 
     const existingPositions = allItems.map((i) => Number(i.position) || 0);
     const maxPos = existingPositions.length > 0 ? Math.max(0, ...existingPositions) : 0;
@@ -235,6 +258,9 @@ const Queue = () => {
     }
 
     if (!error) {
+      if (insertedData?.id && createdCustId) {
+        localStorage.setItem(`queue_cust_${insertedData.id}`, createdCustId);
+      }
       if (insertedData?.id && estMin) {
         localStorage.setItem(`queue_est_${insertedData.id}`, String(estMin));
       }
