@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Clock, UserPlus, Trash2, CheckCircle, Monitor, Play,
-  ChevronDown, Calculator, Users, Package, RefreshCw, Printer, Pencil,
+  ChevronDown, ChevronUp, Calculator, Users, Package, RefreshCw, Printer, Pencil,
   GripVertical, Undo2, ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -75,6 +75,9 @@ const Queue = () => {
     updates: { id: string; position: number }[];
   } | null>(null);
 
+  // Guard ref to prevent Realtime echoes or concurrent fetches from clobbering an in-progress reorder
+  const isReorderingRef = useRef(false);
+
   const { user, effectiveUserId, profile } = useAuth();
   const { activeSeason } = useSeason();
 
@@ -115,7 +118,11 @@ const Queue = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "queue", filter: `season_id=eq.${activeSeason.id}` },
-        () => fetchQueue()
+        () => {
+          // If we are currently applying a reorder, ignore realtime echoes to prevent reverting
+          if (isReorderingRef.current) return;
+          fetchQueue();
+        }
       )
       .subscribe();
     return () => {
@@ -125,12 +132,16 @@ const Queue = () => {
 
   const fetchQueue = async () => {
     if (!targetUserId || !activeSeason) return;
+    if (isReorderingRef.current) return;
+
     const { data } = await supabase
       .from("queue")
       .select("*")
       .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
       .order("position", { ascending: true });
+
+    if (isReorderingRef.current) return;
 
     const raw = (data as QueueItem[]) || [];
     const activeRaw = raw.filter((item) => item.status !== "done");
@@ -537,6 +548,62 @@ const Queue = () => {
     await fetchQueue();
   };
 
+  const requestSwap = (sourceCustomer: QueueItem, targetCustomer: QueueItem) => {
+    if (!sourceCustomer || !targetCustomer || sourceCustomer.id === targetCustomer.id) return;
+
+    // Sort current waiting items by position
+    const waitingList = allItems
+      .filter((i) => i.status === "waiting")
+      .sort(sortByPosition);
+
+    const sourceIdx = waitingList.findIndex((i) => i.id === sourceCustomer.id);
+    const targetIdx = waitingList.findIndex((i) => i.id === targetCustomer.id);
+    if (sourceIdx === -1 || targetIdx === -1) return;
+
+    const newWaiting = [...waitingList];
+    const [moved] = newWaiting.splice(sourceIdx, 1);
+    newWaiting.splice(targetIdx, 0, moved);
+
+    // Generate strictly unique ascending positions from waitingList
+    const rawPos = waitingList.map((w) => Number(w.position) || 0);
+    const originalPositions: number[] = [];
+    let currentSlot = rawPos[0] > 0 ? rawPos[0] : 1;
+    for (let i = 0; i < waitingList.length; i++) {
+      const existing = rawPos[i];
+      if (existing > 0 && !originalPositions.includes(existing) && existing >= currentSlot) {
+        originalPositions.push(existing);
+        currentSlot = existing + 1;
+      } else {
+        originalPositions.push(currentSlot);
+        currentSlot++;
+      }
+    }
+
+    const updates: { id: string; position: number }[] = [];
+    const reorderedWithPositions = newWaiting.map((item, idx) => {
+      const newPos = originalPositions[idx];
+      if (item.position !== newPos) {
+        updates.push({ id: item.id, position: newPos });
+      }
+      return { ...item, position: newPos };
+    });
+
+    const newSourcePosition =
+      reorderedWithPositions.find((i) => i.id === sourceCustomer.id)?.position ?? targetCustomer.position;
+
+    // Combine with non-waiting items
+    const nonWaiting = allItems.filter((i) => i.status !== "waiting");
+    const combinedQueue = [...nonWaiting, ...reorderedWithPositions];
+
+    setReorderConfirm({
+      sourceCustomer,
+      targetCustomer,
+      newPosition: newSourcePosition,
+      reorderedQueue: combinedQueue,
+      updates,
+    });
+  };
+
   const handleDragStart = (e: React.DragEvent, item: QueueItem) => {
     setDraggedItem(item);
     e.dataTransfer.setData("text/plain", item.id);
@@ -562,49 +629,7 @@ const Queue = () => {
       setDraggedItem(null);
       return;
     }
-
-    // Sort current waiting items by position
-    const waitingList = allItems
-      .filter((i) => i.status === "waiting")
-      .sort(sortByPosition);
-
-    const sourceIdx = waitingList.findIndex((i) => i.id === draggedItem.id);
-    const targetIdx = waitingList.findIndex((i) => i.id === targetItem.id);
-    if (sourceIdx === -1 || targetIdx === -1) {
-      setDraggedItem(null);
-      return;
-    }
-
-    const newWaiting = [...waitingList];
-    const [moved] = newWaiting.splice(sourceIdx, 1);
-    newWaiting.splice(targetIdx, 0, moved);
-
-    // Re-assign existing ascending positions
-    const originalPositions = waitingList.map((w) => Number(w.position));
-    const updates: { id: string; position: number }[] = [];
-    const reorderedWithPositions = newWaiting.map((item, idx) => {
-      const newPos = originalPositions[idx] || (idx + 1);
-      if (item.position !== newPos) {
-        updates.push({ id: item.id, position: newPos });
-      }
-      return { ...item, position: newPos };
-    });
-
-    const newSourcePosition =
-      reorderedWithPositions.find((i) => i.id === draggedItem.id)?.position ?? targetItem.position;
-
-    // Combine with non-waiting items
-    const nonWaiting = allItems.filter((i) => i.status !== "waiting");
-    const combinedQueue = [...nonWaiting, ...reorderedWithPositions];
-
-    setReorderConfirm({
-      sourceCustomer: draggedItem,
-      targetCustomer: targetItem,
-      newPosition: newSourcePosition,
-      reorderedQueue: combinedQueue,
-      updates,
-    });
-
+    requestSwap(draggedItem, targetItem);
     setDraggedItem(null);
   };
 
@@ -612,10 +637,13 @@ const Queue = () => {
     if (!reorderConfirm) return;
     const { sourceCustomer, newPosition, reorderedQueue, updates } = reorderConfirm;
 
-    // Ensure reordered items are strictly sorted by position so place switches immediately
-    const sortedCombined = [...reorderedQueue].sort(sortByPosition);
+    // 1. Lock reordering so Realtime listener ignores intermediate database states
+    isReorderingRef.current = true;
 
+    // 2. Immediately sort and apply locally so UI switches place and numbers instantly
+    const sortedCombined = [...reorderedQueue].sort(sortByPosition);
     setAllItems(sortedCombined);
+
     if (activeSeason) {
       try {
         localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(sortedCombined));
@@ -623,18 +651,35 @@ const Queue = () => {
     }
     setReorderConfirm(null);
 
+    // 3. Persist each update sequentially to Supabase with strict verification
     try {
-      await Promise.all(
-        updates.map((u) =>
-          supabase.from("queue").update({ position: u.position }).eq("id", u.id)
-        )
-      );
+      if (updates && updates.length > 0) {
+        for (const u of updates) {
+          const { error } = await supabase
+            .from("queue")
+            .update({ position: Number(u.position) })
+            .eq("id", u.id);
+
+          if (error) {
+            console.error(`Supabase queue reorder failed for id ${u.id}:`, error);
+            throw error;
+          }
+        }
+      }
       toast.success(`تم تبديل الدور والمكان — أصبح دور "${sourceCustomer.name}" رقم #${newPosition}`);
-    } catch {
-      toast.error("حدث خطأ أثناء حفظ الترتيب الجديد في قاعدة البيانات");
+    } catch (err: any) {
+      console.error("Failed to apply reorder in database:", err);
+      toast.error("تعذر حفظ الترتيب الجديد في قاعدة البيانات: " + (err?.message || "خطأ غير معروف"));
+      isReorderingRef.current = false;
+      await fetchQueue();
+      return;
     }
 
-    await fetchQueue();
+    // 4. Crucial: Do NOT call fetchQueue() here! Keep local state authoritative.
+    // Release the guard after a 2.5s cooldown so incoming Realtime echoes are ignored.
+    setTimeout(() => {
+      isReorderingRef.current = false;
+    }, 2500);
   };
 
   const openInvoiceFor = (customer: QueueItem) => {
@@ -841,7 +886,7 @@ const Queue = () => {
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-0.5">
-                {waiting.map((customer) => {
+                {waiting.map((customer, idx) => {
                   const estMin = parseEstimatedMinutes(customer);
                   return (
                     <div
@@ -858,13 +903,41 @@ const Queue = () => {
                           : "border-border hover:border-primary/40"
                       )}
                     >
-                      {/* Row 1: #Position + Customer Name + Est Time + Drag Handle + Action Buttons */}
+                      {/* Row 1: #Position + Customer Name + Est Time + Drag Handle & Arrows + Action Buttons */}
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <GripVertical
-                            className="h-4 w-4 text-muted-foreground/40 hover:text-foreground cursor-grab active:cursor-grabbing shrink-0 transition-colors"
-                            title="اسحب لتبديل الدور لأعلى أو لأسفل"
-                          />
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <GripVertical
+                              className="h-4 w-4 text-muted-foreground/40 hover:text-foreground cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                              title="اسحب لتبديل الدور لأعلى أو لأسفل"
+                            />
+                            <div className="flex flex-col">
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  requestSwap(customer, waiting[idx - 1]);
+                                }}
+                                className="h-3 w-3.5 flex items-center justify-center text-muted-foreground/40 hover:text-primary disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                                title="تبديل الدور مع السابق لأعلى"
+                              >
+                                <ChevronUp className="h-2.5 w-2.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === waiting.length - 1}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  requestSwap(customer, waiting[idx + 1]);
+                                }}
+                                className="h-3 w-3.5 flex items-center justify-center text-muted-foreground/40 hover:text-primary disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                                title="تبديل الدور مع التالي لأسفل"
+                              >
+                                <ChevronDown className="h-2.5 w-2.5" />
+                              </button>
+                            </div>
+                          </div>
                           <span className="inline-flex items-center justify-center h-6 min-w-[1.75rem] px-1.5 rounded-md bg-amber-500/15 text-amber-800 dark:text-amber-200 font-bold text-xs shrink-0">
                             #{customer.position}
                           </span>
