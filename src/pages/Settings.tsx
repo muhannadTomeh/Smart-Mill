@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -23,33 +25,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 
-export interface DisplaySettings {
-  show_estimated_time: boolean;
-  show_oil_prices: boolean;
-  show_sell_price: boolean;
-  show_buy_price: boolean;
-  show_clock: boolean;
-  show_bags_count: boolean;
-  show_faqs: boolean;
-  ticker_text: string;
-  custom_faqs: Array<{ id: string; q: string; a: string }>;
-}
-
-export const defaultDisplaySettings: DisplaySettings = {
-  show_estimated_time: true,
-  show_oil_prices: true,
-  show_sell_price: true,
-  show_buy_price: true,
-  show_clock: true,
-  show_bags_count: true,
-  show_faqs: true,
-  ticker_text: "",
-  custom_faqs: [
-    { id: "1", q: "كيف يُحسب الرد؟", a: "نسبة مئوية من كمية الزيت المنتج" },
-    { id: "2", q: "سعر تنكة البلاستيك والحديد؟", a: "متوفرة بجودة عالية ومطابقة للمواصفات" },
-    { id: "3", q: "هل يمكن تأجيل الدور؟", a: "نعم، بالتنسيق مع مسؤول الطابور" },
-  ],
-};
+import {
+  DynamicDisplayItem,
+  getDynamicItems,
+  DisplaySettings,
+  defaultDisplaySettings,
+} from "@/hooks/useDisplaySettings";
+export type { DynamicDisplayItem, DisplaySettings };
+export { defaultDisplaySettings };
 
 interface ContainerType {
   id: string;
@@ -117,8 +100,8 @@ export default function Settings() {
   // Screen display settings
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(defaultDisplaySettings);
   const [savingDisplay, setSavingDisplay] = useState(false);
-  const [newFaqQ, setNewFaqQ] = useState("");
-  const [newFaqA, setNewFaqA] = useState("");
+  const [newItemTitle, setNewItemTitle] = useState("");
+  const [newItemDetails, setNewItemDetails] = useState("");
   const loadedSeasonIdRef = useRef<string | null>(null);
 
   const displayUrl = activeSeason ? `${window.location.origin}/display/${activeSeason.id}` : "";
@@ -134,18 +117,20 @@ export default function Settings() {
     if (savedLocal) {
       try {
         const parsed = JSON.parse(savedLocal);
+        const dynamic_items = getDynamicItems(parsed);
         setDisplaySettings({
           ...defaultDisplaySettings,
           ...parsed,
-          custom_faqs: Array.isArray(parsed.custom_faqs) ? parsed.custom_faqs : defaultDisplaySettings.custom_faqs,
+          dynamic_items: dynamic_items.length > 0 ? dynamic_items : defaultDisplaySettings.dynamic_items,
         });
       } catch {}
     } else if ((activeSeason as any).display_settings) {
       const raw = (activeSeason as any).display_settings;
+      const dynamic_items = getDynamicItems(raw);
       setDisplaySettings({
         ...defaultDisplaySettings,
         ...raw,
-        custom_faqs: Array.isArray(raw.custom_faqs) ? raw.custom_faqs : defaultDisplaySettings.custom_faqs,
+        dynamic_items: dynamic_items.length > 0 ? dynamic_items : defaultDisplaySettings.dynamic_items,
       });
     }
 
@@ -158,14 +143,13 @@ export default function Settings() {
       .then(({ data }) => {
         if (data && (data as any).display_settings) {
           const ds = (data as any).display_settings;
+          const dynamic_items = getDynamicItems(ds);
           setDisplaySettings((prev) => {
             const merged = {
               ...defaultDisplaySettings,
               ...ds,
               ...prev,
-              custom_faqs: Array.isArray(prev.custom_faqs) && prev.custom_faqs.length > 0
-                ? prev.custom_faqs
-                : (Array.isArray(ds.custom_faqs) ? ds.custom_faqs : defaultDisplaySettings.custom_faqs),
+              dynamic_items: dynamic_items.length > 0 ? dynamic_items : (prev.dynamic_items || defaultDisplaySettings.dynamic_items),
             };
             if (activeSeason?.id) {
               localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(merged));
@@ -189,7 +173,7 @@ export default function Settings() {
     } catch {}
   };
 
-  // Instantly persist any toggle change so it never reverts and reflects live
+  // Instantly persist any setting change so it never reverts and reflects live
   const updateDisplaySetting = <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
     setDisplaySettings((prev) => {
       const updated = { ...prev, [key]: value };
@@ -231,16 +215,24 @@ export default function Settings() {
     }
   };
 
-  const addCustomFaq = () => {
-    if (!newFaqQ.trim() || !newFaqA.trim()) {
-      toast({ title: "تنبيه", description: "يرجى كتابة السؤال/العنوان والتفاصيل", variant: "destructive" });
+  const addDynamicItem = () => {
+    if (!newItemTitle.trim() || !newItemDetails.trim()) {
+      toast({ title: "تنبيه", description: "يرجى كتابة العنوان والتفاصيل", variant: "destructive" });
       return;
     }
-    const newFaq = { id: Date.now().toString(), q: newFaqQ.trim(), a: newFaqA.trim() };
+    const newItem: DynamicDisplayItem = {
+      id: Date.now().toString(),
+      title: newItemTitle.trim(),
+      details: newItemDetails.trim(),
+      visible: true,
+    };
     setDisplaySettings((prev) => {
+      const currentItems = getDynamicItems(prev);
+      const updatedItems = [...currentItems, newItem];
       const updated = {
         ...prev,
-        custom_faqs: [...(prev.custom_faqs || []), newFaq],
+        dynamic_items: updatedItems,
+        custom_faqs: updatedItems.map((it) => ({ id: it.id, q: it.title, a: it.details })),
       };
       if (activeSeason?.id) {
         localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
@@ -249,15 +241,21 @@ export default function Settings() {
       broadcastSettingsChange(updated);
       return updated;
     });
-    setNewFaqQ("");
-    setNewFaqA("");
+    setNewItemTitle("");
+    setNewItemDetails("");
+    toast({ title: "تمت الإضافة بنجاح", description: `تمت إضافة "${newItem.title}" للشاشة بنجاح` });
   };
 
-  const removeCustomFaq = (id: string) => {
+  const toggleItemVisibility = (id: string) => {
     setDisplaySettings((prev) => {
+      const currentItems = getDynamicItems(prev);
+      const updatedItems = currentItems.map((item) =>
+        item.id === id ? { ...item, visible: !item.visible } : item
+      );
       const updated = {
         ...prev,
-        custom_faqs: (prev.custom_faqs || []).filter((f) => f.id !== id),
+        dynamic_items: updatedItems,
+        custom_faqs: updatedItems.map((it) => ({ id: it.id, q: it.title, a: it.details })),
       };
       if (activeSeason?.id) {
         localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
@@ -268,10 +266,29 @@ export default function Settings() {
     });
   };
 
-  const clearAllFaqs = () => {
+  const removeDynamicItem = (id: string) => {
+    setDisplaySettings((prev) => {
+      const currentItems = getDynamicItems(prev);
+      const updatedItems = currentItems.filter((item) => item.id !== id);
+      const updated = {
+        ...prev,
+        dynamic_items: updatedItems,
+        custom_faqs: updatedItems.map((it) => ({ id: it.id, q: it.title, a: it.details })),
+      };
+      if (activeSeason?.id) {
+        localStorage.setItem(`display_settings_${activeSeason.id}`, JSON.stringify(updated));
+        localStorage.setItem("display_settings_global", JSON.stringify(updated));
+      }
+      broadcastSettingsChange(updated);
+      return updated;
+    });
+  };
+
+  const clearAllDynamicItems = () => {
     setDisplaySettings((prev) => {
       const updated = {
         ...prev,
+        dynamic_items: [],
         custom_faqs: [],
       };
       if (activeSeason?.id) {
@@ -743,115 +760,148 @@ export default function Settings() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-5">
-          {/* Main Toggles Grid */}
+          {/* Section Header & Description */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/60">
+            <div>
+              <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                <Tv className="h-5 w-5 text-primary" />
+                عناصر وإعلانات شاشة العرض (ديناميكية)
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                أضف أي عنصر تريده على الشاشة بكتابة (العنوان والتفاصيل) ثم اضغط "إضافة للشاشة"، مع زر إظهار وإخفاء مباشر لكل عنصر.
+              </p>
+            </div>
+            {getDynamicItems(displaySettings).length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAllDynamicItems}
+                className="text-destructive text-xs hover:bg-destructive/10 self-start sm:self-auto"
+              >
+                <Trash2 className="h-3.5 w-3.5 me-1" />
+                حذف الكل
+              </Button>
+            )}
+          </div>
+
+          {/* Add New Dynamic Item Form */}
+          <div className="p-4 rounded-xl border-2 border-dashed border-primary/20 bg-primary/5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Plus className="h-4 w-4 text-primary font-bold" />
+              <Label className="text-sm font-bold text-foreground">إضافة عنصر جديد للشاشة:</Label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground font-semibold">العنوان</Label>
+                <Input
+                  value={newItemTitle}
+                  onChange={(e) => setNewItemTitle(e.target.value)}
+                  placeholder="مثال: سعر الزيت بيع"
+                  className="bg-background text-sm font-medium"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addDynamicItem();
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground font-semibold">التفاصيل / القيمة</Label>
+                <Input
+                  value={newItemDetails}
+                  onChange={(e) => setNewItemDetails(e.target.value)}
+                  placeholder="مثال: 25"
+                  className="bg-background text-sm font-medium"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addDynamicItem();
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end pt-1">
+              <Button
+                onClick={addDynamicItem}
+                disabled={!newItemTitle.trim() || !newItemDetails.trim()}
+                className="gap-2 bg-primary text-primary-foreground font-bold hover:bg-primary/90 shadow-sm"
+                size="sm"
+              >
+                <Plus className="h-4 w-4" />
+                إضافة للشاشة
+              </Button>
+            </div>
+          </div>
+
+          {/* Dynamic Items List */}
           <div className="space-y-3">
-            <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
-              <Eye className="h-4 w-4 text-primary" />
-              التحكم بإظهار وإخفاء عناصر الشاشة
-            </h3>
-            
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {/* Estimated Time Toggle */}
-              <div className="flex items-center justify-between p-3.5 border rounded-xl bg-card hover:bg-muted/30 transition-colors">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold flex items-center gap-1.5 cursor-pointer">
-                    <Clock className="h-4 w-4 text-amber-500" />
-                    الوقت التقديري للأدوار
-                  </Label>
-                  <p className="text-xs text-muted-foreground">عرض الوقت بجانب اسم الدور القادم</p>
-                </div>
-                <Switch
-                  checked={Boolean(displaySettings.show_estimated_time)}
-                  onCheckedChange={(val) => updateDisplaySetting("show_estimated_time", val)}
-                />
-              </div>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                العناصر المضافة على الشاشة ({getDynamicItems(displaySettings).length}):
+              </Label>
+            </div>
 
-              {/* Oil Prices Section Toggle */}
-              <div className="flex items-center justify-between p-3.5 border rounded-xl bg-card hover:bg-muted/30 transition-colors">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold flex items-center gap-1.5 cursor-pointer">
-                    <span>🫒</span>
-                    شريط أسعار الزيت
-                  </Label>
-                  <p className="text-xs text-muted-foreground">عرض شريط الأسعار أسفل الشاشة</p>
-                </div>
-                <Switch
-                  checked={Boolean(displaySettings.show_oil_prices)}
-                  onCheckedChange={(val) => updateDisplaySetting("show_oil_prices", val)}
-                />
-              </div>
+            <div className="space-y-2.5">
+              {getDynamicItems(displaySettings).map((item) => (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-all",
+                    item.visible
+                      ? "bg-card border-border shadow-sm"
+                      : "bg-muted/30 border-dashed border-border/70 opacity-60"
+                  )}
+                >
+                  {/* Title & Details */}
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-bold text-sm text-foreground">{item.title}</p>
+                      {item.visible ? (
+                        <Badge variant="secondary" className="text-[11px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 font-semibold">
+                          ظاهر على الشاشة
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[11px] text-muted-foreground font-normal">
+                          مخفي
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold text-primary/90 break-words">{item.details}</p>
+                  </div>
 
-              {/* Sell Price Toggle */}
-              <div className={`flex items-center justify-between p-3.5 border rounded-xl bg-card transition-colors ${!displaySettings.show_oil_prices ? 'opacity-50' : 'hover:bg-muted/30'}`}>
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold flex items-center gap-1.5 cursor-pointer">
-                    سعر بيع الزيت
-                  </Label>
-                  <p className="text-xs text-muted-foreground">عرض سعر البيع (شيكل/كغم)</p>
+                  {/* Actions: Show/Hide Toggle + Delete */}
+                  <div className="flex items-center gap-3 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-border/40">
+                    <div className="flex items-center gap-2">
+                      <Label
+                        htmlFor={`toggle-${item.id}`}
+                        className="text-xs font-semibold cursor-pointer text-muted-foreground"
+                      >
+                        {item.visible ? "إخفاء" : "إظهار"}
+                      </Label>
+                      <Switch
+                        id={`toggle-${item.id}`}
+                        checked={item.visible}
+                        onCheckedChange={() => toggleItemVisibility(item.id)}
+                        aria-label="إظهار أو إخفاء العنصر على الشاشة"
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeDynamicItem(item.id)}
+                      className="text-destructive hover:bg-destructive/10 h-8 w-8 rounded-lg shrink-0"
+                      title="حذف هذا العنصر"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <Switch
-                  disabled={!displaySettings.show_oil_prices}
-                  checked={Boolean(displaySettings.show_sell_price)}
-                  onCheckedChange={(val) => updateDisplaySetting("show_sell_price", val)}
-                />
-              </div>
+              ))}
 
-              {/* Buy Price Toggle */}
-              <div className={`flex items-center justify-between p-3.5 border rounded-xl bg-card transition-colors ${!displaySettings.show_oil_prices ? 'opacity-50' : 'hover:bg-muted/30'}`}>
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold flex items-center gap-1.5 cursor-pointer">
-                    سعر شراء الزيت
-                  </Label>
-                  <p className="text-xs text-muted-foreground">عرض سعر الشراء (شيكل/كغم)</p>
+              {getDynamicItems(displaySettings).length === 0 && (
+                <div className="text-center py-8 px-4 rounded-xl border border-dashed bg-muted/10">
+                  <p className="text-sm font-semibold text-foreground">لا توجد عناصر مضافة للشاشة حالياً</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    أضف مثلاً: العنوان "سعر الزيت بيع" والتفاصيل "25" ثم اضغط "إضافة للشاشة".
+                  </p>
                 </div>
-                <Switch
-                  disabled={!displaySettings.show_oil_prices}
-                  checked={Boolean(displaySettings.show_buy_price)}
-                  onCheckedChange={(val) => updateDisplaySetting("show_buy_price", val)}
-                />
-              </div>
-
-              {/* Clock Toggle */}
-              <div className="flex items-center justify-between p-3.5 border rounded-xl bg-card hover:bg-muted/30 transition-colors">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold flex items-center gap-1.5 cursor-pointer">
-                    الساعة الرقمية
-                  </Label>
-                  <p className="text-xs text-muted-foreground">عرض الساعة الكبيرة أعلى الشاشة</p>
-                </div>
-                <Switch
-                  checked={Boolean(displaySettings.show_clock)}
-                  onCheckedChange={(val) => updateDisplaySetting("show_clock", val)}
-                />
-              </div>
-
-              {/* Bags count Toggle */}
-              <div className="flex items-center justify-between p-3.5 border rounded-xl bg-card hover:bg-muted/30 transition-colors">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold flex items-center gap-1.5 cursor-pointer">
-                    عدد الشوالات
-                  </Label>
-                  <p className="text-xs text-muted-foreground">عرض كمية الشوالات للأدوار</p>
-                </div>
-                <Switch
-                  checked={Boolean(displaySettings.show_bags_count)}
-                  onCheckedChange={(val) => updateDisplaySetting("show_bags_count", val)}
-                />
-              </div>
-
-              {/* FAQs & Rotating Info Toggle */}
-              <div className="flex items-center justify-between p-3.5 border rounded-xl bg-card hover:bg-muted/30 transition-colors">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold flex items-center gap-1.5 cursor-pointer">
-                    المعلومات الدوارة والأسئلة
-                  </Label>
-                  <p className="text-xs text-muted-foreground">عرض بطاقات المعلومات المتبدلة</p>
-                </div>
-                <Switch
-                  checked={Boolean(displaySettings.show_faqs)}
-                  onCheckedChange={(val) => updateDisplaySetting("show_faqs", val)}
-                />
-              </div>
+              )}
             </div>
           </div>
 
@@ -866,90 +916,12 @@ export default function Settings() {
             <Input
               value={displaySettings.ticker_text || ""}
               onChange={(e) => updateDisplaySetting("ticker_text", e.target.value)}
-              placeholder="مثال: أهلاً وسهلاً بكم في معصرة النور... نرجو من الزبائن الكرام استلام كشوفات الحساب من الكاشير"
+              placeholder="مثال: أهلاً وسهلاً بكم في معصرة قفين... موسم مبارك على الجميع"
               className="bg-muted/20"
             />
             <p className="text-xs text-muted-foreground">
               إذا تم كتابة نص هنا، سيتحرك بسلاسة أسفل شاشة التلفاز كشريط عاجل وإعلانات للمعصرة.
             </p>
-          </div>
-
-          <Separator />
-
-          {/* Custom Info & FAQs List */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
-                  <HelpCircle className="h-4 w-4 text-primary" />
-                  المعلومات والإعلانات المخصصة على الشاشة
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  أضف أي معلومات تود عرضها للمنتظرين، أو احذف ما لا ترغب به.
-                </p>
-              </div>
-              {displaySettings.custom_faqs && displaySettings.custom_faqs.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearAllFaqs} className="text-destructive text-xs hover:bg-destructive/10">
-                  حذف الكل
-                </Button>
-              )}
-            </div>
-
-            {/* List */}
-            <div className="space-y-2">
-              {displaySettings.custom_faqs?.map((faq, idx) => (
-                <div key={faq.id || idx} className="flex items-start justify-between gap-3 p-3 rounded-lg border bg-muted/20">
-                  <div className="space-y-1 min-w-0">
-                    <p className="font-bold text-sm text-foreground">{faq.q}</p>
-                    <p className="text-xs text-muted-foreground">{faq.a}</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeCustomFaq(faq.id)}
-                    className="text-destructive hover:bg-destructive/10 shrink-0 h-8 w-8"
-                    title="حذف هذه المعلومة"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-
-              {(!displaySettings.custom_faqs || displaySettings.custom_faqs.length === 0) && (
-                <p className="text-xs text-muted-foreground text-center py-4 bg-muted/10 rounded-lg border border-dashed">
-                  لا توجد معلومات مخصصة مضافة حالياً.
-                </p>
-              )}
-            </div>
-
-            {/* Add New Info Form */}
-            <div className="p-3.5 rounded-xl border bg-muted/10 space-y-3">
-              <Label className="text-xs font-semibold text-foreground">إضافة معلومة أو إعلان جديد:</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Input
-                  value={newFaqQ}
-                  onChange={(e) => setNewFaqQ(e.target.value)}
-                  placeholder="العنوان أو السؤال (مثال: مواعيد العصر)"
-                  className="bg-background text-sm"
-                />
-                <Input
-                  value={newFaqA}
-                  onChange={(e) => setNewFaqA(e.target.value)}
-                  placeholder="التفاصيل أو الإجابة (مثال: نستقبلكم يومياً 8 ص - 10 م)"
-                  className="bg-background text-sm"
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={addCustomFaq}
-                disabled={!newFaqQ.trim() || !newFaqA.trim()}
-                className="gap-1.5"
-              >
-                <Plus className="h-4 w-4" />
-                إضافة للقائمة
-              </Button>
-            </div>
           </div>
 
           <div className="pt-2 flex items-center justify-between flex-wrap gap-3">

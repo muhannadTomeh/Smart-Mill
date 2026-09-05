@@ -7,19 +7,56 @@ export interface CustomFaq {
   a: string;
 }
 
+export interface DynamicDisplayItem {
+  id: string;
+  title: string;       // العنوان
+  details: string;     // التفاصيل
+  visible: boolean;    // إظهار أو إخفاء
+}
+
+export function getDynamicItems(settings: any): DynamicDisplayItem[] {
+  if (Array.isArray(settings?.dynamic_items) && settings.dynamic_items.length > 0) {
+    return settings.dynamic_items
+      .map((it: any) => ({
+        id: String(it.id || Math.random()),
+        title: String(it.title || it.q || "").trim(),
+        details: String(it.details || it.a || "").trim(),
+        visible: it.visible !== false,
+      }))
+      .filter((it: DynamicDisplayItem) => it.title || it.details);
+  }
+  if (Array.isArray(settings?.custom_faqs) && settings.custom_faqs.length > 0) {
+    return settings.custom_faqs
+      .map((f: any) => ({
+        id: String(f.id || Math.random()),
+        title: String(f.title || f.q || "").trim(),
+        details: String(f.details || f.a || "").trim(),
+        visible: f.visible !== false,
+      }))
+      .filter((it: DynamicDisplayItem) => it.title || it.details);
+  }
+  return [];
+}
+
 export interface DisplaySettings {
-  show_estimated_time: boolean;
-  show_oil_prices: boolean;
-  show_sell_price: boolean;
-  show_buy_price: boolean;
-  show_clock: boolean;
-  show_bags_count: boolean;
-  show_faqs: boolean;
+  dynamic_items?: DynamicDisplayItem[];
   ticker_text?: string;
+  show_estimated_time?: boolean;
+  show_oil_prices?: boolean;
+  show_sell_price?: boolean;
+  show_buy_price?: boolean;
+  show_clock?: boolean;
+  show_bags_count?: boolean;
+  show_faqs?: boolean;
   custom_faqs?: CustomFaq[];
 }
 
 export const defaultDisplaySettings: DisplaySettings = {
+  dynamic_items: [
+    { id: "1", title: "سعر الزيت بيع", details: "25 ₪", visible: true },
+    { id: "2", title: "رقم التواصل مع المعصرة", details: "0569945677", visible: true },
+  ],
+  ticker_text: "",
   show_estimated_time: true,
   show_oil_prices: true,
   show_sell_price: true,
@@ -27,12 +64,7 @@ export const defaultDisplaySettings: DisplaySettings = {
   show_clock: true,
   show_bags_count: true,
   show_faqs: true,
-  ticker_text: "",
-  custom_faqs: [
-    { id: "1", q: "كيف يُحسب الرد؟", a: "نسبة مئوية من كمية الزيت المنتج" },
-    { id: "2", q: "سعر تنكة البلاستيك والحديد؟", a: "متوفرة بجودة عالية ومطابقة للمواصفات" },
-    { id: "3", q: "هل يمكن تأجيل الدور؟", a: "نعم، بالتنسيق مع مسؤول الطابور" },
-  ],
+  custom_faqs: [],
 };
 
 const BROADCAST_CHANNEL_NAME = "smart_mill_display_channel";
@@ -78,10 +110,12 @@ export function useDisplaySettings(seasonId?: string | null) {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
+        const dynamic_items = getDynamicItems(parsed);
         setDisplaySettings((prev) => ({
           ...defaultDisplaySettings,
+          ...prev,
           ...parsed,
-          custom_faqs: Array.isArray(parsed.custom_faqs) ? parsed.custom_faqs : defaultDisplaySettings.custom_faqs,
+          dynamic_items: dynamic_items.length > 0 ? dynamic_items : defaultDisplaySettings.dynamic_items,
         }));
       } catch {}
     }
@@ -96,10 +130,11 @@ export function useDisplaySettings(seasonId?: string | null) {
 
       if (data && (data as any).display_settings && typeof (data as any).display_settings === "object") {
         const ds = (data as any).display_settings;
+        const dynamic_items = getDynamicItems(ds);
         const merged: DisplaySettings = {
           ...defaultDisplaySettings,
           ...ds,
-          custom_faqs: Array.isArray(ds.custom_faqs) ? ds.custom_faqs : defaultDisplaySettings.custom_faqs,
+          dynamic_items: dynamic_items.length > 0 ? dynamic_items : defaultDisplaySettings.dynamic_items,
         };
         setDisplaySettings(merged);
         localStorage.setItem(localKey, JSON.stringify(merged));

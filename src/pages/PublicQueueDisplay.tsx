@@ -15,7 +15,12 @@ interface QueueItem {
   notes?: string | null;
 }
 
-import { DisplaySettings, defaultDisplaySettings } from "@/hooks/useDisplaySettings";
+import {
+  DisplaySettings,
+  defaultDisplaySettings,
+  getDynamicItems,
+  DynamicDisplayItem,
+} from "@/hooks/useDisplaySettings";
 
 interface SeasonInfo {
   name: string;
@@ -353,15 +358,8 @@ export default function PublicQueueDisplay() {
     year: "numeric",
   }).format(clock);
 
-  const hasBottomPrices =
-    displaySettings.show_oil_prices &&
-    season &&
-    (displaySettings.show_buy_price || displaySettings.show_sell_price);
-
-  const showBottomBar =
-    hasBottomPrices ||
-    (season && (season.plastic_container_price > 0 || season.return_percent > 0)) ||
-    (displaySettings.show_faqs && activeFaqs.length > 0);
+  const dynamicDisplayItems = getDynamicItems(displaySettings).filter((item) => item.visible);
+  const showBottomBar = dynamicDisplayItems.length > 0;
 
   return (
     <div
@@ -596,109 +594,33 @@ export default function PublicQueueDisplay() {
         </div>
       </main>
 
-      {/* Bottom Info Bar — Information distributed evenly across the screen */}
+      {/* Bottom Info Bar — Dynamic Custom Items (e.g. Oil Prices, Contact, Announcements) */}
       {showBottomBar && (
         <div
-          className="mx-6 md:mx-10 mb-2.5 rounded-2xl px-6 md:px-12 py-3 flex items-center justify-between gap-4 md:gap-8 backdrop-blur-md shadow-xl shrink-0"
+          className="mx-6 md:mx-10 mb-2.5 rounded-2xl px-6 md:px-10 py-3 flex items-center justify-around gap-4 md:gap-8 backdrop-blur-md shadow-xl shrink-0 flex-wrap"
           style={{
-            background: "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: "linear-gradient(90deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)",
+            border: "1px solid rgba(255,255,255,0.1)",
           }}
         >
-          {/* Oil Buy Price */}
-          {displaySettings.show_buy_price && season?.oil_buy_price != null && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center">
-              <p className="text-xs uppercase tracking-wider font-bold text-emerald-300/80 mb-0.5">
-                شراء الزيت
-              </p>
-              <p className="text-2xl md:text-3xl font-black text-emerald-300">
-                {season.oil_buy_price}{" "}
-                <span className="text-xs font-medium opacity-70">₪/كغم</span>
-              </p>
+          {dynamicDisplayItems.map((item, index) => (
+            <div
+              key={item.id || index}
+              className="flex-1 min-w-[150px] flex items-center justify-center relative"
+            >
+              {index > 0 && (
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-10 bg-white/10 hidden md:block" />
+              )}
+              <div className="flex flex-col items-center justify-center text-center px-3">
+                <p className="text-xs md:text-sm font-bold text-emerald-300/85 mb-0.5 tracking-wide">
+                  {item.title}
+                </p>
+                <p className="text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-wide drop-shadow-sm">
+                  {item.details}
+                </p>
+              </div>
             </div>
-          )}
-
-          {displaySettings.show_buy_price && displaySettings.show_sell_price && (
-            <div className="w-px h-10 bg-white/10 shrink-0" />
-          )}
-
-          {/* Oil Sell Price */}
-          {displaySettings.show_sell_price && season?.oil_sell_price != null && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center">
-              <p className="text-xs uppercase tracking-wider font-bold text-amber-300/80 mb-0.5">
-                بيع الزيت
-              </p>
-              <p className="text-2xl md:text-3xl font-black text-amber-300">
-                {season.oil_sell_price}{" "}
-                <span className="text-xs font-medium opacity-70">₪/كغم</span>
-              </p>
-            </div>
-          )}
-
-          {/* Plastic Container Price */}
-          {season?.plastic_container_price != null && season.plastic_container_price > 0 && (
-            <>
-              <div className="w-px h-10 bg-white/10 shrink-0" />
-              <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <p className="text-xs uppercase tracking-wider font-bold text-white/60 mb-0.5">
-                  سعر تنكة البلاستيك
-                </p>
-                <p className="text-2xl md:text-3xl font-black text-white">
-                  {season.plastic_container_price}{" "}
-                  <span className="text-xs font-medium opacity-70">₪</span>
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* Metal Container Price */}
-          {season?.metal_container_price != null && season.metal_container_price > 0 && (
-            <>
-              <div className="w-px h-10 bg-white/10 shrink-0" />
-              <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <p className="text-xs uppercase tracking-wider font-bold text-white/60 mb-0.5">
-                  سعر تنكة الحديد
-                </p>
-                <p className="text-2xl md:text-3xl font-black text-white">
-                  {season.metal_container_price}{" "}
-                  <span className="text-xs font-medium opacity-70">₪</span>
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* Return Percentage */}
-          {season?.return_percent != null && season.return_percent > 0 && (
-            <>
-              <div className="w-px h-10 bg-white/10 shrink-0" />
-              <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <p className="text-xs uppercase tracking-wider font-bold text-white/60 mb-0.5">
-                  نسبة الرد
-                </p>
-                <p className="text-2xl md:text-3xl font-black text-white">
-                  %{season.return_percent}
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* Dynamic Rotating FAQs / Tips */}
-          {displaySettings.show_faqs && activeFaqs.length > 0 && (
-            <>
-              <div className="w-px h-10 bg-white/10 shrink-0" />
-              <div className="flex-1 flex flex-col items-center justify-center text-center overflow-hidden">
-                <div key={faqIndex} style={{ animation: "qd-faq-fade 0.4s ease-out" }}>
-                  <p className="text-xs font-bold text-white/50 flex items-center justify-center gap-1.5 mb-0.5">
-                    <span>💡</span>
-                    <span>{activeFaqs[faqIndex].q}</span>
-                  </p>
-                  <p className="text-base md:text-lg font-bold text-white/95 truncate">
-                    {activeFaqs[faqIndex].a}
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
+          ))}
         </div>
       )}
 
