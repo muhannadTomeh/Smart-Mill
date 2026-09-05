@@ -401,6 +401,16 @@ const Queue = () => {
   };
 
   const startProcessing = async (id: string) => {
+    // 1. التحقق أولاً: منع بدء عصر زبون جديد إذا كان هناك زبون قيد العصر بالفعل
+    const currentActive = allItems.find((i) => i.status === "processing");
+    if (currentActive) {
+      toast.error(`يوجد زبون بالفعل قيد العصر (${currentActive.name})`, {
+        description: "إذا انتهى دوره اضغط على 'تم العصر'",
+        duration: 5000,
+      });
+      return;
+    }
+
     const startedAt = new Date().toISOString();
     const target = allItems.find((i) => i.id === id);
     let estMin = target ? parseEstimatedMinutes(target) : null;
@@ -408,11 +418,13 @@ const Queue = () => {
       estMin = 30;
     }
 
-    localStorage.setItem(`processing_started_${id}`, startedAt);
-    localStorage.setItem(`queue_est_${id}`, String(estMin));
-    if (target?.name) {
-      localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(estMin));
-    }
+    try {
+      localStorage.setItem(`processing_started_${id}`, startedAt);
+      localStorage.setItem(`queue_est_${id}`, String(estMin));
+      if (target?.name) {
+        localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(estMin));
+      }
+    } catch {}
 
     const updatedNotes = `[بدء_العصر:${startedAt}] [وقت_تقديري:${estMin}] ${(target?.notes || "").replace(/\[(?:بدء_العصر|وقت_تقديري|الوقت|est):?[^\]]*\]/gi, "")}`.trim();
 
