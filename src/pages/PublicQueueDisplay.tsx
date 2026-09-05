@@ -520,64 +520,66 @@ export default function PublicQueueDisplay() {
             />
           </div>
 
-          {nextItem ? (
+          {nextFive.length > 0 ? (
             <div
               className="relative z-10 flex flex-col justify-between items-center w-full h-full text-center"
               style={{ animation: "qd-fade-scale 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
               {/* Header Badge */}
-              <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-base md:text-lg uppercase tracking-wider shadow-sm shrink-0">
+              <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-base md:text-lg uppercase tracking-wider shadow-sm shrink-0 mb-3 md:mb-4">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>الدور التالي</span>
               </div>
 
-              {/* Core Hero Info (Number + Name + Bags) */}
-              <div className="flex-1 min-h-0 flex flex-col items-center justify-center my-auto w-full py-2">
-                {/* Big Turn Number */}
-                <span
-                  className="font-black text-white leading-none drop-shadow-2xl select-none shrink-0"
-                  style={{
-                    fontSize: "clamp(5.5rem, 11vh, 9.5rem)",
-                    textShadow: "0 0 60px rgba(52,211,153,0.5), 0 4px 0 rgba(0,0,0,0.4)",
-                    lineHeight: 0.9,
-                  }}
-                >
-                  {nextItem.position}
-                </span>
+              {/* Rows: Up to 5 customers evenly distributed vertically */}
+              <div className="flex-1 w-full flex flex-col justify-between gap-2.5 md:gap-3.5 my-auto overflow-hidden">
+                {nextFive.map((item, idx) => (
+                  <div
+                    key={item.id || idx}
+                    className="flex-1 flex items-center justify-between px-5 md:px-7 py-2 md:py-2.5 rounded-2xl transition-all shadow-md relative overflow-hidden"
+                    style={{
+                      background:
+                        idx === 0
+                          ? "linear-gradient(90deg, rgba(16,185,129,0.22) 0%, rgba(255,255,255,0.05) 100%)"
+                          : "rgba(255, 255, 255, 0.035)",
+                      border:
+                        idx === 0
+                          ? "1.5px solid rgba(52,211,153,0.45)"
+                          : "1px solid rgba(255, 255, 255, 0.08)",
+                    }}
+                  >
+                    {/* Right side (RTL): Big Turn Number + Customer Name */}
+                    <div className="flex items-center gap-4 md:gap-6 min-w-0 flex-1">
+                      {/* Big Turn Number */}
+                      <span
+                        className="font-black text-white leading-none drop-shadow select-none shrink-0 min-w-[2.5rem] md:min-w-[3.5rem] text-right"
+                        style={{
+                          fontSize: "clamp(2rem, 3.8vw, 3.25rem)",
+                          textShadow: "0 0 25px rgba(52,211,153,0.5), 0 2px 4px rgba(0,0,0,0.6)",
+                        }}
+                      >
+                        {item.position}
+                      </span>
 
-                {/* Customer Name */}
-                <span
-                  className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-3 tracking-wide truncate max-w-full px-4 drop-shadow"
-                  style={{ textShadow: "0 2px 10px rgba(0,0,0,0.7)" }}
-                >
-                  {nextItem.name}
-                </span>
+                      {/* Customer Name */}
+                      <span
+                        className="text-white font-black truncate text-xl md:text-2xl lg:text-3xl tracking-wide drop-shadow"
+                        style={{ textShadow: "0 2px 8px rgba(0,0,0,0.7)" }}
+                      >
+                        {item.name}
+                      </span>
+                    </div>
 
-                {/* Bags Badge */}
-                {displaySettings.show_bags_count && nextItem.bags > 0 && (
-                  <span className="mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-white/10 text-white/95 text-base md:text-lg font-bold border border-white/15 backdrop-blur-md shadow-sm">
-                    🛍️ {nextItem.bags} شوال
-                  </span>
-                )}
-              </div>
-
-              {/* Bottom Operational Expected Time */}
-              {displaySettings.show_estimated_time && (
-                <div className="w-full shrink-0 pt-1">
-                  <div className="inline-flex items-center justify-center gap-3 md:gap-4 px-6 md:px-8 py-2 md:py-2.5 rounded-2xl border-2 shadow-xl bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.2)] max-w-full">
-                    <span className="text-xl md:text-2xl shrink-0">⏳</span>
-                    <span className="text-sm md:text-base font-bold whitespace-nowrap">
-                      الوقت المتوقع للدور:
-                    </span>
-                    <span
-                      className="text-white font-mono text-2xl md:text-3xl font-black tracking-widest drop-shadow shrink-0"
-                      dir="ltr"
-                    >
-                      {nextItem.estimated_minutes ? `${nextItem.estimated_minutes}:00` : "30:00"}
-                    </span>
+                    {/* Left side (RTL): Estimated time in small font if added */}
+                    {item.estimated_minutes != null && item.estimated_minutes > 0 && (
+                      <div className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/35 text-amber-200 text-xs md:text-sm font-bold shadow-xs">
+                        <span className="text-sm">⏳</span>
+                        <span dir="rtl">{item.estimated_minutes} دقيقة</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-3 text-center my-auto">
