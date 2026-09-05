@@ -188,6 +188,36 @@ const Queue = () => {
     } catch {}
   };
 
+  const calculateQueueWaitAhead = (targetPosition: number) => {
+    // 1. Current processing items
+    const processingItems = allItems.filter((i) => i.status === "processing");
+    let processingRemainingMins = 0;
+    for (const p of processingItems) {
+      const remSec = getRemainingSeconds(p, nowMs);
+      if (remSec !== null && remSec > 0) {
+        processingRemainingMins += Math.max(1, Math.ceil(remSec / 60));
+      } else {
+        const pEst = parseEstimatedMinutes(p) || 30;
+        processingRemainingMins += pEst;
+      }
+    }
+
+    // 2. Waiting items ahead of targetPosition
+    const waitingAhead = allItems.filter(
+      (i) => i.status === "waiting" && Number(i.position) < targetPosition
+    );
+    let waitingMins = 0;
+    for (const w of waitingAhead) {
+      const wEst = parseEstimatedMinutes(w) || 30;
+      waitingMins += wEst;
+    }
+
+    const aheadCount = processingItems.length + waitingAhead.length;
+    const waitMinutes = processingRemainingMins + waitingMins;
+
+    return { aheadCount, waitMinutes };
+  };
+
   const addToQueue = async (shouldPrint = false) => {
     if (!newCustomer.name.trim()) {
       toast.error("يرجى إدخال اسم الزبون");
@@ -239,6 +269,7 @@ const Queue = () => {
 
       if (shouldPrint) {
         try {
+          const { aheadCount, waitMinutes } = calculateQueueWaitAhead(nextPosition);
           printThermalQueueTicket(
             {
               turn_number: nextPosition,
@@ -248,6 +279,8 @@ const Queue = () => {
               phone: newCustomer.phone?.trim() || null,
               season_name: activeSeason?.name,
               estimated_minutes: estMin,
+              ahead_count: aheadCount,
+              estimated_wait_minutes: waitMinutes,
             },
             profile?.mill_name || localStorage.getItem("mill_name") || "معصرة الزيتون"
           );
@@ -267,6 +300,7 @@ const Queue = () => {
 
   const handlePrintTicket = (customer: QueueItem) => {
     try {
+      const { aheadCount, waitMinutes } = calculateQueueWaitAhead(Number(customer.position));
       printThermalQueueTicket(
         {
           turn_number: customer.position,
@@ -277,6 +311,8 @@ const Queue = () => {
           created_at: customer.created_at,
           season_name: activeSeason?.name,
           estimated_minutes: parseEstimatedMinutes(customer),
+          ahead_count: aheadCount,
+          estimated_wait_minutes: waitMinutes,
         },
         profile?.mill_name || localStorage.getItem("mill_name") || "معصرة الزيتون"
       );

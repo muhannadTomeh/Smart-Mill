@@ -594,12 +594,31 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
 export interface ThermalQueueTicketData {
   turn_number: number | string;
   customer_name: string;
-  bags_count: number;
+  bags_count?: number | null;
   notes?: string | null;
   phone?: string | null;
   created_at?: string;
   season_name?: string;
   estimated_minutes?: number | null;
+  ahead_count?: number | null;
+  estimated_wait_minutes?: number | null;
+}
+
+export function formatEstimatedWaitTime(minutes: number): string {
+  if (minutes <= 0) return "مباشرة (الدور القادم)";
+  if (minutes < 60) return `~${minutes} دقيقة تقريباً`;
+  const hours = Math.floor(minutes / 60);
+  const remMin = minutes % 60;
+  let hoursText = "";
+  if (hours === 1) hoursText = "ساعة";
+  else if (hours === 2) hoursText = "ساعتان";
+  else if (hours >= 3 && hours <= 10) hoursText = `${hours} ساعات`;
+  else hoursText = `${hours} ساعة`;
+
+  if (remMin === 0) return `حوالي ${hoursText} (${minutes} د)`;
+  if (remMin === 30) return `حوالي ${hoursText} ونصف (${minutes} د)`;
+  if (remMin === 15) return `حوالي ${hoursText} وربع (${minutes} د)`;
+  return `حوالي ${hoursText} و ${remMin} د (${minutes} د)`;
 }
 
 export function printThermalQueueTicket(data: ThermalQueueTicketData, millName = "معصرة الزيتون") {
@@ -781,6 +800,24 @@ export function printThermalQueueTicket(data: ThermalQueueTicketData, millName =
     <span class="info-label">رقم الهاتف:</span>
     <span class="info-value">${data.phone}</span>
   </div>` : ''}
+
+  <!-- قسم الأدوار السابقة والوقت التقديري المتبقي -->
+  <div style="border: 1.5px dashed #000; border-radius: 6px; padding: 5px 6px; margin: 6px 0; background: #fafafa;">
+    <div class="info-row" style="padding: 2px 0;">
+      <span class="info-label bold" style="font-size: 13px;">أمامك في الطابور:</span>
+      <span class="info-value bold" style="font-size: 14.5px;">
+        ${data.ahead_count != null && data.ahead_count > 0 
+          ? `${data.ahead_count} ${data.ahead_count === 1 ? 'زبون' : data.ahead_count === 2 ? 'زبونان' : 'زبائن'}`
+          : 'أنت التالي مباشرة (0)'}
+      </span>
+    </div>
+    <div class="info-row" style="padding: 2px 0; border-top: 1px dotted #ccc; margin-top: 3px; padding-top: 3px;">
+      <span class="info-label bold" style="font-size: 12px;">الوقت التقديري المتبقي:</span>
+      <span class="info-value bold" style="font-size: 12.5px;">
+        ${formatEstimatedWaitTime(data.estimated_wait_minutes ?? 0)}
+      </span>
+    </div>
+  </div>
 
   ${cleanNotes ? `
   <div class="notes-box">
