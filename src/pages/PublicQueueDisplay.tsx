@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { parseEstimatedMinutes, parseStartedAt } from "@/pages/Queue";
+import { parseEstimatedMinutes, parseStartedAt } from "@/lib/queueUtils";
+
 
 interface QueueItem {
   id: string;

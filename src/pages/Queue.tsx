@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -20,87 +20,20 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { QuickInvoiceSheet } from "@/components/queue/QuickInvoiceSheet";
 import { printThermalQueueTicket } from "@/lib/thermalReceiptPrinter";
+import {
+  QueueItem,
+  parseEstimatedMinutes,
+  parseStartedAt,
+  getRemainingSeconds,
+  formatRemaining,
+  formatTimeSafe,
+} from "@/lib/queueUtils";
 
-interface QueueItem {
-  id: string;
-  name: string;
-  phone: string | null;
-  bags: number;
-  notes: string | null;
-  position: number;
-  created_at: string;
-  status: string;
-  estimated_minutes?: number | null;
-  started_at?: string | null;
-}
+// Re-export for backwards compatibility
+export { parseEstimatedMinutes, parseStartedAt, getRemainingSeconds, formatRemaining, formatTimeSafe };
+export type { QueueItem };
 
-export function parseEstimatedMinutes(item: { estimated_minutes?: number | null; notes?: string | null; id?: string }): number | null {
-  if (item.estimated_minutes != null && !isNaN(Number(item.estimated_minutes))) {
-    return Number(item.estimated_minutes);
-  }
-  if (item.notes) {
-    const match = item.notes.match(/\[(?:وقت_تقديري|الوقت|est):?\s*(\d+)/i);
-    if (match) return parseInt(match[1]);
-  }
-  if (item.id) {
-    const local = localStorage.getItem(`queue_est_${item.id}`);
-    if (local) {
-      const n = parseInt(local, 10);
-      if (!isNaN(n) && n > 0) return n;
-    }
-  }
-  return null;
-}
-
-export function parseStartedAt(item: { started_at?: string | null; notes?: string | null; id?: string }): number | null {
-  if (item.started_at) {
-    const t = new Date(item.started_at).getTime();
-    if (!isNaN(t)) return t;
-  }
-  if (item.notes) {
-    const match = item.notes.match(/\[بدء_العصر:([^\]]+)\]/);
-    if (match) {
-      const t = new Date(match[1]).getTime();
-      if (!isNaN(t)) return t;
-      const num = Number(match[1]);
-      if (!isNaN(num) && num > 0) return num;
-    }
-  }
-  if (item.id) {
-    const local = localStorage.getItem(`processing_started_${item.id}`);
-    if (local) {
-      const t = new Date(local).getTime();
-      if (!isNaN(t)) return t;
-    }
-  }
-  return null;
-}
-
-export function getRemainingSeconds(item: QueueItem, nowMs: number): number | null {
-  const estMin = parseEstimatedMinutes(item);
-  if (!estMin || estMin <= 0) return null;
-  let startedAt = parseStartedAt(item);
-  if (!startedAt && item.id) {
-    if (item.status === "processing") {
-      startedAt = Date.now();
-      localStorage.setItem(`processing_started_${item.id}`, new Date(startedAt).toISOString());
-    }
-  }
-  if (!startedAt) return null;
-  const elapsed = Math.max(0, Math.floor((nowMs - startedAt) / 1000));
-  return Math.max(0, estMin * 60 - elapsed);
-}
-
-export function formatRemaining(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-const formatTime = (dateStr: string) => {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", hour12: false });
-};
+const formatTime = formatTimeSafe;
 
 const Queue = () => {
   const [allItems, setAllItems] = useState<QueueItem[]>([]);
@@ -551,6 +484,9 @@ const Queue = () => {
                   <UserPlus className="h-5 w-5 text-primary" />
                   تسجيل زبون جديد في الطابور
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                  نموذج تسجيل وإضافة زبون جديد إلى طابور الانتظار
+                </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-3.5 mt-2">
@@ -769,7 +705,7 @@ const Queue = () => {
 
                       {/* Row 2: Secondary info (Bags, Time, Phone) */}
                       <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                        <span className="font-semibold text-foreground/90">{customer.bags} شوال</span>
+                        <span className="font-semibold text-foreground/90">{customer.bags ?? 0} شوال</span>
                         <span>•</span>
                         <span>{formatTime(customer.created_at)}</span>
                         {customer.phone && (
@@ -838,7 +774,7 @@ const Queue = () => {
                             {p.name}
                           </h3>
                           <Badge variant="outline" className="text-xs font-semibold px-2 py-0 border-border text-muted-foreground shrink-0">
-                            {p.bags} شوال
+                            {p.bags ?? 0} شوال
                           </Badge>
                         </div>
                         <Button
@@ -1025,6 +961,9 @@ const Queue = () => {
               <Pencil className="h-5 w-5 text-primary" />
               تعديل بيانات الزبون {editingCustomer?.position ? `(دور #${editingCustomer.position})` : ""}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              تعديل بيانات الزبون في طابور الانتظار
+            </DialogDescription>
           </DialogHeader>
 
           {editingCustomer && (

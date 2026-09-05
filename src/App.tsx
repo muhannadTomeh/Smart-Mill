@@ -45,6 +45,7 @@ import AdminIndex from "./pages/admin/AdminIndex";
 import MillDetails from "./pages/admin/MillDetails";
 import { AdminRoute } from "./components/AdminRoute";
 import { AdminErrorBoundary } from "./components/AdminErrorBoundary";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -281,15 +282,15 @@ const ProtectedLayout = () => {
 
   // Regular Mill Owners & Cashier Employees
   return (
-    <SubscriptionProvider>
-      <SubscriptionGate>
-        <SeasonProvider>
-          <SidebarProvider>
-            <div className="min-h-screen flex w-full bg-background" dir="rtl">
-              <AppSidebar />
-              <div className="flex-1 flex flex-col min-w-0">
-                <HeaderBar />
-                <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+    <SubscriptionGate>
+      <SeasonProvider>
+        <SidebarProvider>
+          <div className="min-h-screen flex w-full bg-background" dir="rtl">
+            <AppSidebar />
+            <div className="flex-1 flex flex-col min-w-0">
+              <HeaderBar />
+              <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+                <AppErrorBoundary>
                   <Routes>
                     {!isEmployee ? (
                       <>
@@ -303,13 +304,13 @@ const ProtectedLayout = () => {
                       <Route path="/*" element={<EmployeeLayout />} />
                     )}
                   </Routes>
-                </main>
-              </div>
+                </AppErrorBoundary>
+              </main>
             </div>
-          </SidebarProvider>
-        </SeasonProvider>
-      </SubscriptionGate>
-    </SubscriptionProvider>
+          </div>
+        </SidebarProvider>
+      </SeasonProvider>
+    </SubscriptionGate>
   );
 };
 
@@ -337,12 +338,14 @@ const EmployeeLayout = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/queue" element={<Queue />} />
-      <Route path="/invoices" element={<Invoices />} />
-      <Route path="/daily-closing" element={<DailyClosing />} />
-      <Route path="*" element={<Navigate to="/queue" replace />} />
-    </Routes>
+    <AppErrorBoundary fallbackTitle="حدث خطأ في شاشة الموظف">
+      <Routes>
+        <Route path="/queue" element={<Queue />} />
+        <Route path="/invoices" element={<Invoices />} />
+        <Route path="/daily-closing" element={<DailyClosing />} />
+        <Route path="*" element={<Navigate to="/queue" replace />} />
+      </Routes>
+    </AppErrorBoundary>
   );
 };
 
@@ -365,47 +368,51 @@ const SeasonGateContent = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/queue" element={<Queue />} />
-      <Route path="/invoices" element={<Invoices />} />
-      <Route path="/daily-closing" element={<DailyClosing />} />
-      <Route path="/customers" element={<Customers />} />
-      <Route path="/workers" element={<Workers />} />
-      <Route path="/oil-trading" element={<OilTrading />} />
-      <Route path="/expenses" element={<Expenses />} />
-      <Route path="/inventory" element={<Inventory />} />
-      <Route path="/reports" element={<Reports />} />
-      <Route path="/settings" element={<Settings />} />
-      <Route path="/notifications" element={<Notifications />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <AppErrorBoundary fallbackTitle="حدث خطأ في عرض الصفحة">
+      <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/queue" element={<Queue />} />
+        <Route path="/invoices" element={<Invoices />} />
+        <Route path="/daily-closing" element={<DailyClosing />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/workers" element={<Workers />} />
+        <Route path="/oil-trading" element={<OilTrading />} />
+        <Route path="/expenses" element={<Expenses />} />
+        <Route path="/inventory" element={<Inventory />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AppErrorBoundary>
   );
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <RoleProvider>
-            <SubscriptionProvider>
-              <Routes>
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/display/:seasonId" element={<PublicQueueDisplay />} />
-                <Route path="/oauth/consent" element={<OAuthConsent />} />
-                <Route path="/*" element={<ProtectedLayout />} />
-              </Routes>
-            </SubscriptionProvider>
-          </RoleProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <AppErrorBoundary fallbackTitle="تعذر تشغيل التطبيق">
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <RoleProvider>
+              <SubscriptionProvider>
+                <Routes>
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/display/:seasonId" element={<PublicQueueDisplay />} />
+                  <Route path="/oauth/consent" element={<OAuthConsent />} />
+                  <Route path="/*" element={<ProtectedLayout />} />
+                </Routes>
+              </SubscriptionProvider>
+            </RoleProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </AppErrorBoundary>
 );
 
 export default App;
