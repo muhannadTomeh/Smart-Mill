@@ -34,11 +34,11 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
       onChange?.(e);
     };
 
-    // Ensure value passed in string form is normalized to Latin digits
+    // Ensure value is always normalized to Latin digits string for numeric inputs
     const rawValue = props.value;
     const normalizedValue =
-      typeof rawValue === "string" && isNumeric
-        ? toLatinDigits(rawValue)
+      isNumeric && rawValue !== undefined && rawValue !== null
+        ? toLatinDigits(String(rawValue))
         : rawValue;
 
     return (

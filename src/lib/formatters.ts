@@ -12,11 +12,13 @@ export function formatDate(
   if (!date) return "";
   const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(LATIN_ARABIC_LOCALE, options || {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-  });
+  return toLatinDigits(
+    d.toLocaleDateString(LATIN_ARABIC_LOCALE, options || {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    })
+  );
 }
 
 export function formatDateTime(
@@ -26,13 +28,15 @@ export function formatDateTime(
   if (!date) return "";
   const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString(LATIN_ARABIC_LOCALE, options || {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return toLatinDigits(
+    d.toLocaleString(LATIN_ARABIC_LOCALE, options || {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  );
 }
 
 export function formatTime(
@@ -42,11 +46,13 @@ export function formatTime(
   if (!date) return "";
   const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString(LATIN_ARABIC_LOCALE, options || {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  return toLatinDigits(
+    d.toLocaleTimeString(LATIN_ARABIC_LOCALE, options || {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+  );
 }
 
 export function formatNumber(

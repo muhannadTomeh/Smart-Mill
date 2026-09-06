@@ -31,7 +31,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { InvoicePreview, type InvoicePreviewData } from "@/components/invoices/InvoicePreview";
-import { SimpleCalculator } from "@/components/invoices/SimpleCalculator";
 import { DeletedInvoicesDialog } from "@/components/invoices/DeletedInvoicesDialog";
 import { useDeletedInvoices } from "@/hooks/useDeletedInvoices";
 import { 
@@ -391,7 +390,13 @@ export default function Invoices() {
     };
   }, [invoiceData, selectedPayment, containerCounts, containerTypes, activeSeason]);
 
-  const netOilForCustomer = Math.max(0, (invoiceData.oilProduced || 0) - (selectedPayment?.oilAmount || 0));
+  const openSystemCalculator = () => {
+    try {
+      window.location.href = "calculator:";
+    } catch (e) {
+      console.warn("Could not open calculator:", e);
+    }
+  };
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -407,8 +412,21 @@ export default function Invoices() {
           </div>
         </div>
 
-        {/* Action buttons: الفواتير المحذوفة + سجل الفواتير */}
+        {/* Action buttons: الآلة الحاسبة + الفواتير المحذوفة + سجل الفواتير */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Button to open system native calculator */}
+          <Button
+            asChild
+            variant="outline"
+            className="gap-2 border-border hover:bg-muted font-semibold shadow-xs cursor-pointer"
+            title="فتح تطبيق الآلة الحاسبة في جهازك"
+          >
+            <a href="calculator:">
+              <CalcIcon className="h-4 w-4 text-primary" />
+              <span>الآلة الحاسبة</span>
+            </a>
+          </Button>
+
           <Button
             variant="outline"
             onClick={() => setDeletedModalOpen(true)}
@@ -437,21 +455,32 @@ export default function Invoices() {
         </div>
       </div>
 
-      {/* Main Grid: Right = Invoice Form (7 cols), Left = Calculator (5 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* RIGHT: Invoice Input Form (col-span-7) */}
-        <div className="lg:col-span-7 space-y-6">
-          <Card className="border-border/80 shadow-sm">
+      {/* Main Invoice Form (Full Width RTL) */}
+      <div className="max-w-4xl mx-auto space-y-6">
+        <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-4 border-b bg-muted/20">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-bold flex items-center gap-2">
                   <FileText className="h-5 w-5 text-primary" />
                   <span>بيانات الفاتورة والإنتاج</span>
                 </CardTitle>
-                <Badge variant="outline" className="font-mono text-xs">
-                  {formatDate(new Date())}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
+                    title="فتح تطبيق الآلة الحاسبة في جهازك"
+                  >
+                    <a href="calculator:">
+                      <CalcIcon className="h-3.5 w-3.5 text-primary" />
+                      <span>آلة حاسبة</span>
+                    </a>
+                  </Button>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {formatDate(new Date())}
+                  </Badge>
+                </div>
               </div>
               <CardDescription>
                 أدخل كمية الزيت المنتج والتنكات لاحتساب الرد والأجرة تلقائياً
@@ -506,11 +535,11 @@ export default function Invoices() {
                       placeholder="أدخل اسم الزبون..."
                     />
                     <Input
-                      className="h-11"
+                      className="h-11 text-right"
                       value={invoiceData.customerPhone}
                       onChange={(e) => setInvoiceData(p => ({ ...p, customerPhone: e.target.value }))}
                       placeholder="رقم الهاتف (اختياري)..."
-                      dir="ltr"
+                      dir="rtl"
                     />
                   </div>
                 )}
@@ -542,7 +571,7 @@ export default function Invoices() {
                     value={oilProducedStr !== "" ? oilProducedStr : (invoiceData.oilProduced ? String(invoiceData.oilProduced) : "")}
                     onChange={handleOilProducedChange}
                     placeholder="0.0"
-                    className="text-2xl font-black font-mono h-14 ps-24 pe-4 text-right"
+                    className="text-2xl font-black font-mono h-14 pl-24 pr-4 text-right"
                     lang="en-US"
                     dir="ltr"
                   />
@@ -583,12 +612,12 @@ export default function Invoices() {
                           <p className="text-sm font-medium truncate">{ct.name}</p>
                           <p className="text-xs text-muted-foreground">{ct.price} {currency} للواحدة</p>
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5" dir="ltr">
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
-                            className="h-8 w-8 rounded-lg"
+                            className="h-8 w-8 rounded-lg font-bold text-base"
                             onClick={() => {
                               const curr = containerCounts[ct.id] || 0;
                               if (curr > 0) setContainerCounts(p => ({ ...p, [ct.id]: curr - 1 }));
@@ -597,21 +626,25 @@ export default function Invoices() {
                             -
                           </Button>
                           <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             className="w-14 h-8 text-center font-mono font-bold text-sm p-1"
-                            value={containerCounts[ct.id] ?? 0}
+                            value={toLatinDigits(containerCounts[ct.id] ?? 0)}
                             onChange={(e) => {
-                              const val = e.target.value === "" ? 0 : parseInt(e.target.value);
+                              const clean = toLatinDigits(e.target.value).replace(/\D/g, "");
+                              const val = clean === "" ? 0 : parseInt(clean, 10);
                               setContainerCounts(p => ({ ...p, [ct.id]: isNaN(val) ? 0 : Math.max(0, val) }));
                             }}
                             min="0"
+                            lang="en-US"
+                            dir="ltr"
                             onFocus={(e) => e.target.select()}
                           />
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
-                            className="h-8 w-8 rounded-lg"
+                            className="h-8 w-8 rounded-lg font-bold text-base"
                             onClick={() => {
                               const curr = containerCounts[ct.id] || 0;
                               setContainerCounts(p => ({ ...p, [ct.id]: curr + 1 }));
@@ -771,21 +804,20 @@ export default function Invoices() {
                   </div>
                 )}
 
-                {/* Buttons Grid */}
+                {/* Buttons Grid - RTL Order: Primary Print on the right */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-                  {/* Preview Invoice Button - requested to be on the right */}
+                  {/* Confirm & Print Receipt (Primary - on the right in RTL) */}
                   <Button
                     type="button"
-                    variant="outline"
-                    onClick={() => setShowPreviewModal(true)}
-                    disabled={!invoiceData.oilProduced || !selectedPayment}
-                    className="sm:col-span-4 h-12 text-sm font-semibold border-primary/30 text-primary hover:bg-primary/5 gap-2"
+                    onClick={() => confirmInvoice(true)}
+                    disabled={!selectedPayment || !invoiceData.customerName || isSubmitting}
+                    className="sm:col-span-5 h-12 text-sm font-bold shadow-md hover:shadow-lg transition-all gap-2 bg-primary text-primary-foreground"
                   >
-                    <Eye className="h-4 w-4" />
-                    <span>معاينة الفاتورة</span>
+                    <Printer className="h-4 w-4" />
+                    <span>تأكيد وطباعة (80mm)</span>
                   </Button>
 
-                  {/* Confirm Only */}
+                  {/* Confirm Only (Secondary - in middle) */}
                   <Button
                     type="button"
                     variant="secondary"
@@ -797,35 +829,22 @@ export default function Invoices() {
                     <span>تأكيد فقط</span>
                   </Button>
 
-                  {/* Confirm & Print Receipt */}
+                  {/* Preview Invoice Button (Tertiary - on the left in RTL) */}
                   <Button
                     type="button"
-                    onClick={() => confirmInvoice(true)}
-                    disabled={!selectedPayment || !invoiceData.customerName || isSubmitting}
-                    className="sm:col-span-5 h-12 text-sm font-bold shadow-md hover:shadow-lg transition-all gap-2 bg-primary text-primary-foreground"
+                    variant="outline"
+                    onClick={() => setShowPreviewModal(true)}
+                    disabled={!invoiceData.oilProduced || !selectedPayment}
+                    className="sm:col-span-4 h-12 text-sm font-semibold border-primary/30 text-primary hover:bg-primary/5 gap-2"
                   >
-                    <Printer className="h-4 w-4" />
-                    <span>تأكيد وطباعة (80mm)</span>
+                    <Eye className="h-4 w-4" />
+                    <span>معاينة الفاتورة</span>
                   </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* LEFT: Open Simple Calculator (col-span-5) */}
-        <div className="lg:col-span-5 sticky top-4">
-          <SimpleCalculator
-            onUseValue={(val) => {
-              setInvoiceData(p => ({ ...p, oilProduced: val }));
-              toast({
-                title: "تم نقل الناتج",
-                description: `تم تعيين كمية الزيت إلى ${val} كغم`,
-              });
-            }}
-          />
-        </div>
-      </div>
 
       {/* Live Preview Modal Dialog */}
       <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
