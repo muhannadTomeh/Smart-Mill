@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
+import { useCurrency } from "@/hooks/useCurrency";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 
@@ -38,6 +39,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
   const { refetch: refetchInventory } = useInventory();
+  const { currency } = useCurrency();
 
   const [oilProduced, setOilProduced] = useState<number>(0);
   const [containerTypes, setContainerTypes] = useState<ContainerType[]>([]);
@@ -100,11 +102,11 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
 
     return {
       oilOnly: { ...opts.oil, label: `${opts.oil.oilAmount.toFixed(2)} كغم زيت` },
-      cashOnly: { ...opts.cash, label: `${opts.cash.cashAmount.toFixed(2)} ₪` },
-      mixed: { ...mixedBreakdown, label: `${mixedBreakdown.oilAmount.toFixed(2)} كغم + ${mixedBreakdown.cashAmount.toFixed(2)} ₪` },
+      cashOnly: { ...opts.cash, label: `${opts.cash.cashAmount.toFixed(2)} ${currency}` },
+      mixed: { ...mixedBreakdown, label: `${mixedBreakdown.oilAmount.toFixed(2)} كغم + ${mixedBreakdown.cashAmount.toFixed(2)} ${currency}` },
       defaultMixed: opts.mixed,
     };
-  }, [oilProduced, totalContainerCost, settings, customMixedOil]);
+  }, [oilProduced, totalContainerCost, settings, customMixedOil, currency]);
 
   const adjustContainer = (id: string, delta: number) => {
     setContainerCounts((p) => ({ ...p, [id]: Math.max(0, (p[id] || 0) + delta) }));
@@ -266,6 +268,16 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
             <div className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">1</span>
               <Label className="text-lg font-semibold">كمية الزيت المنتج (كغم)</Label>
+              {oilProduced > 0 && (
+                <div className="ms-auto flex items-center gap-1.5 flex-wrap justify-end">
+                  <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                    {((oilProduced * settings.return_percent) / 100).toFixed(2)} كغم
+                  </Badge>
+                  <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                    {(oilProduced * settings.cash_return_cost).toFixed(2)} {currency}
+                  </Badge>
+                </div>
+              )}
             </div>
             <Input
               type="number"
@@ -292,7 +304,9 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">2</span>
               <Label className="text-lg font-semibold">التنكات</Label>
               {totalContainerCost > 0 && (
-                <Badge variant="secondary" className="ms-auto">{totalContainerCost.toFixed(2)} ₪</Badge>
+                <Badge variant="secondary" className="ms-auto font-mono text-xs font-semibold px-2.5 py-0.5">
+                  {totalContainerCost.toFixed(2)} {currency}
+                </Badge>
               )}
             </div>
             {containerTypes.length === 0 ? (
@@ -303,7 +317,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                   <div key={ct.id} className="flex items-center gap-3 rounded-lg bg-muted/40 p-3">
                     <div className="flex-1">
                       <p className="font-medium">{ct.name}</p>
-                      <p className="text-xs text-muted-foreground">{ct.price} ₪ / تنكة</p>
+                      <p className="text-xs text-muted-foreground">{ct.price} {currency} / تنكة</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => adjustContainer(ct.id, -1)}>
@@ -452,8 +466,8 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                       {/* Cash amount input */}
                       <div className="space-y-1.5 bg-background/90 dark:bg-card p-3 rounded-lg border border-amber-200/60 dark:border-amber-900/40">
                         <div className="flex justify-between items-center text-xs">
-                          <Label className="font-semibold text-foreground">المبلغ النقدي المتبقي (شيكل)</Label>
-                          <span className="text-muted-foreground text-[11px]">الافتراضي: {calc.defaultMixed.cashAmount.toFixed(2)} ₪</span>
+                          <Label className="font-semibold text-foreground">المبلغ النقدي المتبقي ({currency})</Label>
+                          <span className="text-muted-foreground text-[11px]">الافتراضي: {calc.defaultMixed.cashAmount.toFixed(2)} {currency}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Button
@@ -514,7 +528,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                         النتيجة النهائية للمختلط:
                       </span>
                       <span className="font-bold text-sm text-amber-900 dark:text-amber-100">
-                        {calc.mixed.oilAmount.toFixed(2)} كغم زيت + {calc.mixed.cashAmount.toFixed(2)} ₪ نقداً
+                        {calc.mixed.oilAmount.toFixed(2)} كغم زيت + {calc.mixed.cashAmount.toFixed(2)} {currency} نقداً
                       </span>
                     </div>
                   </div>

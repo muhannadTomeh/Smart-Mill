@@ -24,6 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
+import { useCurrency } from "@/hooks/useCurrency";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
@@ -59,6 +60,7 @@ export default function Invoices() {
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
   const { refetch: refetchInventory } = useInventory();
+  const { currency } = useCurrency();
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -175,8 +177,8 @@ export default function Invoices() {
 
     const methods: PaymentMethod[] = [
       { ...opts.oil, total: `${opts.oil.oilAmount.toFixed(2)} كغم زيت` },
-      { ...opts.cash, total: `${opts.cash.cashAmount.toFixed(2)} شيكل` },
-      { ...opts.mixed, total: `${opts.mixed.oilAmount.toFixed(2)} كغم زيت + ${opts.mixed.cashAmount.toFixed(2)} شيكل` },
+      { ...opts.cash, total: `${opts.cash.cashAmount.toFixed(2)} ${currency}` },
+      { ...opts.mixed, total: `${opts.mixed.oilAmount.toFixed(2)} كغم زيت + ${opts.mixed.cashAmount.toFixed(2)} ${currency}` },
     ];
     setPaymentMethods(methods);
 
@@ -191,7 +193,7 @@ export default function Invoices() {
         );
         setSelectedPayment({
           ...customBreakdown,
-          total: `${customBreakdown.oilAmount.toFixed(2)} كغم زيت + ${customBreakdown.cashAmount.toFixed(2)} شيكل`,
+          total: `${customBreakdown.oilAmount.toFixed(2)} كغم زيت + ${customBreakdown.cashAmount.toFixed(2)} ${currency}`,
         });
       } else {
         const updated = methods.find(m => m.type === selectedPayment.type);
@@ -214,7 +216,7 @@ export default function Invoices() {
     );
     setSelectedPayment({
       ...customBreakdown,
-      total: `${customBreakdown.oilAmount.toFixed(2)} كغم زيت + ${customBreakdown.cashAmount.toFixed(2)} شيكل`,
+      total: `${customBreakdown.oilAmount.toFixed(2)} كغم زيت + ${customBreakdown.cashAmount.toFixed(2)} ${currency}`,
     });
   };
 
@@ -480,9 +482,16 @@ export default function Invoices() {
                   <Label htmlFor="oilProduced" className="text-sm font-semibold">
                     كمية الزيت المنتج (كغم)
                   </Label>
-                  <span className="text-xs text-muted-foreground">
-                    يمكنك استخدام الآلة الحاسبة على اليسار لنقل الناتج فوراً
-                  </span>
+                  {invoiceData.oilProduced > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                        {((invoiceData.oilProduced * settings.return_percent) / 100).toFixed(2)} كغم
+                      </Badge>
+                      <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                        {(invoiceData.oilProduced * settings.cash_return_cost).toFixed(2)} {currency}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
 
                 <div className="relative">
@@ -538,7 +547,7 @@ export default function Invoices() {
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold">عدد التنكات والعبوات</Label>
                     <span className="text-xs text-muted-foreground font-mono">
-                      إجمالي التنكات: {getTotalContainerCount()} | {getTotalContainerCost()} ₪
+                      إجمالي التنكات: {getTotalContainerCount()} | {getTotalContainerCost().toFixed(2)} {currency}
                     </span>
                   </div>
 
@@ -550,7 +559,7 @@ export default function Invoices() {
                       >
                         <div className="overflow-hidden">
                           <p className="text-sm font-medium truncate">{ct.name}</p>
-                          <p className="text-xs text-muted-foreground">{ct.price} ₪ للواحدة</p>
+                          <p className="text-xs text-muted-foreground">{ct.price} {currency} للواحدة</p>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Button
@@ -617,7 +626,7 @@ export default function Invoices() {
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-bold text-foreground">طريقة دفع الأجرة</Label>
                     <span className="text-xs text-primary font-semibold">
-                      نسبة الرد: {settings.return_percent}% | سعر الكاش: {settings.cash_return_cost} ₪
+                      نسبة الرد: {settings.return_percent}% | سعر الكاش: {settings.cash_return_cost} {currency}
                     </span>
                   </div>
 
@@ -693,9 +702,9 @@ export default function Invoices() {
                             />
                           </div>
                           <div>
-                            <Label className="text-xs font-medium">المبلغ النقدي المحسوب:</Label>
+                            <Label className="text-xs font-medium">المبلغ النقدي المحسوب ({currency}):</Label>
                             <div className="h-9 mt-1 px-3 flex items-center bg-background border rounded-md font-mono font-bold text-primary">
-                              {selectedPayment.cashAmount.toFixed(2)} شيكل
+                              {selectedPayment.cashAmount.toFixed(2)} {currency}
                             </div>
                           </div>
                         </div>

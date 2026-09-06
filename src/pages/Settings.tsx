@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
+import { useCurrency, POPULAR_CURRENCIES } from "@/hooks/useCurrency";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,7 +60,14 @@ export default function Settings() {
   const { activeSeason, refetch: refetchSeasons } = useSeason();
   const { settings, loading } = useSettings();
   const { inventory, updateInventory } = useInventory();
+  const { currency, setCurrency, currencies } = useCurrency();
   const { toast } = useToast();
+
+  const [selectedCurrency, setSelectedCurrency] = useState(currency);
+
+  useEffect(() => {
+    setSelectedCurrency(currency);
+  }, [currency]);
 
   const [profileForm, setProfileForm] = useState({
     mill_name: "",
@@ -467,6 +475,7 @@ export default function Settings() {
 
   const saveSettings = async () => {
     if (!activeSeason) return;
+    setCurrency(selectedCurrency);
     const { error } = await supabase.from("seasons").update({
       return_percent: parseFloat(form.return_percent),
       oil_sell_price: parseFloat(form.oil_sell_price),
@@ -475,7 +484,7 @@ export default function Settings() {
     }).eq("id", activeSeason.id);
     if (!error) {
       await refetchSeasons();
-      toast({ title: "تم الحفظ", description: "تم حفظ إعدادات المعصرة بنجاح" });
+      toast({ title: "تم الحفظ", description: "تم حفظ إعدادات المعصرة والعملة بنجاح" });
     }
   };
 
@@ -688,27 +697,45 @@ export default function Settings() {
       <Card>
         <CardHeader>
           <CardTitle>إعدادات المعصرة والثوابت</CardTitle>
-          <CardDescription>الثوابت المستخدمة في حساب الفواتير وطرق الدفع</CardDescription>
+          <CardDescription>العملة والثوابت المستخدمة في حساب الفواتير وطرق الدفع والرد</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label>العملة المعتمدة في الحسابات</Label>
+              <Select value={selectedCurrency} onValueChange={(val) => {
+                setSelectedCurrency(val);
+                setCurrency(val);
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر العملة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currencies.map((c) => (
+                    <SelectItem key={c.symbol} value={c.symbol}>
+                      {c.name} ({c.symbol})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>نسبة الرد (%)</Label>
               <Input type="number" value={form.return_percent} onChange={(e) => setForm((p) => ({ ...p, return_percent: e.target.value }))} min="0" step="0.1" />
             </div>
             <div className="space-y-2">
-              <Label>تكلفة الرد نقداً (شيكل/كغم)</Label>
+              <Label>تكلفة الرد نقداً ({selectedCurrency}/كغم)</Label>
               <Input type="number" value={form.cash_return_cost} onChange={(e) => setForm((p) => ({ ...p, cash_return_cost: e.target.value }))} min="0" step="0.1" />
             </div>
           </div>
           <Separator />
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>سعر بيع الزيت (شيكل/كغم)</Label>
+              <Label>سعر بيع الزيت ({selectedCurrency}/كغم)</Label>
               <Input type="number" value={form.oil_sell_price} onChange={(e) => setForm((p) => ({ ...p, oil_sell_price: e.target.value }))} min="0" step="0.1" />
             </div>
             <div className="space-y-2">
-              <Label>سعر شراء الزيت (شيكل/كغم)</Label>
+              <Label>سعر شراء الزيت ({selectedCurrency}/كغم)</Label>
               <Input type="number" value={form.oil_buy_price} onChange={(e) => setForm((p) => ({ ...p, oil_buy_price: e.target.value }))} min="0" step="0.1" />
             </div>
           </div>
@@ -1000,7 +1027,7 @@ export default function Settings() {
             <div key={ct.id} className="flex items-center justify-between border rounded-lg p-3">
                   <div>
                     <span className="font-medium">{ct.name}</span>
-                    <span className="text-muted-foreground me-2"> — {ct.price} شيكل</span>
+                    <span className="text-muted-foreground me-2"> — {ct.price} {selectedCurrency}</span>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => setContainerDeleteTarget(ct)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -1023,7 +1050,7 @@ export default function Settings() {
                   <Input value={newContainerName} onChange={(e) => setNewContainerName(e.target.value)} placeholder="مثال: بلاستيك، حديد..." />
                 </div>
                 <div className="space-y-2">
-                  <Label>السعر (شيكل)</Label>
+                  <Label>السعر ({selectedCurrency})</Label>
                   <Input type="number" value={newContainerPrice} onChange={(e) => setNewContainerPrice(e.target.value)} min="0" step="0.1" />
                 </div>
                 <Button onClick={addContainerType} disabled={!newContainerName.trim() || !newContainerPrice} className="w-full">
