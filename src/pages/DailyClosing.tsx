@@ -17,8 +17,8 @@ import {
   AlertTriangle, 
   Printer, 
   History, 
-  ArrowDownRight, 
-  ArrowUpRight, 
+  ArrowDownLeft, 
+  ArrowUpLeft, 
   Scale, 
   RefreshCw,
   Clock
