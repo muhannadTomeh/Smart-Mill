@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { QuickInvoiceSheet } from "@/components/queue/QuickInvoiceSheet";
 import { printThermalQueueTicket } from "@/lib/thermalReceiptPrinter";
+import { saveDeletedInvoice } from "@/lib/deletedInvoices";
 import {
   QueueItem,
   parseEstimatedMinutes,
@@ -461,9 +462,35 @@ const Queue = () => {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const deletedName = deleteTarget.name;
+    const isWaitingForInvoice = deleteTarget.status === "completed";
+
+    // Save snapshot to deleted invoices (persisted for 24 hours)
+    saveDeletedInvoice({
+      id: deleteTarget.id,
+      name: deleteTarget.name,
+      phone: deleteTarget.phone || null,
+      position: Number(deleteTarget.position) || 0,
+      bags: Number(deleteTarget.bags) || 0,
+      notes: deleteTarget.notes || null,
+      status: deleteTarget.status || "completed",
+      season_id: activeSeason?.id || null,
+      user_id: targetUserId || null,
+      deleted_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      source: isWaitingForInvoice ? "queue_completed" : "invoice",
+    });
+
     setAllItems((prev) => prev.filter((i) => i.id !== deleteTarget.id));
     await supabase.from("queue").delete().eq("id", deleteTarget.id);
-    toast.success(`تمت إزالة ${deletedName} من الطابور`);
+
+    toast.success(
+      isWaitingForInvoice
+        ? `تم نقل فاتورة "${deletedName}" إلى الفواتير المحذوفة`
+        : `تم نقل دور "${deletedName}" إلى المحذوفات`,
+      {
+        description: "محفوظة لمدة 24 ساعة — يمكنك مراجعة تفاصيلها أو استرجاعها من صفحة الفواتير",
+      }
+    );
     setDeleteTarget(null);
     await fetchQueue();
   };

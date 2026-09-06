@@ -13,10 +13,13 @@ import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useNavigate } from "react-router-dom";
 import { 
   FileText, Search, Calendar, Eye, Printer, Filter, 
-  Receipt, Droplets, Wallet, Layers, ArrowUpDown
+  Receipt, Droplets, Wallet, Layers, ArrowUpDown, Trash2
 } from "lucide-react";
+import { DeletedInvoicesDialog } from "@/components/invoices/DeletedInvoicesDialog";
+import { useDeletedInvoices } from "@/hooks/useDeletedInvoices";
 
 interface InvoiceRecord {
   id: string;
@@ -37,6 +40,10 @@ export default function InvoicesHistory() {
   const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const { currency } = useCurrency();
+  const navigate = useNavigate();
+
+  const [deletedDialogOpen, setDeletedDialogOpen] = useState(false);
+  const { count: deletedCount } = useDeletedInvoices();
 
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +135,22 @@ export default function InvoicesHistory() {
             </p>
           </div>
         </div>
+
+        {/* Action: الفواتير المحذوفة */}
+        <Button
+          variant="outline"
+          onClick={() => setDeletedDialogOpen(true)}
+          className="gap-2 border-border hover:bg-destructive/5 hover:border-destructive/30 hover:text-destructive transition-colors relative"
+          title="عرض الفواتير والأدوار المحذوفة خلال الـ 24 ساعة الماضية"
+        >
+          <Trash2 className="h-4 w-4 text-muted-foreground" />
+          <span>الفواتير المحذوفة</span>
+          {deletedCount > 0 && (
+            <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs font-mono rounded-full">
+              {deletedCount}
+            </Badge>
+          )}
+        </Button>
       </div>
 
       {/* Summary Stats Cards */}
@@ -373,6 +396,21 @@ export default function InvoicesHistory() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Deleted Invoices Dialog (Saved for 24 hours) */}
+      <DeletedInvoicesDialog
+        open={deletedDialogOpen}
+        onOpenChange={setDeletedDialogOpen}
+        onSelectForInvoice={(item) => {
+          navigate("/invoices", {
+            state: {
+              customerName: item.name,
+              customerPhone: item.phone || "",
+              queueId: item.id,
+            },
+          });
+        }}
+      />
     </div>
   );
 }
