@@ -129,22 +129,17 @@ All colors MUST be HSL.
 
 
 @layer base {
-  :root, html, body {
-    font-variant-numeric: tabular-nums;
-    -webkit-font-feature-settings: "locl" 0;
-    font-feature-settings: "locl" 0;
+  :root, html, body, * {
+    font-variant-numeric: tabular-nums lining-nums;
+    -webkit-font-feature-settings: "locl" 0, "numr" 0;
+    font-feature-settings: "locl" 0, "numr" 0;
   }
 
-  * {
-    @apply border-border;
-    -webkit-font-feature-settings: "locl" 0;
-    font-feature-settings: "locl" 0;
-  }
-
-  input, textarea, select, button, .font-mono, [data-slot="input"] {
-    font-variant-numeric: tabular-nums;
-    -webkit-font-feature-settings: "locl" 0;
-    font-feature-settings: "locl" 0;
+  input, textarea, select, button, .font-mono, [data-slot="input"], [type="number"] {
+    font-family: 'Outfit', 'Figtree', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-variant-numeric: tabular-nums lining-nums !important;
+    -webkit-font-feature-settings: "locl" 0, "numr" 0 !important;
+    font-feature-settings: "locl" 0, "numr" 0 !important;
   }
 
   body {

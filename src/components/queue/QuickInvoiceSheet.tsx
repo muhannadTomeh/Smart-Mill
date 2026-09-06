@@ -289,9 +289,11 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
               value={oilProduced || ""}
               onChange={(e) => setOilProduced(parseFloat(e.target.value) || 0)}
               placeholder="0"
-              className="text-3xl h-16 text-center font-bold"
+              className="text-3xl h-16 text-center font-bold font-mono"
               min="0"
               step="0.1"
+              lang="en-US"
+              dir="ltr"
             />
             <div className="flex gap-2 justify-center">
               {[1, 5, 10].map((n) => (
@@ -431,7 +433,9 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                               const val = parseFloat(e.target.value);
                               setCustomMixedOil(isNaN(val) ? 0 : Math.max(0, val));
                             }}
-                            className="text-center font-bold text-base h-9 text-amber-700 dark:text-amber-400"
+                            className="text-center font-bold text-base h-9 text-amber-700 dark:text-amber-400 font-mono"
+                            lang="en-US"
+                            dir="ltr"
                           />
                           <Button
                             type="button"

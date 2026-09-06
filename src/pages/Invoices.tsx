@@ -533,6 +533,8 @@ export default function Invoices() {
                     min="0"
                     step="0.1"
                     className="text-xl font-bold font-mono h-12 pe-16"
+                    lang="en-US"
+                    dir="ltr"
                   />
                   <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-muted-foreground font-semibold text-sm">
                     كغم زيت

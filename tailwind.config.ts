@@ -19,8 +19,8 @@ export default {
 		},
 		extend: {
 			fontFamily: {
-				sans: ['Cairo', 'Figtree', 'system-ui', 'sans-serif'],
-				display: ['Cairo', 'Outfit', 'Figtree', 'system-ui', 'sans-serif'],
+				sans: ['Outfit', 'Figtree', 'Cairo', 'system-ui', 'sans-serif'],
+				display: ['Outfit', 'Figtree', 'Cairo', 'system-ui', 'sans-serif'],
 				mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
 			},
 			colors: {
