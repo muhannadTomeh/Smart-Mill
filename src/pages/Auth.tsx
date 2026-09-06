@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { ArrowRight, Home } from "lucide-react";
 import AuthBranding from "@/components/auth/AuthBranding";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
@@ -193,8 +194,32 @@ const Auth = () => {
       <AuthBranding />
 
       {/* Form Panel */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-10 bg-background">
-        <div className="w-full max-w-md">
+      <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 bg-background relative min-h-screen lg:min-h-0">
+        {/* Top Header with Back to Landing Page Button */}
+        <div className="w-full flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/")}
+            className="gap-2 rounded-xl border-border/80 bg-card hover:bg-muted text-foreground font-semibold px-3.5 py-2 shadow-xs transition-all hover:translate-x-[-2px]"
+          >
+            <ArrowRight className="h-4 w-4 text-primary" />
+            <span>الرجوع لصفحة الهبوط</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/")}
+            title="الرجوع لصفحة الهبوط"
+            className="rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted"
+          >
+            <Home className="h-4 w-4 text-primary" />
+          </Button>
+        </div>
+
+        {/* Form Container in Center */}
+        <div className="w-full max-w-md mx-auto my-auto py-6">
           {view === "login" && (
             <LoginForm loading={loading} onSubmit={handleLogin} onNavigate={setView} />
           )}
@@ -238,6 +263,17 @@ const Auth = () => {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Footer info */}
+        <div className="w-full text-center text-xs text-muted-foreground py-2">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="hover:text-primary transition-colors inline-flex items-center gap-1.5"
+          >
+            <span>المعصرة الذكية — نظام إدارة معاصر الزيتون المتطور</span>
+          </button>
         </div>
       </div>
     </div>
