@@ -120,7 +120,7 @@ export function formatTimeSafe(dateStr?: string | null): string {
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return "--:--";
-    return d.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return d.toLocaleTimeString("ar-u-nu-latn", { hour: "2-digit", minute: "2-digit", hour12: false });
   } catch {
     return "--:--";
   }

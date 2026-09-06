@@ -129,8 +129,22 @@ All colors MUST be HSL.
 
 
 @layer base {
+  :root, html, body {
+    font-variant-numeric: tabular-nums;
+    -webkit-font-feature-settings: "locl" 0;
+    font-feature-settings: "locl" 0;
+  }
+
   * {
     @apply border-border;
+    -webkit-font-feature-settings: "locl" 0;
+    font-feature-settings: "locl" 0;
+  }
+
+  input, textarea, select, button, .font-mono, [data-slot="input"] {
+    font-variant-numeric: tabular-nums;
+    -webkit-font-feature-settings: "locl" 0;
+    font-feature-settings: "locl" 0;
   }
 
   body {

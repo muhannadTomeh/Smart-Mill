@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
+import { formatDate } from "@/lib/formatters";
+import { useCurrency } from "@/hooks/useCurrency";
 import { 
   FileText, Search, Calendar, Eye, Printer, Filter, 
   Receipt, Droplets, Wallet, Layers, ArrowUpDown
@@ -34,6 +36,7 @@ export default function InvoicesHistory() {
   const { user, effectiveUserId, profile } = useAuth();
   const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
+  const { currency } = useCurrency();
 
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,9 +168,9 @@ export default function InvoicesHistory() {
             <p className="text-xs text-muted-foreground font-medium">النقد المحصل</p>
             <Wallet className="h-4 w-4 text-blue-600" />
           </div>
-          <p className="text-2xl font-bold mt-1 text-blue-600">
-            {totals.cashFees.toLocaleString("en-US", { maximumFractionDigits: 1 })} ₪
-          </p>
+          <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400">
+            {totals.cashFees.toLocaleString("en-US", { maximumFractionDigits: 1 })} {currency}
+          </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">شيكل بالصندوق</p>
         </Card>
       </div>
@@ -247,7 +250,7 @@ export default function InvoicesHistory() {
                       <TableCell className="text-right text-xs text-muted-foreground">
                         <div className="flex items-center gap-1.5 font-mono">
                           <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{new Date(inv.created_at).toLocaleDateString("ar-EG")}</span>
+                          <span>{formatDate(inv.created_at)}</span>
                         </div>
                       </TableCell>
 

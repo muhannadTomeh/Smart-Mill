@@ -16,6 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatDate, formatNumber } from "@/lib/formatters";
 
 interface Expense {
   id: string;
@@ -46,6 +48,7 @@ const Expenses = () => {
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
+  const { currency } = useCurrency();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,7 +225,7 @@ const Expenses = () => {
             </div>
             <div>
               <div className="text-2xl font-bold text-destructive font-mono">
-                {getTotalExpenses().toLocaleString()} ₪
+                {formatNumber(getTotalExpenses())} {currency}
               </div>
               <p className="text-xs text-muted-foreground">إجمالي المصاريف (حسب الفلترة الحالية)</p>
             </div>
@@ -447,9 +450,9 @@ const Expenses = () => {
                   {filteredExpenses.map((exp) => (
                     <TableRow key={exp.id} className="hover:bg-accent/30 transition-colors">
                       <TableCell className="text-right">
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
                           <Calendar className="h-3.5 w-3.5" />
-                          <span>{new Date(exp.created_at).toLocaleDateString("ar-SA")}</span>
+                          <span>{formatDate(exp.created_at)}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -458,7 +461,7 @@ const Expenses = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-bold text-sm text-destructive font-mono">
-                        {exp.amount.toLocaleString()} ₪
+                        {formatNumber(exp.amount)} {currency}
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground max-w-xs truncate">
                         {exp.description || "-"}

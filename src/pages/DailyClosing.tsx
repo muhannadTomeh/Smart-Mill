@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useRole } from "@/contexts/RoleContext";
 import { printThermalZReport, type ThermalZReportData } from "@/lib/thermalReceiptPrinter";
+import { formatDate, formatTime } from "@/lib/formatters";
 
 interface DailyClosingRecord {
   id: string;
@@ -339,9 +340,9 @@ export default function DailyClosing() {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             تحديث البيانات
           </Button>
-          <Badge variant="secondary" className="px-3 py-1.5 gap-1.5 text-xs">
+          <Badge variant="secondary" className="px-3 py-1.5 gap-1.5 text-xs font-mono">
             <Clock className="h-3.5 w-3.5 text-primary" />
-            <span>{new Date().toLocaleDateString("ar-EG")}</span>
+            <span>{formatDate(new Date())}</span>
           </Badge>
         </div>
       </div>
@@ -652,8 +653,8 @@ export default function DailyClosing() {
                   <TableBody>
                     {invoices.map((inv) => (
                       <TableRow key={inv.id}>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                          {new Date(inv.created_at).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" })}
+                        <TableCell className="text-right text-xs text-muted-foreground font-mono">
+                          {formatTime(inv.created_at)}
                         </TableCell>
                         <TableCell className="text-right font-medium">{inv.customer_name}</TableCell>
                         <TableCell className="text-right text-xs">
@@ -762,9 +763,8 @@ export default function DailyClosing() {
                       const diff = Number(rec.difference) || 0;
                       return (
                         <TableRow key={rec.id}>
-                          <TableCell className="text-right text-xs font-medium">
-                            {new Date(rec.closing_date).toLocaleDateString("ar-EG")} -{" "}
-                            {new Date(rec.closing_date).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" })}
+                          <TableCell className="text-right text-xs font-medium font-mono">
+                            {formatDate(rec.closing_date)} - {formatTime(rec.closing_date)}
                           </TableCell>
                           <TableCell className="text-right text-xs font-semibold">{rec.cashier_name}</TableCell>
                           <TableCell className="text-right text-xs">{rec.opening_cash} ₪</TableCell>

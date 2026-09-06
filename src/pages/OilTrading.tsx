@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
+import { formatDate } from "@/lib/formatters";
 
 interface Transaction {
   id: string;
@@ -198,7 +199,7 @@ const OilTrading = () => {
                     {transactions.map((tx) =>
                   <TableRow key={tx.id}>
                         <TableCell className="text-right">
-                          <div className="flex items-center gap-1"><Calendar className="h-4 w-4" />{new Date(tx.created_at).toLocaleDateString('ar-SA')}</div>
+                          <div className="flex items-center gap-1 font-mono text-xs"><Calendar className="h-4 w-4" />{formatDate(tx.created_at)}</div>
                         </TableCell>
                         <TableCell className="text-right">
                           <Badge variant={tx.type === 'buy' ? 'secondary' : 'default'}>

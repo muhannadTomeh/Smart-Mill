@@ -2,6 +2,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Receipt, Printer } from "lucide-react";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
+import { formatDate, formatDateTime } from "@/lib/formatters";
 
 export interface InvoicePreviewData {
   invoice_number?: string | number;
@@ -32,14 +33,18 @@ interface Props {
 
 export function InvoicePreview({ data, millName = "المعصرة الذكية" }: Props) {
   const dateStr = data.created_at
-    ? new Date(data.created_at).toLocaleString("ar-SA", {
+    ? formatDateTime(data.created_at, {
         year: "numeric",
         month: "long",
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
       })
-    : new Date().toLocaleDateString("ar-SA");
+    : formatDate(new Date(), {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+      });
 
   const netOilForCustomer = Math.max(0, data.oil_produced - Number(data.oil_amount || 0));
 

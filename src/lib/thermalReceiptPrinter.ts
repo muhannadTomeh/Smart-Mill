@@ -113,12 +113,12 @@ function printHtmlViaIframe(html: string) {
 
 export function printThermalReceipt(data: ThermalReceiptData, millName = "المعصرة الذكية") {
   const dateObj = data.created_at ? new Date(data.created_at) : new Date();
-  const formattedDate = dateObj.toLocaleDateString("ar-EG", {
+  const formattedDate = dateObj.toLocaleDateString("ar-u-nu-latn", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  const formattedTime = dateObj.toLocaleTimeString("ar-EG", {
+  const formattedTime = dateObj.toLocaleTimeString("ar-u-nu-latn", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
@@ -128,7 +128,7 @@ export function printThermalReceipt(data: ThermalReceiptData, millName = "الم
 
   const receiptHtml = `
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar-u-nu-latn" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <title>إيصال - ${millName}</title>
@@ -143,6 +143,9 @@ export function printThermalReceipt(data: ThermalReceiptData, millName = "الم
       padding: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, -apple-system, BlinkMacSystemFont;
       -webkit-print-color-adjust: exact;
+      -webkit-font-feature-settings: "locl" 0;
+      font-feature-settings: "locl" 0;
+      font-variant-numeric: tabular-nums;
       print-color-adjust: exact;
     }
     body {
@@ -325,12 +328,12 @@ export function printThermalReceipt(data: ThermalReceiptData, millName = "الم
 
 export function printThermalZReport(data: ThermalZReportData, millName = "المعصرة الذكية") {
   const dateObj = data.closing_date ? new Date(data.closing_date) : new Date();
-  const formattedDate = dateObj.toLocaleDateString("ar-EG", {
+  const formattedDate = dateObj.toLocaleDateString("ar-u-nu-latn", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  const formattedTime = dateObj.toLocaleTimeString("ar-EG", {
+  const formattedTime = dateObj.toLocaleTimeString("ar-u-nu-latn", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
@@ -345,7 +348,7 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
 
   const zReportHtml = `
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar-u-nu-latn" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <title>تقرير Z - إغلاق الصندوق - ${millName}</title>
@@ -360,6 +363,9 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
       padding: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, -apple-system, BlinkMacSystemFont;
       -webkit-print-color-adjust: exact;
+      -webkit-font-feature-settings: "locl" 0;
+      font-feature-settings: "locl" 0;
+      font-variant-numeric: tabular-nums;
       print-color-adjust: exact;
     }
     body {
@@ -623,12 +629,12 @@ export function formatEstimatedWaitTime(minutes: number): string {
 
 export function printThermalQueueTicket(data: ThermalQueueTicketData, millName = "معصرة الزيتون") {
   const dateObj = data.created_at ? new Date(data.created_at) : new Date();
-  const formattedDate = dateObj.toLocaleDateString("ar-EG", {
+  const formattedDate = dateObj.toLocaleDateString("ar-u-nu-latn", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  const formattedTime = dateObj.toLocaleTimeString("ar-EG", {
+  const formattedTime = dateObj.toLocaleTimeString("ar-u-nu-latn", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
@@ -643,7 +649,7 @@ export function printThermalQueueTicket(data: ThermalQueueTicketData, millName =
 
   const ticketHtml = `
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar-u-nu-latn" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <title>تذكرة دور #${data.turn_number} - ${data.customer_name}</title>
@@ -658,6 +664,9 @@ export function printThermalQueueTicket(data: ThermalQueueTicketData, millName =
       padding: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, -apple-system, BlinkMacSystemFont;
       -webkit-print-color-adjust: exact;
+      -webkit-font-feature-settings: "locl" 0;
+      font-feature-settings: "locl" 0;
+      font-variant-numeric: tabular-nums;
       print-color-adjust: exact;
     }
     body {

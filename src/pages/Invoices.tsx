@@ -37,6 +37,7 @@ import {
   type PaymentBreakdown 
 } from "@/lib/invoiceCalculations";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
+import { formatDate } from "@/lib/formatters";
 
 interface PaymentMethod extends PaymentBreakdown {
   total: string;
@@ -410,7 +411,7 @@ export default function Invoices() {
                   <span>بيانات الفاتورة والإنتاج</span>
                 </CardTitle>
                 <Badge variant="outline" className="font-mono text-xs">
-                  {new Date().toLocaleDateString("ar-SA")}
+                  {formatDate(new Date())}
                 </Badge>
               </div>
               <CardDescription>

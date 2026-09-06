@@ -20,6 +20,7 @@ import { useDailyInventory } from "@/hooks/useDailyInventory";
 import { useRole } from "@/contexts/RoleContext";
 import { Navigate } from "react-router-dom";
 import { InvoicePreview, InvoicePreviewData } from "@/components/invoices/InvoicePreview";
+import { formatDate } from "@/lib/formatters";
 import { toast } from "sonner";
 
 type MovementKind = "invoice" | "oil_buy" | "oil_sell" | "expense" | "worker_payment";
@@ -336,9 +337,9 @@ const Inventory = () => {
                   return (
                     <TableRow key={m.id}>
                       <TableCell className="text-right whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-xs">
+                        <div className="flex items-center gap-1 text-xs font-mono">
                           <Calendar className="h-3.5 w-3.5" />
-                          {new Date(m.date).toLocaleDateString("ar-SA")}
+                          {formatDate(m.date)}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

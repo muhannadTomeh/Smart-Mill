@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
+import { formatDate } from "@/lib/formatters";
 
 interface Worker {
   id: string;
@@ -478,7 +479,7 @@ const Workers = () => {
                               <TableCell className="text-right">{record.hours ? `${record.hours} ساعة` : `${record.shifts} شفت`}</TableCell>
                               <TableCell className="text-right">{record.amount} ش</TableCell>
                               <TableCell className="text-right text-muted-foreground text-xs">{record.notes || '—'}</TableCell>
-                              <TableCell className="text-right">{new Date(record.created_at).toLocaleDateString('ar-SA')}</TableCell>
+                              <TableCell className="text-right font-mono text-xs">{formatDate(record.created_at)}</TableCell>
                             </TableRow>
                           );
                         })}
@@ -580,7 +581,7 @@ const Workers = () => {
                                 <TableCell className="text-right font-medium">{w?.name || '—'}</TableCell>
                                 <TableCell className="text-right">{payment.amount} ش</TableCell>
                                 <TableCell className="text-right text-muted-foreground text-xs">{payment.notes || '—'}</TableCell>
-                                <TableCell className="text-right">{new Date(payment.created_at).toLocaleDateString('ar-SA')}</TableCell>
+                                <TableCell className="text-right font-mono text-xs">{formatDate(payment.created_at)}</TableCell>
                               </TableRow>
                             );
                           })}

@@ -69,7 +69,7 @@ export default function Seasons() {
 
   const formatDate = (d: string | null) => {
     if (!d) return "—";
-    return new Date(d).toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+    return new Date(d).toLocaleDateString("ar-u-nu-latn", { year: "numeric", month: "long" });
   };
 
   if (loading) {
@@ -267,7 +267,7 @@ function StatBox({ icon, value, label }: { icon: React.ReactNode; value: number;
   return (
     <div className="bg-muted/40 rounded-lg p-2.5 text-center">
       <div className="flex justify-center mb-1">{icon}</div>
-      <p className="text-base font-bold text-foreground">{value.toLocaleString()}</p>
+      <p className="text-base font-bold text-foreground font-mono">{value.toLocaleString("en-US")}</p>
       <p className="text-[11px] text-muted-foreground">{label}</p>
     </div>
   );

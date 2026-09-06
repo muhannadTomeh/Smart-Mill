@@ -76,7 +76,7 @@ export default function AdminIndex() {
     try {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return '---';
-      return d.toLocaleDateString("ar-EG");
+      return d.toLocaleDateString("ar-u-nu-latn");
     } catch {
       return '---';
     }

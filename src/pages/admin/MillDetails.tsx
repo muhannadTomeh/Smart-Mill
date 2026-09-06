@@ -93,7 +93,7 @@ export default function MillDetails() {
     try {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return '---';
-      return d.toLocaleDateString("ar-EG");
+      return d.toLocaleDateString("ar-u-nu-latn");
     } catch {
       return '---';
     }
@@ -104,7 +104,7 @@ export default function MillDetails() {
     try {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return '---';
-      return d.toLocaleString("ar-EG");
+      return d.toLocaleString("ar-u-nu-latn");
     } catch {
       return '---';
     }
