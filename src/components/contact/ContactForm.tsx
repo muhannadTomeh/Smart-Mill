@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, MessageSquare, Phone, Send } from "lucide-react";
+import { Mail, MessageSquare, Phone } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -12,7 +11,6 @@ const ContactForm = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   
@@ -50,23 +48,39 @@ const ContactForm = () => {
     fetchUserEmail();
   }, []);
 
+  const targetEmail = settings.email || "muhannad.tomeh22@gmail.com";
+  const emailSubject = subject.trim() || "رسالة من موقع المعصرة الذكية";
+  const bodyText = `السلام عليكم ورحمة الله وبركاته،\n\nالاسم: ${name.trim()}\nالبريد الإلكتروني: ${email.trim()}\n\nالموضوع:\n${subject.trim()}\n\n---\nأُرسلت من منصة المعصرة الذكية`;
+  
+  const encodedSubject = encodeURIComponent(emailSubject);
+  const encodedBody = encodeURIComponent(bodyText);
+  const mailtoLink = `mailto:${targetEmail}?subject=${encodedSubject}&body=${encodedBody}`;
+  const gmailWebLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(targetEmail)}&su=${encodedSubject}&body=${encodedBody}`;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    const mailtoLink = `mailto:${settings.email}?subject=${encodeURIComponent(
-      subject || "رسالة من موقع المعصرة الذكية"
-    )}&body=${encodeURIComponent(
-      `الاسم: ${name}\nالبريد الإلكتروني: ${email}\n\nالموضوع: ${subject}\n\nالوصف:\n${message}`
-    )}`;
-    
-    window.location.href = mailtoLink;
-    
-    toast({
-      title: "تم توجيهك لبريد التواصل",
-      description: "سيتم فتح تطبيق البريد الخاص بك لإرسال الرسالة.",
-    });
-    
+
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+
+    if (isMobile) {
+      // فتح تطبيق الإيميل في الهاتف
+      window.location.href = mailtoLink;
+      toast({
+        title: "جاري فتح تطبيق البريد",
+        description: "يتم الآن توجيهك إلى تطبيق البريد الإلكتروني في هاتفك.",
+      });
+    } else {
+      // فتح صفحة الإيميل (Gmail) في المتصفح للكمبيوتر
+      window.open(gmailWebLink, "_blank", "noopener,noreferrer");
+      toast({
+        title: "تم فتح صفحة البريد",
+        description: "تم توجيهك إلى صفحة البريد الإلكتروني لإرسال رسالتك.",
+      });
+    }
+
     setIsSubmitting(false);
   };
 
@@ -122,15 +136,15 @@ const ContactForm = () => {
 
           <Card className="border shadow-lg">
             <CardHeader>
-              <CardTitle>أرسل لنا رسالة</CardTitle>
+              <CardTitle>أرسل لنا رسالة عبر الإيميل</CardTitle>
               <CardDescription>
-                املأ النموذج التالي وسيقوم فريقنا بالرد عليك في أقرب وقت.
+                املأ النموذج وسيتم نقلك مباشرة إلى صفحة البريد أو فتح تطبيق البريد في هاتفك.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">الاسم الكريم</Label>
+                  <Label htmlFor="name">الاسم</Label>
                   <Input 
                     id="name" 
                     required 
@@ -140,41 +154,39 @@ const ContactForm = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">البريد الإلكتروني</Label>
+                  <Label htmlFor="email">الايميل</Label>
                   <Input 
                     id="email" 
                     type="email" 
                     required 
-                    placeholder="your@email.com" 
+                    placeholder="name@example.com" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="subject">الموضوع / نوع المشكلة</Label>
+                  <Label htmlFor="subject">الموضوع</Label>
                   <Input 
                     id="subject" 
                     required 
-                    placeholder="مثال: استفسار عن الاشتراك، مشكلة في الفواتير..." 
+                    placeholder="اكتب موضوع رسالتك أو استفسارك..." 
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="message">وصف المشكلة بالتفصيل</Label>
-                  <Textarea 
-                    id="message" 
-                    required 
-                    className="min-h-[120px]" 
-                    placeholder="يرجى كتابة تفاصيل ما تواجهه..." 
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                  />
-                </div>
                 <Button type="submit" className="w-full gap-2" disabled={isSubmitting}>
-                  <Send className="h-4 w-4" />
-                  {isSubmitting ? "جاري الإرسال..." : "إرسال الرسالة"}
+                  <Mail className="h-4 w-4" />
+                  {isSubmitting ? "جاري التحويل..." : "إرسال لنا رسالة عبر الإيميل"}
                 </Button>
+
+                <div className="pt-2 text-center">
+                  <a
+                    href={mailtoLink}
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors underline"
+                  >
+                    أو اضغط هنا لفتح تطبيق البريد الافتراضي في جهازك
+                  </a>
+                </div>
               </form>
             </CardContent>
           </Card>
