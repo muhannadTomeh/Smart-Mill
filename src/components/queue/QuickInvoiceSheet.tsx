@@ -3,7 +3,7 @@ import { calculatePaymentOptions, calculateCustomMixedFromOil, calculateCustomMi
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, toLatinDigits } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -42,6 +42,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const { currency } = useCurrency();
 
   const [oilProduced, setOilProduced] = useState<number>(0);
+  const [oilProducedStr, setOilProducedStr] = useState<string>("");
   const [containerTypes, setContainerTypes] = useState<ContainerType[]>([]);
   const [containerCounts, setContainerCounts] = useState<Record<string, number>>({});
   const [paymentType, setPaymentType] = useState<PaymentType | null>(null);
@@ -54,6 +55,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       fetchContainerTypes();
       // reset
       setOilProduced(0);
+      setOilProducedStr("");
       setContainerCounts({});
       setPaymentType(null);
       setCustomMixedOil(null);
@@ -285,24 +287,25 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
               )}
             </div>
             <Input
-              type="number"
-              value={oilProduced || ""}
-              onChange={(e) => setOilProduced(parseFloat(e.target.value) || 0)}
-              placeholder="0"
+              type="text"
+              inputMode="decimal"
+              value={oilProducedStr !== "" ? oilProducedStr : (oilProduced ? String(oilProduced) : "")}
+              onChange={(e) => {
+                let clean = toLatinDigits(e.target.value).replace(/,/g, ".");
+                const parts = clean.split(".");
+                if (parts.length > 2) {
+                  clean = parts[0] + "." + parts.slice(1).join("");
+                }
+                clean = clean.replace(/[^0-9.]/g, "");
+                setOilProducedStr(clean);
+                const val = parseFloat(clean);
+                setOilProduced(isNaN(val) ? 0 : val);
+              }}
+              placeholder="0.0"
               className="text-3xl h-16 text-center font-bold font-mono"
-              min="0"
-              step="0.1"
               lang="en-US"
               dir="ltr"
             />
-            <div className="flex gap-2 justify-center">
-              {[1, 5, 10].map((n) => (
-                <Button key={n} variant="secondary" size="sm" onClick={() => addOil(n)} className="flex-1">
-                  +{n}
-                </Button>
-              ))}
-              <Button variant="outline" size="sm" onClick={() => setOilProduced(0)}>تصفير</Button>
-            </div>
           </div>
 
           {/* Step 2: Containers */}

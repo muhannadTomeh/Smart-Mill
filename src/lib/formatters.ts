@@ -64,3 +64,10 @@ export function formatNumber(
   }
   return n.toLocaleString("en-US");
 }
+
+export function toLatinDigits(val: string | number | null | undefined): string {
+  if (val === null || val === undefined) return "";
+  return String(val)
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
+}

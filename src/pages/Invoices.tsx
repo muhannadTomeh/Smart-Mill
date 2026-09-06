@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, toLatinDigits } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +77,19 @@ export default function Invoices() {
     oilProduced: 0,
     notes: "",
   });
+  const [oilProducedStr, setOilProducedStr] = useState<string>("");
+
+  const handleOilProducedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let clean = toLatinDigits(e.target.value).replace(/,/g, ".");
+    const parts = clean.split(".");
+    if (parts.length > 2) {
+      clean = parts[0] + "." + parts.slice(1).join("");
+    }
+    clean = clean.replace(/[^0-9.]/g, "");
+    setOilProducedStr(clean);
+    const val = parseFloat(clean);
+    setInvoiceData(p => ({ ...p, oilProduced: isNaN(val) ? 0 : val }));
+  };
   const [containerCounts, setContainerCounts] = useState<Record<string, number>>({});
   const [containerTypes, setContainerTypes] = useState<ContainerType[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -341,6 +354,7 @@ export default function Invoices() {
 
       // Reset form
       setInvoiceData({ customerName: "", customerPhone: "", oilProduced: 0, notes: "" });
+      setOilProducedStr("");
       const resetCounts: Record<string, number> = {};
       containerTypes.forEach(ct => { resetCounts[ct.id] = 0; });
       setContainerCounts(resetCounts);
@@ -523,49 +537,18 @@ export default function Invoices() {
                 <div className="relative">
                   <Input
                     id="oilProduced"
-                    type="number"
-                    value={invoiceData.oilProduced || ""}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      setInvoiceData(p => ({ ...p, oilProduced: isNaN(val) ? 0 : val }));
-                    }}
+                    type="text"
+                    inputMode="decimal"
+                    value={oilProducedStr !== "" ? oilProducedStr : (invoiceData.oilProduced ? String(invoiceData.oilProduced) : "")}
+                    onChange={handleOilProducedChange}
                     placeholder="0.0"
-                    min="0"
-                    step="0.1"
-                    className="text-xl font-bold font-mono h-12 pe-16"
+                    className="text-2xl font-black font-mono h-14 ps-24 pe-4 text-right"
                     lang="en-US"
                     dir="ltr"
                   />
-                  <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-muted-foreground font-semibold text-sm">
+                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-muted-foreground font-bold text-sm">
                     كغم زيت
                   </div>
-                </div>
-
-                {/* Quick Add Buttons */}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {[10, 20, 50, 100].map((inc) => (
-                    <Button
-                      key={inc}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs font-mono"
-                      onClick={() => setInvoiceData(p => ({ ...p, oilProduced: Math.round(((p.oilProduced || 0) + inc) * 10) / 10 }))}
-                    >
-                      +{inc} كغم
-                    </Button>
-                  ))}
-                  {invoiceData.oilProduced > 0 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs text-destructive hover:bg-destructive/10"
-                      onClick={() => setInvoiceData(p => ({ ...p, oilProduced: 0 }))}
-                    >
-                      تصفير
-                    </Button>
-                  )}
                 </div>
               </div>
 

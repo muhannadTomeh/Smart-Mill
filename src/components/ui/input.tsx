@@ -2,8 +2,9 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-const toLatinDigits = (val: string) => {
-  return val
+export const toLatinDigits = (val: string | number | null | undefined): string => {
+  if (val === null || val === undefined) return "";
+  return String(val)
     .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
     .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
 };
@@ -16,6 +17,13 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
       props.inputMode === "numeric" ||
       props.inputMode === "decimal";
 
+    // Use type="text" with inputMode="decimal" when type="number" is passed
+    // to prevent Chromium from natively formatting numbers into Eastern Arabic / Hindi numerals (١٢٣)
+    // based on the host Windows/OS regional locale.
+    const resolvedType = type === "number" ? "text" : type;
+    const resolvedInputMode =
+      props.inputMode || (type === "number" ? "decimal" : undefined);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isNumeric && e.target.value) {
         const normalized = toLatinDigits(e.target.value);
@@ -26,9 +34,17 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
       onChange?.(e);
     };
 
+    // Ensure value passed in string form is normalized to Latin digits
+    const rawValue = props.value;
+    const normalizedValue =
+      typeof rawValue === "string" && isNumeric
+        ? toLatinDigits(rawValue)
+        : rawValue;
+
     return (
       <input
-        type={type}
+        type={resolvedType}
+        inputMode={resolvedInputMode}
         lang={lang || (isNumeric ? "en-US" : undefined)}
         dir={dir || (isNumeric ? "ltr" : undefined)}
         className={cn(
@@ -39,6 +55,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
         onChange={handleChange}
         ref={ref}
         {...props}
+        value={normalizedValue}
       />
     )
   }
