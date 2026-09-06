@@ -431,18 +431,7 @@ export default function Invoices() {
                   <span>بيانات الفاتورة والإنتاج</span>
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
-                    title="فتح تطبيق الآلة الحاسبة في جهازك"
-                  >
-                    <a href="calculator:">
-                      <CalcIcon className="h-3.5 w-3.5 text-primary" />
-                      <span>آلة حاسبة</span>
-                    </a>
-                  </Button>
+                
                   <Badge variant="outline" className="font-mono text-xs">
                     {formatDate(new Date())}
                   </Badge>
