@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LogIn, User, Lock, Sprout, ArrowRight } from "lucide-react";
+import { LogIn, User, Lock, Sprout } from "lucide-react";
 import type { AuthView } from "@/pages/Auth";
 
 interface LoginFormProps {
@@ -14,7 +13,6 @@ interface LoginFormProps {
 }
 
 const LoginForm = ({ loading, onSubmit, onNavigate }: LoginFormProps) => {
-  const navigate = useNavigate();
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -94,19 +92,6 @@ const LoginForm = ({ loading, onSubmit, onNavigate }: LoginFormProps) => {
           <LogIn className="h-4 w-4 me-2" />
           {loading ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول"}
         </Button>
-
-        <div className="pt-2 text-center">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/")}
-            className="text-xs text-muted-foreground hover:text-foreground gap-1.5 font-medium"
-          >
-            <ArrowRight className="h-3.5 w-3.5 text-primary" />
-            <span>الرجوع إلى صفحة الهبوط الرئيسية</span>
-          </Button>
-        </div>
       </form>
     </div>
   );

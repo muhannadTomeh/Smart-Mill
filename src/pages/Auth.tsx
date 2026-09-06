@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Home } from "lucide-react";
+import { Home } from "lucide-react";
 import AuthBranding from "@/components/auth/AuthBranding";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
@@ -170,9 +170,9 @@ const Auth = () => {
         owner_id: employeeOwnerId,
         input_pin: employeePin
       });
-      
+
       if (error) throw error;
-      
+
       if (data) {
         localStorage.setItem('employee_owner_id', employeeOwnerId);
         toast({ title: "تم تسجيل الدخول", description: "مرحباً بك في وضع الموظف" });
@@ -195,26 +195,17 @@ const Auth = () => {
 
       {/* Form Panel */}
       <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 bg-background relative min-h-screen lg:min-h-0">
-        {/* Top Header with Back to Landing Page Button */}
-        <div className="w-full flex items-center justify-between">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate("/")}
-            className="gap-2 rounded-xl border-border/80 bg-card hover:bg-muted text-foreground font-semibold px-3.5 py-2 shadow-xs transition-all hover:translate-x-[-2px]"
-          >
-            <ArrowRight className="h-4 w-4 text-primary" />
-            <span>الرجوع لصفحة الهبوط</span>
-          </Button>
-
+        {/* Top Header with Home Icon Button */}
+        <div className="w-full flex items-center justify-start">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate("/")}
-            title="الرجوع لصفحة الهبوط"
+            title="الرئيسية"
+            aria-label="الرئيسية"
             className="rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted"
           >
-            <Home className="h-4 w-4 text-primary" />
+            <Home className="h-5 w-5 text-primary" />
           </Button>
         </div>
 
@@ -246,16 +237,16 @@ const Auth = () => {
                     autoFocus
                   />
                 </div>
-                <Button 
-                  onClick={handleEmployeeLogin} 
-                  disabled={isVerifyingEmployee || employeePin.length < 4} 
+                <Button
+                  onClick={handleEmployeeLogin}
+                  disabled={isVerifyingEmployee || employeePin.length < 4}
                   className="w-full h-12 text-lg"
                 >
                   {isVerifyingEmployee ? "جارٍ التحقق..." : "تسجيل الدخول"}
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  onClick={() => setView("login")} 
+                <Button
+                  variant="ghost"
+                  onClick={() => setView("login")}
                   className="w-full"
                 >
                   الرجوع لتسجيل دخول المالك
