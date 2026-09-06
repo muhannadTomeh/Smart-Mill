@@ -547,9 +547,20 @@ export default function Invoices() {
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold">عدد التنكات والعبوات</Label>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      إجمالي التنكات: {getTotalContainerCount()} | {getTotalContainerCost().toFixed(2)} {currency}
-                    </span>
+                    {getTotalContainerCost() > 0 ? (
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                          {(getTotalContainerCost() / (settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 25))).toFixed(2)} كغم
+                        </Badge>
+                        <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                          {getTotalContainerCost().toFixed(2)} {currency}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground font-mono">
+                        إجمالي التنكات: {getTotalContainerCount()}
+                      </span>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

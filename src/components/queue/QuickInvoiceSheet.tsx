@@ -79,6 +79,11 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
     return containerTypes.reduce((sum, ct) => sum + (containerCounts[ct.id] || 0) * ct.price, 0);
   }, [containerTypes, containerCounts]);
 
+  const containerOilPrice = settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 25);
+  const containerOilEquiv = useMemo(() => {
+    return totalContainerCost > 0 && containerOilPrice > 0 ? totalContainerCost / containerOilPrice : 0;
+  }, [totalContainerCost, containerOilPrice]);
+
   const totalContainerCount = useMemo(
     () => Object.values(containerCounts).reduce((s, v) => s + v, 0),
     [containerCounts]
@@ -304,9 +309,14 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">2</span>
               <Label className="text-lg font-semibold">التنكات</Label>
               {totalContainerCost > 0 && (
-                <Badge variant="secondary" className="ms-auto font-mono text-xs font-semibold px-2.5 py-0.5">
-                  {totalContainerCost.toFixed(2)} {currency}
-                </Badge>
+                <div className="ms-auto flex items-center gap-1.5 flex-wrap justify-end">
+                  <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                    {containerOilEquiv.toFixed(2)} كغم
+                  </Badge>
+                  <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                    {totalContainerCost.toFixed(2)} {currency}
+                  </Badge>
+                </div>
               )}
             </div>
             {containerTypes.length === 0 ? (
