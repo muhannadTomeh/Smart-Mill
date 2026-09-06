@@ -28,6 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useRole } from "@/contexts/RoleContext";
+import { useCurrency } from "@/hooks/useCurrency";
 import { printThermalZReport, type ThermalZReportData } from "@/lib/thermalReceiptPrinter";
 import { formatDate, formatTime } from "@/lib/formatters";
 
@@ -56,6 +57,7 @@ export default function DailyClosing() {
   const { user, effectiveUserId, profile } = useAuth();
   const { activeSeason } = useSeason();
   const { isEmployee } = useRole();
+  const { currency } = useCurrency();
   const targetUserId = effectiveUserId || user?.id;
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
   const cashierName = profile?.display_name || user?.email?.split("@")[0] || "مسؤول الصندوق";
@@ -286,7 +288,7 @@ export default function DailyClosing() {
         actual_cash: actualCash,
         difference: difference || 0,
         notes: record.notes,
-      }, millName);
+      }, millName, currency);
     }
 
     toast.success(shouldPrint ? "تم إغلاق الصندوق وطباعة تقرير Z بنجاح" : "تم اعتماد إغلاق الصندوق بنجاح");
@@ -313,7 +315,7 @@ export default function DailyClosing() {
       actual_cash: record.actual_cash,
       difference: record.difference,
       notes: record.notes,
-    }, millName);
+    }, millName, currency);
     toast.success("تم إرسال أمر إعادة طباعة تقرير Z");
   };
 
@@ -323,7 +325,7 @@ export default function DailyClosing() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <Calculator className="h-6 w-6" />
             </div>
             <div>
@@ -347,90 +349,93 @@ export default function DailyClosing() {
         </div>
       </div>
 
-      <Tabs defaultValue="reconcile" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="reconcile" className="gap-2">
-            <Scale className="h-4 w-4" />
-            مطابقة الصندوق
-          </TabsTrigger>
-          <TabsTrigger value="breakdown" className="gap-2">
-            <Receipt className="h-4 w-4" />
-            حركة اليوم ({invoicesCount + expenses.length + oilSales.length + oilPurchases.length + workerPayments.length})
-          </TabsTrigger>
-          <TabsTrigger value="history" className="gap-2">
-            <History className="h-4 w-4" />
-            سجل الإغلاقات ({closingsHistory.length})
-          </TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="reconcile" className="w-full" dir="rtl">
+        <div className="flex justify-start">
+          <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsTrigger value="reconcile" className="gap-2">
+              <Scale className="h-4 w-4" />
+              <span>مطابقة الصندوق</span>
+            </TabsTrigger>
+            <TabsTrigger value="breakdown" className="gap-2">
+              <Receipt className="h-4 w-4" />
+              <span>حركة اليوم ({invoicesCount + expenses.length + oilSales.length + oilPurchases.length + workerPayments.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" className="gap-2">
+              <History className="h-4 w-4" />
+              <span>سجل الإغلاقات ({closingsHistory.length})</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* TAB 1: Main Reconciliation Tab */}
-        <TabsContent value="reconcile" className="space-y-6 mt-4">
+        <TabsContent value="reconcile" className="space-y-6 mt-4" dir="rtl">
           {/* 3 Quick KPI Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4" dir="rtl">
             {/* Inflows */}
-            <Card className="border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20">
+            <Card className="border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 text-right">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">إجمالي المقبوضات النقدية (+)</span>
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center">
-                    <ArrowDownRight className="h-5 w-5" />
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0">
+                    <ArrowDownLeft className="h-5 w-5" />
                   </div>
                 </div>
                 <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-2">
-                  +{totalInflows.toFixed(2)} ₪
+                  <span className="font-mono" dir="ltr">+{totalInflows.toFixed(2)} {currency}</span>
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-emerald-500/10">
-                  <span>فواتير كاش: {invoicesCash.toFixed(2)} ₪</span>
-                  <span>مبيعات زيت: {oilSalesCash.toFixed(2)} ₪</span>
+                  <span>فواتير كاش: <span className="font-mono font-medium">{invoicesCash.toFixed(2)} {currency}</span></span>
+                  <span>مبيعات زيت: <span className="font-mono font-medium">{oilSalesCash.toFixed(2)} {currency}</span></span>
                 </div>
               </CardContent>
             </Card>
 
             {/* Outflows */}
-            <Card className="border-rose-500/20 bg-rose-50/40 dark:bg-rose-950/20">
+            <Card className="border-rose-500/20 bg-rose-50/40 dark:bg-rose-950/20 text-right">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-rose-800 dark:text-rose-300">إجمالي المدفوعات والمصاريف (-)</span>
-                  <div className="w-8 h-8 rounded-full bg-rose-500/15 text-rose-600 flex items-center justify-center">
-                    <ArrowUpRight className="h-5 w-5" />
+                  <div className="w-8 h-8 rounded-full bg-rose-500/15 text-rose-600 flex items-center justify-center shrink-0">
+                    <ArrowUpLeft className="h-5 w-5" />
                   </div>
                 </div>
                 <div className="text-2xl font-black text-rose-700 dark:text-rose-400 mt-2">
-                  -{totalOutflows.toFixed(2)} ₪
+                  <span className="font-mono" dir="ltr">-{totalOutflows.toFixed(2)} {currency}</span>
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-rose-500/10">
-                  <span>مصاريف: {expensesCash.toFixed(2)} ₪</span>
-                  <span>مشتريات/عمال: {(oilPurchasesCash + workerPaymentsCash).toFixed(2)} ₪</span>
+                  <span>مصاريف: <span className="font-mono font-medium">{expensesCash.toFixed(2)} {currency}</span></span>
+                  <span>مشتريات/عمال: <span className="font-mono font-medium">{(oilPurchasesCash + workerPaymentsCash).toFixed(2)} {currency}</span></span>
                 </div>
               </CardContent>
             </Card>
 
             {/* Net Expected */}
-            <Card className="border-primary/20 bg-primary/5">
+            <Card className="border-primary/20 bg-primary/5 text-right">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-foreground">النقد المفترض بالدرج</span>
-                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <Wallet className="h-5 w-5" />
                   </div>
                 </div>
                 <div className="text-2xl font-black text-primary mt-2">
-                  {expectedCash.toFixed(2)} ₪
+                  <span className="font-mono" dir="ltr">{expectedCash.toFixed(2)} {currency}</span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-2 pt-2 border-t border-primary/10">
-                  <span>عهد البداية: {openingCash.toFixed(2)} ₪ | صافي الحركة: {netMovement >= 0 ? `+${netMovement.toFixed(2)}` : netMovement.toFixed(2)} ₪</span>
+                  <span>عهدة البداية: <span className="font-mono font-medium">{openingCash.toFixed(2)} {currency}</span> | صافي الحركة: <span className="font-mono font-medium">{netMovement >= 0 ? `+${netMovement.toFixed(2)}` : netMovement.toFixed(2)} {currency}</span></span>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Reconciliation Form */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <Card className="lg:col-span-7">
-              <CardHeader>
+          {/* Reconciliation Form and Shift Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" dir="rtl">
+            {/* Reconciliation Form on the Right */}
+            <Card className="lg:col-span-7 text-right">
+              <CardHeader className="text-right">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Scale className="h-5 w-5 text-primary" />
-                  حاسبة مطابقة الدرج والصندوق
+                  <span>حاسبة مطابقة الدرج والصندوق</span>
                 </CardTitle>
                 <CardDescription>
                   أدخل العهدة الافتتاحية والمبلغ المعدود يدوياً لحساب الفارق
@@ -443,27 +448,31 @@ export default function DailyClosing() {
                     <Label className="font-semibold text-sm">الرصيد الافتتاحي للصندوق (عهدة البداية)</Label>
                     <span className="text-xs text-muted-foreground">الرصيد المنقول من بداية الوردية</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <Input
                       type="number"
                       value={openingCash || ""}
                       onChange={(e) => setOpeningCash(parseFloat(e.target.value) || 0)}
                       placeholder="0"
-                      className="text-lg font-bold text-center h-12"
+                      className="text-lg font-bold text-center h-12 flex-1 font-mono"
                       min="0"
+                      dir="ltr"
+                      lang="en-US"
                     />
-                    {[0, 100, 200, 500].map((val) => (
-                      <Button
-                        key={val}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setOpeningCash(val)}
-                        className="text-xs font-semibold px-2.5"
-                      >
-                        {val === 0 ? "صفر" : `${val} ₪`}
-                      </Button>
-                    ))}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {[0, 100, 200, 500].map((val) => (
+                        <Button
+                          key={val}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setOpeningCash(val)}
+                          className="text-xs font-semibold px-2.5 h-12"
+                        >
+                          {val === 0 ? "صفر" : `${val} ${currency}`}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -472,7 +481,7 @@ export default function DailyClosing() {
                   <div className="flex justify-between items-center">
                     <Label className="text-base font-bold text-foreground flex items-center gap-1.5">
                       <Wallet className="h-4 w-4 text-primary" />
-                      النقد الفعلي المعدود في الدرج الآن (₪)
+                      <span>النقد الفعلي المعدود في الدرج الآن ({currency})</span>
                     </Label>
                     <span className="text-xs font-semibold text-primary">المبلغ الفعلي الممسوك باليد</span>
                   </div>
@@ -481,9 +490,11 @@ export default function DailyClosing() {
                     value={actualCashStr}
                     onChange={(e) => setActualCashStr(e.target.value)}
                     placeholder="أدخل المبلغ بعد عد النقود..."
-                    className="text-3xl font-black text-center h-16 border-2 border-primary/40 focus:border-primary"
+                    className="text-3xl font-black text-center h-16 border-2 border-primary/40 focus:border-primary font-mono"
                     min="0"
                     step="0.5"
+                    dir="ltr"
+                    lang="en-US"
                   />
                 </div>
 
@@ -503,7 +514,7 @@ export default function DailyClosing() {
                         {Math.abs(difference) < 0.01 ? (
                           <>
                             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                            <span>الصندوق متطابق تماماً بنجاح (0 ₪)</span>
+                            <span>الصندوق متطابق تماماً بنجاح</span>
                           </>
                         ) : difference > 0 ? (
                           <>
@@ -517,41 +528,32 @@ export default function DailyClosing() {
                           </>
                         )}
                       </div>
-                      <div className="text-xl font-black">
+                      <div className="text-xl font-black font-mono" dir="ltr">
                         {Math.abs(difference) < 0.01 
                           ? "متوازن ✅" 
                           : difference > 0 
-                          ? `+${difference.toFixed(2)} ₪` 
-                          : `${difference.toFixed(2)} ₪`}
+                          ? `+${difference.toFixed(2)} ${currency}` 
+                          : `${difference.toFixed(2)} ${currency}`}
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Notes Input */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 text-right">
                   <Label className="text-xs text-muted-foreground">ملاحظات الإغلاق (اختياري)</Label>
                   <Textarea
                     placeholder="أي ملاحظات حول الوردية، سبب العجز أو الفائض، اسم مستلم الوردية..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={2}
-                    className="resize-none text-sm"
+                    className="resize-none text-sm text-right"
+                    dir="rtl"
                   />
                 </div>
 
-                {/* Action Buttons */}
+                {/* Action Buttons: Primary on Right, Secondary on Left in RTL */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="sm:w-auto h-12 text-base font-semibold"
-                    disabled={actualCash === null || closing}
-                    onClick={() => handleCloseRegister(false)}
-                  >
-                    <CheckCircle2 className="h-5 w-5 me-2 text-primary" />
-                    اعتماد الإغلاق فقط
-                  </Button>
                   <Button
                     size="lg"
                     className="flex-1 h-12 text-base font-bold shadow-md hover:shadow-lg transition-all gap-2"
@@ -559,18 +561,28 @@ export default function DailyClosing() {
                     onClick={() => handleCloseRegister(true)}
                   >
                     <Printer className="h-5 w-5" />
-                    اعتماد وطباعة تقرير Z (80mm)
+                    <span>اعتماد وطباعة تقرير Z (80mm)</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="sm:w-auto h-12 text-base font-semibold gap-2"
+                    disabled={actualCash === null || closing}
+                    onClick={() => handleCloseRegister(false)}
+                  >
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span>اعتماد الإغلاق فقط</span>
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Shift Breakdown Card */}
-            <Card className="lg:col-span-5">
-              <CardHeader>
+            {/* Shift Breakdown Card on the Left */}
+            <Card className="lg:col-span-5 text-right">
+              <CardHeader className="text-right">
                 <CardTitle className="text-base font-bold flex items-center gap-2">
                   <Receipt className="h-4 w-4 text-primary" />
-                  ملخص بنود الصندوق اليومي
+                  <span>ملخص بنود الصندوق اليومي</span>
                 </CardTitle>
                 <CardDescription>تفصيل حركة المقبوضات والمدفوعات</CardDescription>
               </CardHeader>
@@ -578,51 +590,51 @@ export default function DailyClosing() {
                 <div className="space-y-2.5 text-sm">
                   {/* Opening */}
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-muted-foreground">الرصيد الافتتاحي (العهدة):</span>
-                    <span className="font-bold">{openingCash.toFixed(2)} ₪</span>
+                    <span className="text-muted-foreground">الرصيد الافتتاحي (العهدة)</span>
+                    <span className="font-bold font-mono" dir="ltr">{openingCash.toFixed(2)} {currency}</span>
                   </div>
 
                   <div className="border-t border-dashed my-2" />
 
                   {/* Inflows */}
                   <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
-                    <span>مقبوضات الفواتير ({invoicesCount} فاتورة):</span>
-                    <span className="font-bold">+{invoicesCash.toFixed(2)} ₪</span>
+                    <span>مقبوضات الفواتير ({invoicesCount} فاتورة)</span>
+                    <span className="font-bold font-mono" dir="ltr">+{invoicesCash.toFixed(2)} {currency}</span>
                   </div>
                   <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
-                    <span>مبيعات الزيت النقدية:</span>
-                    <span className="font-bold">+{oilSalesCash.toFixed(2)} ₪</span>
+                    <span>مبيعات الزيت النقدية</span>
+                    <span className="font-bold font-mono" dir="ltr">+{oilSalesCash.toFixed(2)} {currency}</span>
                   </div>
                   <div className="flex justify-between items-center font-bold text-emerald-800 dark:text-emerald-300 pt-1">
-                    <span>إجمالي المقبوضات:</span>
-                    <span>+{totalInflows.toFixed(2)} ₪</span>
+                    <span>إجمالي المقبوضات</span>
+                    <span className="font-mono font-bold" dir="ltr">+{totalInflows.toFixed(2)} {currency}</span>
                   </div>
 
                   <div className="border-t border-dashed my-2" />
 
                   {/* Outflows */}
                   <div className="flex justify-between items-center text-rose-700 dark:text-rose-400">
-                    <span>المصاريف التشغيلية:</span>
-                    <span className="font-bold">-{expensesCash.toFixed(2)} ₪</span>
+                    <span>المصاريف التشغيلية</span>
+                    <span className="font-bold font-mono" dir="ltr">-{expensesCash.toFixed(2)} {currency}</span>
                   </div>
                   <div className="flex justify-between items-center text-rose-700 dark:text-rose-400">
-                    <span>مشتريات الزيت النقدية:</span>
-                    <span className="font-bold">-{oilPurchasesCash.toFixed(2)} ₪</span>
+                    <span>مشتريات الزيت النقدية</span>
+                    <span className="font-bold font-mono" dir="ltr">-{oilPurchasesCash.toFixed(2)} {currency}</span>
                   </div>
                   <div className="flex justify-between items-center text-rose-700 dark:text-rose-400">
-                    <span>دفعات وسلف العمال:</span>
-                    <span className="font-bold">-{workerPaymentsCash.toFixed(2)} ₪</span>
+                    <span>دفعات وسلف العمال</span>
+                    <span className="font-bold font-mono" dir="ltr">-{workerPaymentsCash.toFixed(2)} {currency}</span>
                   </div>
                   <div className="flex justify-between items-center font-bold text-rose-800 dark:text-rose-300 pt-1">
-                    <span>إجمالي المدفوعات:</span>
-                    <span>-{totalOutflows.toFixed(2)} ₪</span>
+                    <span>إجمالي المدفوعات</span>
+                    <span className="font-mono font-bold" dir="ltr">-{totalOutflows.toFixed(2)} {currency}</span>
                   </div>
 
                   <div className="border-t-2 border-foreground/20 my-3" />
 
                   <div className="flex justify-between items-center text-base font-black">
-                    <span>المفترض بالدرج:</span>
-                    <span className="text-primary text-lg">{expectedCash.toFixed(2)} ₪</span>
+                    <span>المفترض بالدرج</span>
+                    <span className="text-primary text-lg font-mono" dir="ltr">{expectedCash.toFixed(2)} {currency}</span>
                   </div>
                 </div>
               </CardContent>
@@ -631,9 +643,9 @@ export default function DailyClosing() {
         </TabsContent>
 
         {/* TAB 2: Detailed Breakdown */}
-        <TabsContent value="breakdown" className="space-y-6 mt-4">
-          <Card>
-            <CardHeader>
+        <TabsContent value="breakdown" className="space-y-6 mt-4" dir="rtl">
+          <Card className="text-right">
+            <CardHeader className="text-right">
               <CardTitle className="text-lg">فواتير ومقبوضات اليوم</CardTitle>
               <CardDescription>جميع الفواتير النقدية المسجلة منذ بداية اليوم</CardDescription>
             </CardHeader>
@@ -641,7 +653,7 @@ export default function DailyClosing() {
               {invoices.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground text-sm">لا توجد فواتير مسجلة اليوم</p>
               ) : (
-                <Table>
+                <Table dir="rtl">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">الوقت</TableHead>
@@ -653,7 +665,7 @@ export default function DailyClosing() {
                   <TableBody>
                     {invoices.map((inv) => (
                       <TableRow key={inv.id}>
-                        <TableCell className="text-right text-xs text-muted-foreground font-mono">
+                        <TableCell className="text-right text-xs text-muted-foreground font-mono" dir="ltr">
                           {formatTime(inv.created_at)}
                         </TableCell>
                         <TableCell className="text-right font-medium">{inv.customer_name}</TableCell>
@@ -661,7 +673,9 @@ export default function DailyClosing() {
                           <Badge variant="outline">{inv.payment_type}</Badge>
                         </TableCell>
                         <TableCell className="text-right font-bold text-emerald-600">
-                          {Number(inv.cash_amount) > 0 ? `${Number(inv.cash_amount).toFixed(2)} ₪` : "0 ₪"}
+                          <span className="font-mono" dir="ltr">
+                            {Number(inv.cash_amount) > 0 ? `${Number(inv.cash_amount).toFixed(2)} ${currency}` : `0 ${currency}`}
+                          </span>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -671,9 +685,9 @@ export default function DailyClosing() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6" dir="rtl">
+            <Card className="text-right">
+              <CardHeader className="text-right">
                 <CardTitle className="text-base">مصاريف اليوم ({expenses.length})</CardTitle>
               </CardHeader>
               <CardContent>
@@ -682,12 +696,12 @@ export default function DailyClosing() {
                 ) : (
                   <div className="space-y-2">
                     {expenses.map((e) => (
-                      <div key={e.id} className="flex justify-between items-center p-2 rounded-lg bg-muted/40 text-sm">
-                        <div>
+                      <div key={e.id} className="flex justify-between items-center p-2.5 rounded-lg bg-muted/40 text-sm">
+                        <div className="text-right">
                           <p className="font-semibold">{e.category}</p>
                           {e.description && <p className="text-xs text-muted-foreground">{e.description}</p>}
                         </div>
-                        <span className="font-bold text-rose-600">-{Number(e.amount).toFixed(2)} ₪</span>
+                        <span className="font-bold text-rose-600 font-mono" dir="ltr">-{Number(e.amount).toFixed(2)} {currency}</span>
                       </div>
                     ))}
                   </div>
@@ -695,8 +709,8 @@ export default function DailyClosing() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className="text-right">
+              <CardHeader className="text-right">
                 <CardTitle className="text-base">مبيعات ومشتريات الزيت</CardTitle>
               </CardHeader>
               <CardContent>
@@ -705,21 +719,21 @@ export default function DailyClosing() {
                 ) : (
                   <div className="space-y-2">
                     {oilSales.map((s) => (
-                      <div key={s.id} className="flex justify-between items-center p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 text-sm">
-                        <div>
+                      <div key={s.id} className="flex justify-between items-center p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 text-sm">
+                        <div className="text-right">
                           <p className="font-semibold text-emerald-800 dark:text-emerald-300">بيع زيت ({s.amount} كغم)</p>
                           {s.notes && <p className="text-xs text-muted-foreground">{s.notes}</p>}
                         </div>
-                        <span className="font-bold text-emerald-600">+{Number(s.total_price).toFixed(2)} ₪</span>
+                        <span className="font-bold text-emerald-600 font-mono" dir="ltr">+{Number(s.total_price).toFixed(2)} {currency}</span>
                       </div>
                     ))}
                     {oilPurchases.map((p) => (
-                      <div key={p.id} className="flex justify-between items-center p-2 rounded-lg bg-rose-50 dark:bg-rose-950/20 text-sm">
-                        <div>
+                      <div key={p.id} className="flex justify-between items-center p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/20 text-sm">
+                        <div className="text-right">
                           <p className="font-semibold text-rose-800 dark:text-rose-300">شراء زيت ({p.amount} كغم)</p>
                           {p.notes && <p className="text-xs text-muted-foreground">{p.notes}</p>}
                         </div>
-                        <span className="font-bold text-rose-600">-{Number(p.total_price).toFixed(2)} ₪</span>
+                        <span className="font-bold text-rose-600 font-mono" dir="ltr">-{Number(p.total_price).toFixed(2)} {currency}</span>
                       </div>
                     ))}
                   </div>
@@ -730,9 +744,9 @@ export default function DailyClosing() {
         </TabsContent>
 
         {/* TAB 3: Past Closings History */}
-        <TabsContent value="history" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
+        <TabsContent value="history" className="space-y-4 mt-4" dir="rtl">
+          <Card className="text-right">
+            <CardHeader className="text-right">
               <CardTitle className="text-lg">سجل الإغلاقات وتقارير Z السابقة</CardTitle>
               <CardDescription>استعراض الإغلاقات المعتمدة وإعادة طباعة تقرير Z</CardDescription>
             </CardHeader>
@@ -744,7 +758,7 @@ export default function DailyClosing() {
                   <p className="text-xs mt-1">عند إغلاق اليومية سيتم حفظ التقرير هنا تلقائياً</p>
                 </div>
               ) : (
-                <Table>
+                <Table dir="rtl">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">التاريخ والوقت</TableHead>
@@ -763,19 +777,20 @@ export default function DailyClosing() {
                       const diff = Number(rec.difference) || 0;
                       return (
                         <TableRow key={rec.id}>
-                          <TableCell className="text-right text-xs font-medium font-mono">
+                          <TableCell className="text-right text-xs font-medium font-mono" dir="ltr">
                             {formatDate(rec.closing_date)} - {formatTime(rec.closing_date)}
                           </TableCell>
                           <TableCell className="text-right text-xs font-semibold">{rec.cashier_name}</TableCell>
-                          <TableCell className="text-right text-xs">{rec.opening_cash} ₪</TableCell>
-                          <TableCell className="text-right text-xs text-emerald-600 font-bold">+{rec.total_inflows.toFixed(2)} ₪</TableCell>
-                          <TableCell className="text-right text-xs text-rose-600 font-bold">-{rec.total_outflows.toFixed(2)} ₪</TableCell>
-                          <TableCell className="text-right text-xs font-bold">{rec.expected_cash.toFixed(2)} ₪</TableCell>
-                          <TableCell className="text-right text-xs font-bold text-primary">{rec.actual_cash.toFixed(2)} ₪</TableCell>
+                          <TableCell className="text-right text-xs font-mono" dir="ltr">{rec.opening_cash} {currency}</TableCell>
+                          <TableCell className="text-right text-xs text-emerald-600 font-bold font-mono" dir="ltr">+{rec.total_inflows.toFixed(2)} {currency}</TableCell>
+                          <TableCell className="text-right text-xs text-rose-600 font-bold font-mono" dir="ltr">-{rec.total_outflows.toFixed(2)} {currency}</TableCell>
+                          <TableCell className="text-right text-xs font-bold font-mono" dir="ltr">{rec.expected_cash.toFixed(2)} {currency}</TableCell>
+                          <TableCell className="text-right text-xs font-bold text-primary font-mono" dir="ltr">{rec.actual_cash.toFixed(2)} {currency}</TableCell>
                           <TableCell className="text-right text-xs">
                             <Badge 
                               variant={Math.abs(diff) < 0.01 ? "secondary" : diff > 0 ? "outline" : "destructive"}
-                              className="text-[11px]"
+                              className="text-[11px] font-mono"
+                              dir="ltr"
                             >
                               {Math.abs(diff) < 0.01 ? "متطابق" : diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}
                             </Badge>

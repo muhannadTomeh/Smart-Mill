@@ -326,7 +326,7 @@ export function printThermalReceipt(data: ThermalReceiptData, millName = "الم
   printHtmlViaIframe(receiptHtml);
 }
 
-export function printThermalZReport(data: ThermalZReportData, millName = "المعصرة الذكية") {
+export function printThermalZReport(data: ThermalZReportData, millName = "المعصرة الذكية", currency = "₪") {
   const dateObj = data.closing_date ? new Date(data.closing_date) : new Date();
   const formattedDate = dateObj.toLocaleDateString("ar-u-nu-latn", {
     year: "numeric",
@@ -341,10 +341,10 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
 
   const diffStatus = 
     Math.abs(data.difference) < 0.01 
-      ? "مطابق تماماً (0 ₪)" 
+      ? `مطابق تماماً (0 ${currency})` 
       : data.difference > 0 
-      ? `فائض (+${data.difference.toFixed(2)} ₪)` 
-      : `عجز (${data.difference.toFixed(2)} ₪)`;
+      ? `فائض (+${data.difference.toFixed(2)} ${currency})` 
+      : `عجز (${data.difference.toFixed(2)} ${currency})`;
 
   const zReportHtml = `
 <!DOCTYPE html>
@@ -509,15 +509,15 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
   <div class="section-title">المقبوضات النقدية (+)</div>
   <div class="info-row">
     <span class="info-label">فواتير العصر (${data.invoices_count} فاتورة):</span>
-    <span class="info-value">${data.invoices_cash.toFixed(2)} ₪</span>
+    <span class="info-value">${data.invoices_cash.toFixed(2)} ${currency}</span>
   </div>
   <div class="info-row">
     <span class="info-label">مبيعات الزيت النقدية:</span>
-    <span class="info-value">${data.oil_sales_cash.toFixed(2)} ₪</span>
+    <span class="info-value">${data.oil_sales_cash.toFixed(2)} ${currency}</span>
   </div>
   <div class="info-row bold" style="border-top: 1px dashed #ccc; margin-top: 2px; padding-top: 2px;">
     <span>إجمالي المقبوضات:</span>
-    <span>+${data.total_inflows.toFixed(2)} ₪</span>
+    <span>+${data.total_inflows.toFixed(2)} ${currency}</span>
   </div>
 
   <div class="divider"></div>
@@ -526,19 +526,19 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
   <div class="section-title">المدفوعات والمصروفات النقدية (-)</div>
   <div class="info-row">
     <span class="info-label">المصاريف التشغيلية:</span>
-    <span class="info-value">${data.expenses_cash.toFixed(2)} ₪</span>
+    <span class="info-value">${data.expenses_cash.toFixed(2)} ${currency}</span>
   </div>
   <div class="info-row">
     <span class="info-label">مشتريات الزيت النقدية:</span>
-    <span class="info-value">${data.oil_purchases_cash.toFixed(2)} ₪</span>
+    <span class="info-value">${data.oil_purchases_cash.toFixed(2)} ${currency}</span>
   </div>
   <div class="info-row">
     <span class="info-label">دفعات وأجور العمال:</span>
-    <span class="info-value">${data.worker_payments_cash.toFixed(2)} ₪</span>
+    <span class="info-value">${data.worker_payments_cash.toFixed(2)} ${currency}</span>
   </div>
   <div class="info-row bold" style="border-top: 1px dashed #ccc; margin-top: 2px; padding-top: 2px;">
     <span>إجمالي المدفوعات:</span>
-    <span>-${data.total_outflows.toFixed(2)} ₪</span>
+    <span>-${data.total_outflows.toFixed(2)} ${currency}</span>
   </div>
 
   <div class="divider-double"></div>
@@ -547,20 +547,20 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
   <div class="summary-box">
     <div class="summary-row">
       <span>الرصيد الافتتاحي (العهدة):</span>
-      <span class="bold">${data.opening_cash.toFixed(2)} ₪</span>
+      <span class="bold">${data.opening_cash.toFixed(2)} ${currency}</span>
     </div>
     <div class="summary-row">
       <span>صافي حركة الوردية:</span>
-      <span class="bold">${data.net_movement >= 0 ? `+${data.net_movement.toFixed(2)}` : data.net_movement.toFixed(2)} ₪</span>
+      <span class="bold">${data.net_movement >= 0 ? `+${data.net_movement.toFixed(2)}` : data.net_movement.toFixed(2)} ${currency}</span>
     </div>
     <div class="divider" style="margin: 3px 0;"></div>
     <div class="summary-row" style="font-size: 13px;">
       <span class="bold">النقد المفترض بالدرج:</span>
-      <span class="bold" style="font-size: 14px;">${data.expected_cash.toFixed(2)} ₪</span>
+      <span class="bold" style="font-size: 14px;">${data.expected_cash.toFixed(2)} ${currency}</span>
     </div>
     <div class="summary-row" style="font-size: 13px;">
       <span class="bold">النقد الفعلي المعدود:</span>
-      <span class="bold" style="font-size: 14px;">${data.actual_cash.toFixed(2)} ₪</span>
+      <span class="bold" style="font-size: 14px;">${data.actual_cash.toFixed(2)} ${currency}</span>
     </div>
   </div>
 
