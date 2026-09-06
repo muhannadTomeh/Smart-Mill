@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { formatDate } from "@/lib/formatters";
+import { recordOilTradeAtomic } from "@/lib/financialCore";
 
 interface Transaction {
   id: string;
@@ -66,20 +67,23 @@ const OilTrading = () => {
       return;
     }
 
-    const { error } = await supabase.from("oil_transactions").insert({
-      user_id: targetUserId!, season_id: activeSeason!.id, type: newTransaction.type, amount, price, total_price: totalPrice,
-      party_name: newTransaction.partyName || null, notes: newTransaction.notes || null
+    const { error } = await recordOilTradeAtomic({
+      seasonId: activeSeason!.id,
+      type: newTransaction.type,
+      amount,
+      price,
+      partyName: newTransaction.partyName || null,
+      notes: newTransaction.notes || null,
+      targetUserId: targetUserId!,
     });
 
     if (!error) {
-      await updateInventory({
-        total_oil: newTransaction.type === 'buy' ? inventory.total_oil + amount : inventory.total_oil - amount,
-        total_cash: newTransaction.type === 'buy' ? inventory.total_cash - totalPrice : inventory.total_cash + totalPrice
-      });
       setNewTransaction({ type: 'buy', amount: "", price: "", partyName: "", notes: "" });
-      toast({ title: "تمت العملية", description: `تم تسجيل عملية ${newTransaction.type === 'buy' ? 'الشراء' : 'البيع'} بنجاح` });
+      toast({ title: "تمت العملية", description: `تم تسجيل عملية ${newTransaction.type === 'buy' ? 'الشراء' : 'البيع'} وتوثيقها مالياً بنجاح` });
       fetchTransactions();
       refetchInventory();
+    } else {
+      toast({ title: "خطأ", description: error.message || "حدث خطأ أثناء حفظ العملية", variant: "destructive" });
     }
   };
 

@@ -73,6 +73,180 @@ export type Database = {
           },
         ]
       }
+      customer_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          mill_id: string
+          notes: string | null
+          payment_method: string
+          season_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          mill_id: string
+          notes?: string | null
+          payment_method?: string
+          season_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          mill_id?: string
+          notes?: string | null
+          payment_method?: string
+          season_id?: string
+        }
+        Relationships: []
+      }
+      daily_closings: {
+        Row: {
+          actual_cash: number
+          cashier_name: string
+          closing_date: string
+          created_at: string
+          created_by: string | null
+          difference: number
+          expected_cash: number
+          expenses_cash: number | null
+          id: string
+          invoices_cash: number | null
+          invoices_count: number | null
+          mill_id: string
+          notes: string | null
+          oil_purchases_cash: number | null
+          oil_sales_cash: number | null
+          opening_cash: number
+          season_id: string
+          total_cash_in: number
+          total_cash_out: number
+          worker_payments_cash: number | null
+        }
+        Insert: {
+          actual_cash?: number
+          cashier_name: string
+          closing_date?: string
+          created_at?: string
+          created_by?: string | null
+          difference?: number
+          expected_cash?: number
+          expenses_cash?: number | null
+          id?: string
+          invoices_cash?: number | null
+          invoices_count?: number | null
+          mill_id: string
+          notes?: string | null
+          oil_purchases_cash?: number | null
+          oil_sales_cash?: number | null
+          opening_cash?: number
+          season_id: string
+          total_cash_in?: number
+          total_cash_out?: number
+          worker_payments_cash?: number | null
+        }
+        Update: {
+          actual_cash?: number
+          cashier_name?: string
+          closing_date?: string
+          created_at?: string
+          created_by?: string | null
+          difference?: number
+          expected_cash?: number
+          expenses_cash?: number | null
+          id?: string
+          invoices_cash?: number | null
+          invoices_count?: number | null
+          mill_id?: string
+          notes?: string | null
+          oil_purchases_cash?: number | null
+          oil_sales_cash?: number | null
+          opening_cash?: number
+          season_id?: string
+          total_cash_in?: number
+          total_cash_out?: number
+          worker_payments_cash?: number | null
+        }
+        Relationships: []
+      }
+      financial_transactions: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          direction: Database["public"]["Enums"]["financial_direction"]
+          id: string
+          mill_id: string
+          party_id: string | null
+          party_name: string | null
+          party_type: string | null
+          payment_method: Database["public"]["Enums"]["financial_payment_method"]
+          reference_id: string | null
+          reference_type: string
+          season_id: string
+          status: Database["public"]["Enums"]["financial_tx_status"]
+          type: Database["public"]["Enums"]["financial_tx_type"]
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction: Database["public"]["Enums"]["financial_direction"]
+          id?: string
+          mill_id: string
+          party_id?: string | null
+          party_name?: string | null
+          party_type?: string | null
+          payment_method?: Database["public"]["Enums"]["financial_payment_method"]
+          reference_id?: string | null
+          reference_type: string
+          season_id: string
+          status?: Database["public"]["Enums"]["financial_tx_status"]
+          type: Database["public"]["Enums"]["financial_tx_type"]
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction?: Database["public"]["Enums"]["financial_direction"]
+          id?: string
+          mill_id?: string
+          party_id?: string | null
+          party_name?: string | null
+          party_type?: string | null
+          payment_method?: Database["public"]["Enums"]["financial_payment_method"]
+          reference_id?: string | null
+          reference_type?: string
+          season_id?: string
+          status?: Database["public"]["Enums"]["financial_tx_status"]
+          type?: Database["public"]["Enums"]["financial_tx_type"]
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           created_at: string
@@ -875,10 +1049,70 @@ export type Database = {
         Args: { input_pin: string; owner_id: string }
         Returns: boolean
       }
+      record_expense_atomic: {
+        Args: {
+          p_amount: number
+          p_category: string
+          p_description?: string | null
+          p_season_id: string
+          p_target_user_id?: string | null
+        }
+        Returns: string
+      }
+      record_oil_trade_atomic: {
+        Args: {
+          p_amount: number
+          p_notes?: string | null
+          p_party_name?: string | null
+          p_price: number
+          p_season_id: string
+          p_target_user_id?: string | null
+          p_type: string
+        }
+        Returns: string
+      }
+      record_customer_payment_atomic: {
+        Args: {
+          p_amount: number
+          p_customer_id: string
+          p_notes?: string | null
+          p_season_id: string
+          p_target_user_id?: string | null
+        }
+        Returns: string
+      }
+      void_financial_transaction: {
+        Args: {
+          p_reason: string
+          p_transaction_id: string
+        }
+        Returns: undefined
+      }
+      get_user_mill_id: {
+        Args: {
+          _user_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "platform_admin" | "mill_owner" | "mill_employee"
       subscription_status: "pending" | "active" | "suspended"
+      financial_tx_type:
+        | "income"
+        | "expense"
+        | "stock_purchase"
+        | "stock_sale"
+        | "worker_payment"
+        | "customer_debt"
+        | "customer_payment"
+        | "supplier_payment"
+        | "owner_deposit"
+        | "owner_withdrawal"
+        | "adjustment"
+      financial_direction: "in" | "out" | "none"
+      financial_payment_method: "cash" | "oil" | "mixed" | "credit"
+      financial_tx_status: "active" | "voided"
     }
     CompositeTypes: {
       [_ in never]: never

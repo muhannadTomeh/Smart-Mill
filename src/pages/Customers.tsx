@@ -7,7 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Users, Search, FileText, Phone, Calendar, UserPlus, Plus,
-  Printer, Eye, Pencil, Star, CheckCircle, Receipt
+  Printer, Eye, Pencil, Star, CheckCircle, Receipt,
+  HandCoins, Wallet, CreditCard, ArrowDownLeft, ShieldCheck,
+  AlertCircle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,10 +17,12 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { recordCustomerPaymentAtomic } from "@/lib/financialCore";
 
 interface Customer {
   id: string;
@@ -37,9 +41,19 @@ interface InvoiceRecord {
   payment_type: string;
   oil_amount?: number;
   cash_amount?: number;
+  unpaid_amount?: number;
   total_display: string;
   created_at: string;
   notes?: string | null;
+}
+
+interface CustomerPaymentRecord {
+  id: string;
+  customer_id: string;
+  amount: number;
+  payment_method: string;
+  notes?: string | null;
+  created_at: string;
 }
 
 const paymentLabel = (type: string) => {
@@ -57,15 +71,23 @@ const Customers = () => {
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [customerPayments, setCustomerPayments] = useState<CustomerPaymentRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"invoices" | "payments">("invoices");
 
   // New Customer Dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newCustName, setNewCustName] = useState("");
   const [newCustPhone, setNewCustPhone] = useState("");
   const [savingNewCust, setSavingNewCust] = useState(false);
+
+  // Record Payment Dialog (سند قبض / سداد دين)
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState<number | "">("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
 
   // Preview Invoice Dialog
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRecord | null>(null);
@@ -80,6 +102,7 @@ const Customers = () => {
     payment_type: "cash",
     cash_amount: 0,
     oil_amount: 0,
+    unpaid_amount: 0,
     total_display: "",
   });
   const [savingEdit, setSavingEdit] = useState(false);
@@ -123,10 +146,15 @@ const Customers = () => {
 
   useEffect(() => {
     if (targetUserId && activeSeason) {
-      fetchCustomers();
-      fetchInvoices();
+      fetchAllData();
     }
   }, [targetUserId, activeSeason]);
+
+  const fetchAllData = async () => {
+    setLoading(true);
+    await Promise.all([fetchCustomers(), fetchInvoices(), fetchCustomerPayments()]);
+    setLoading(false);
+  };
 
   const fetchCustomers = async () => {
     if (!targetUserId || !activeSeason) return;
@@ -137,7 +165,6 @@ const Customers = () => {
       .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: false });
     setCustomers((data as Customer[]) || []);
-    setLoading(false);
   };
 
   const fetchInvoices = async () => {
@@ -151,6 +178,22 @@ const Customers = () => {
     setInvoices((data as InvoiceRecord[]) || []);
   };
 
+  const fetchCustomerPayments = async () => {
+    if (!targetUserId || !activeSeason) return;
+    try {
+      const { data, error } = await supabase
+        .from("customer_payments")
+        .select("*")
+        .eq("season_id", activeSeason.id)
+        .order("created_at", { ascending: false });
+      if (!error && data) {
+        setCustomerPayments(data as CustomerPaymentRecord[]);
+      }
+    } catch (err) {
+      console.warn("Could not fetch customer_payments", err);
+    }
+  };
+
   const handleCreateCustomer = async () => {
     if (!newCustName.trim()) {
       toast({ title: "تنبيه", description: "يرجى كتابة اسم الزبون", variant: "destructive" });
@@ -158,7 +201,7 @@ const Customers = () => {
     }
     setSavingNewCust(true);
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("customers")
         .insert({
           user_id: targetUserId!,
@@ -183,6 +226,46 @@ const Customers = () => {
     }
   };
 
+  const handleRecordPayment = async () => {
+    if (!selectedCustomer || !activeSeason || !targetUserId) return;
+    const amt = Number(paymentAmount);
+    if (isNaN(amt) || amt <= 0) {
+      toast({ title: "تنبيه", description: "يرجى إدخال مبلغ صحيح أكبر من صفر", variant: "destructive" });
+      return;
+    }
+    setSavingPayment(true);
+    try {
+      const res = await recordCustomerPaymentAtomic({
+        seasonId: activeSeason.id,
+        customerId: selectedCustomer.id,
+        amount: amt,
+        notes: paymentNotes.trim() || `سند قبض / سداد ذمة - ${selectedCustomer.name}`,
+        targetUserId: targetUserId,
+      });
+
+      if (res.error) throw res.error;
+
+      toast({
+        title: "تم تسجيل الدفعة بنجاح",
+        description: `تم إيداع ${amt} ₪ في الصندوق وقيدها في حساب الزبون بنجاح`,
+      });
+
+      setPaymentDialogOpen(false);
+      setPaymentAmount("");
+      setPaymentNotes("");
+      await fetchCustomerPayments();
+      await fetchInvoices();
+    } catch (err: any) {
+      toast({
+        title: "خطأ",
+        description: err.message || "تعذر تسجيل الدفعة",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
   const handleOpenEdit = (inv: InvoiceRecord) => {
     setEditInvoice(inv);
     setEditFormData({
@@ -193,6 +276,7 @@ const Customers = () => {
       payment_type: inv.payment_type || "cash",
       cash_amount: Number(inv.cash_amount) || 0,
       oil_amount: Number(inv.oil_amount) || 0,
+      unpaid_amount: Number(inv.unpaid_amount) || 0,
       total_display: inv.total_display || "",
     });
   };
@@ -211,6 +295,7 @@ const Customers = () => {
           payment_type: editFormData.payment_type,
           cash_amount: Number(editFormData.cash_amount),
           oil_amount: Number(editFormData.oil_amount),
+          unpaid_amount: Number(editFormData.unpaid_amount) || 0,
           total_display: editFormData.total_display.trim() || `${editFormData.cash_amount} ₪`,
         })
         .eq("id", editInvoice.id);
@@ -235,10 +320,32 @@ const Customers = () => {
     }
   };
 
+  const toggleInvoiceUnpaid = async (inv: InvoiceRecord) => {
+    const currentUnpaid = Number(inv.unpaid_amount) || 0;
+    const newUnpaid = currentUnpaid > 0 ? 0 : (Number(inv.cash_amount) || 0);
+
+    try {
+      const { error } = await supabase
+        .from("invoices")
+        .update({ unpaid_amount: newUnpaid })
+        .eq("id", inv.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "تم تحديث حالة الفاتورة",
+        description: newUnpaid > 0 ? `تم تقييد الفاتورة كدين بذمة الزبون (${newUnpaid} ₪)` : "تم تحديد الفاتورة كمدفوعة بالكامل",
+      });
+
+      await fetchInvoices();
+    } catch (err: any) {
+      toast({ title: "خطأ", description: err.message || "تعذر تحديث الفاتورة", variant: "destructive" });
+    }
+  };
+
   const separateInvoiceToNewCustomer = async (inv: InvoiceRecord) => {
     if (!activeSeason || !targetUserId) return;
     try {
-      // 1. Create a distinct customer for this invoice
       const { data: newCust, error: cErr } = await supabase
         .from("customers")
         .insert({
@@ -253,7 +360,6 @@ const Customers = () => {
 
       if (cErr || !newCust) throw cErr || new Error("تعذر إنشاء زبون جديد");
 
-      // 2. Link this specific invoice to the new customer
       const { error: invErr } = await supabase
         .from("invoices")
         .update({ customer_id: newCust.id })
@@ -273,10 +379,6 @@ const Customers = () => {
     }
   };
 
-  const filteredCustomers = customers.filter(c =>
-    c.name.includes(searchTerm) || c.phone?.includes(searchTerm)
-  );
-
   const getCustomerInvoices = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
     if (!customer) return [];
@@ -286,8 +388,36 @@ const Customers = () => {
     );
   };
 
+  const getCustomerDebts = (customerId: string) => {
+    const custInvs = getCustomerInvoices(customerId);
+    const custPmts = customerPayments.filter(p => p.customer_id === customerId);
+
+    const totalOil = custInvs.reduce((s, i) => s + (Number(i.oil_produced) || 0), 0);
+    const totalCashBilled = custInvs.reduce((s, i) => s + (Number(i.cash_amount) || 0), 0);
+    const totalUnpaidFromInvoices = custInvs.reduce((s, i) => s + (Number(i.unpaid_amount) || 0), 0);
+    const totalPaymentsReceived = custPmts.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+    const remainingDebt = Math.max(0, totalUnpaidFromInvoices - totalPaymentsReceived);
+    const totalPaid = (totalCashBilled - totalUnpaidFromInvoices) + totalPaymentsReceived;
+
+    return {
+      totalOil,
+      totalCashBilled,
+      totalUnpaidFromInvoices,
+      totalPaymentsReceived,
+      totalPaid,
+      remainingDebt,
+      payments: custPmts,
+    };
+  };
+
+  const filteredCustomers = customers.filter(c =>
+    c.name.includes(searchTerm) || c.phone?.includes(searchTerm)
+  );
+
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
   const customerInvoices = selectedCustomerId ? getCustomerInvoices(selectedCustomerId) : [];
+  const selectedCustomerDebts = selectedCustomerId ? getCustomerDebts(selectedCustomerId) : null;
   const isSelectedCustomerStarred = selectedCustomer ? starredIds.includes(selectedCustomer.id) : false;
 
   return (
@@ -296,8 +426,8 @@ const Customers = () => {
         <div className="flex items-center gap-3">
           <Users className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">إدارة الزبائن</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">عرض سجلات الزبائن وفواتيرهم وإدارتها</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">إدارة الزبائن والذمم</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">عرض سجلات الزبائن، فواتيرهم، كشوفات الحساب وسداد الديون</p>
           </div>
         </div>
 
@@ -377,7 +507,7 @@ const Customers = () => {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <CardTitle className="text-lg font-bold">قائمة الزبائن ({customers.length})</CardTitle>
-              <CardDescription className="text-xs">عرض ومتابعة جميع الزبائن المسجلين في النظام</CardDescription>
+              <CardDescription className="text-xs">عرض ومتابعة جميع الزبائن المسجلين وأرصدة ذممهم</CardDescription>
             </div>
             <div className="relative w-full sm:w-72">
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -404,7 +534,8 @@ const Customers = () => {
                 <TableRow>
                   <TableHead className="text-right">الاسم</TableHead>
                   <TableHead className="text-right">رقم الهاتف</TableHead>
-                  <TableHead className="text-right">عدد الفواتير</TableHead>
+                  <TableHead className="text-right">الفواتير</TableHead>
+                  <TableHead className="text-right">رصيد الذمة / الدين</TableHead>
                   <TableHead className="text-right">تاريخ التسجيل</TableHead>
                   <TableHead className="text-left">الإجراءات</TableHead>
                 </TableRow>
@@ -416,6 +547,8 @@ const Customers = () => {
                     (!inv.customer_id && inv.customer_name === customer.name)
                   );
                   const isStarred = starredIds.includes(customer.id);
+                  const debts = getCustomerDebts(customer.id);
+
                   return (
                     <TableRow key={customer.id} className="hover:bg-accent/30 transition-colors">
                       <TableCell className="text-right">
@@ -457,6 +590,17 @@ const Customers = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
+                        {debts.remainingDebt > 0 ? (
+                          <Badge variant="destructive" className="font-mono text-xs font-bold gap-1">
+                            <span>مطلوب: {debts.remainingDebt} ₪</span>
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="font-semibold text-xs text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200">
+                            خالص (0 ₪)
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
                           <Calendar className="h-3.5 w-3.5 opacity-70" />
                           <span>{formatDate(customer.created_at)}</span>
@@ -467,10 +611,13 @@ const Customers = () => {
                           size="sm"
                           variant="outline"
                           className="h-8 px-3 text-xs gap-1.5 rounded-lg border-border hover:bg-muted font-medium"
-                          onClick={() => setSelectedCustomerId(customer.id)}
+                          onClick={() => {
+                            setSelectedCustomerId(customer.id);
+                            setActiveTab("invoices");
+                          }}
                         >
                           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>التفاصيل</span>
+                          <span>كشف الحساب والذمم</span>
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -482,9 +629,9 @@ const Customers = () => {
         </CardContent>
       </Card>
 
-      {/* Customer Details & Invoices History Dialog (Matches Invoices page layout) */}
+      {/* Customer Details, Statement & Debts Dialog */}
       <Dialog open={!!selectedCustomerId} onOpenChange={(open) => !open && setSelectedCustomerId(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-6 rounded-2xl" dir="rtl">
+        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-6 rounded-2xl" dir="rtl">
           <DialogHeader className="border-b border-border/80 pb-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3">
@@ -523,139 +670,382 @@ const Customers = () => {
                     )}
                     <span>•</span>
                     <span>{customerInvoices.length} فواتير مسجلة</span>
-                    <span>•</span>
-                    <span>إجمالي الزيت: {customerInvoices.reduce((s, i) => s + (Number(i.oil_produced) || 0), 0)} كغم</span>
                   </div>
                 </div>
               </div>
 
-              {/* Action: Toggle VIP */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => selectedCustomer && toggleStar(selectedCustomer.id)}
-                className={cn(
-                  "h-8 px-3 text-xs gap-1.5 rounded-lg border font-medium",
-                  isSelectedCustomerStarred
-                    ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Star className={cn("h-3.5 w-3.5", isSelectedCustomerStarred && "fill-amber-500 text-amber-500")} />
-                <span>{isSelectedCustomerStarred ? "زبون مميز" : "تمييز الزبون"}</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => setPaymentDialogOpen(true)}
+                  className="h-8 px-3 text-xs gap-1.5 font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                >
+                  <HandCoins className="h-3.5 w-3.5" />
+                  <span>+ تسجيل سند قبض / سداد دين</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => selectedCustomer && toggleStar(selectedCustomer.id)}
+                  className={cn(
+                    "h-8 px-3 text-xs gap-1.5 rounded-lg border font-medium",
+                    isSelectedCustomerStarred
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Star className={cn("h-3.5 w-3.5", isSelectedCustomerStarred && "fill-amber-500 text-amber-500")} />
+                  <span>{isSelectedCustomerStarred ? "مميز" : "تمييز"}</span>
+                </Button>
+              </div>
             </div>
+
+            {/* Financial Stat Summary Cards */}
+            {selectedCustomerDebts && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-border/50">
+                <div className="p-3 rounded-xl bg-card border">
+                  <span className="text-[11px] text-muted-foreground block">إجمالي الزيت المعصور</span>
+                  <span className="text-base font-bold text-foreground font-mono">{selectedCustomerDebts.totalOil} كغم</span>
+                </div>
+                <div className="p-3 rounded-xl bg-card border">
+                  <span className="text-[11px] text-muted-foreground block">إجمالي الخدمات النقدية</span>
+                  <span className="text-base font-bold text-foreground font-mono">{selectedCustomerDebts.totalCashBilled} ₪</span>
+                </div>
+                <div className="p-3 rounded-xl bg-card border">
+                  <span className="text-[11px] text-muted-foreground block">إجمالي المسدد والمقبوض</span>
+                  <span className="text-base font-bold text-emerald-600 dark:text-emerald-400 font-mono">{selectedCustomerDebts.totalPaid} ₪</span>
+                </div>
+                <div className={cn(
+                  "p-3 rounded-xl border",
+                  selectedCustomerDebts.remainingDebt > 0
+                    ? "bg-destructive/10 border-destructive/30"
+                    : "bg-emerald-500/10 border-emerald-500/30"
+                )}>
+                  <span className="text-[11px] font-semibold block text-muted-foreground">الرصيد المتبقي (الذمة)</span>
+                  <span className={cn(
+                    "text-base font-black font-mono",
+                    selectedCustomerDebts.remainingDebt > 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-300"
+                  )}>
+                    {selectedCustomerDebts.remainingDebt > 0 ? `${selectedCustomerDebts.remainingDebt} ₪ (دين)` : "خالص (0 ₪)"}
+                  </span>
+                </div>
+              </div>
+            )}
           </DialogHeader>
 
-          {customerInvoices.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">لا توجد فواتير مسجلة لهذا الزبون حتى الآن</p>
-            </div>
-          ) : (
-            <div className="mt-4 overflow-hidden border border-border/70 rounded-xl bg-card">
-              <Table>
-                <TableHeader className="bg-muted/30">
-                  <TableRow>
-                    <TableHead className="text-right">التاريخ</TableHead>
-                    <TableHead className="text-right">كمية الزيت</TableHead>
-                    <TableHead className="text-right">التنكات</TableHead>
-                    <TableHead className="text-right">طريقة الدفع</TableHead>
-                    <TableHead className="text-right">الإجمالي</TableHead>
-                    <TableHead className="text-left">الفاتورة</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {customerInvoices.map((inv) => (
-                    <TableRow key={inv.id} className="hover:bg-accent/30 transition-colors">
-                      <TableCell className="text-right">
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span>{formatDate(inv.created_at)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-sm">
-                        {inv.oil_produced} كغم
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">
-                        {inv.container_count && inv.container_count > 0 ? (
-                          <span>{inv.container_count} ({inv.container_type || "تنكة"})</span>
-                        ) : (
-                          <span>-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge
-                          variant={inv.payment_type === 'oil' ? 'default' : inv.payment_type === 'cash' ? 'secondary' : 'outline'}
-                          className="text-xs"
-                        >
-                          {paymentLabel(inv.payment_type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-sm text-foreground">
-                        {inv.total_display}
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 px-2 text-xs gap-1 rounded-md"
-                            onClick={() => setPreviewInvoice(inv)}
-                            title="معاينة الفاتورة"
-                          >
-                            <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span>معاينة</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 px-2 text-xs gap-1 rounded-md"
-                            onClick={() => handleOpenEdit(inv)}
-                            title="تعديل الفاتورة"
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span>تعديل</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="h-7 px-2 text-xs gap-1 rounded-md bg-primary text-primary-foreground shadow-xs"
-                            onClick={() => printThermalReceipt({
-                              customer_name: inv.customer_name,
-                              oil_produced: inv.oil_produced,
-                              container_count: inv.container_count,
-                              container_type: inv.container_type,
-                              payment_type: inv.payment_type,
-                              oil_amount: inv.oil_amount,
-                              cash_amount: inv.cash_amount,
-                              total_display: inv.total_display,
-                              created_at: inv.created_at,
-                              season_name: activeSeason?.name,
-                            }, millName)}
-                            title="طباعة إيصال حراري (80mm)"
-                          >
-                            <Printer className="h-3.5 w-3.5" />
-                            <span>طباعة</span>
-                          </Button>
-                          {customerInvoices.length > 1 && (
+          {/* Tabs: Invoices vs Customer Payments */}
+          <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="mt-4">
+            <TabsList className="grid grid-cols-2 w-full max-w-xs">
+              <TabsTrigger value="invoices" className="text-xs font-semibold gap-1.5">
+                <Receipt className="h-3.5 w-3.5" />
+                <span>فواتير العصر ({customerInvoices.length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="text-xs font-semibold gap-1.5">
+                <HandCoins className="h-3.5 w-3.5" />
+                <span>سندات القبض ({selectedCustomerDebts?.payments.length || 0})</span>
+              </TabsTrigger>
+            </TabsList>
+
+            {/* TAB 1: INVOICES */}
+            <TabsContent value="invoices" className="mt-4">
+              {customerInvoices.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-medium">لا توجد فواتير مسجلة لهذا الزبون حتى الآن</p>
+                </div>
+              ) : (
+                <div className="overflow-hidden border border-border/70 rounded-xl bg-card">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead className="text-right">التاريخ</TableHead>
+                        <TableHead className="text-right">كمية الزيت</TableHead>
+                        <TableHead className="text-right">التنكات</TableHead>
+                        <TableHead className="text-right">طريقة الدفع</TableHead>
+                        <TableHead className="text-right">الإجمالي</TableHead>
+                        <TableHead className="text-right">حالة السداد</TableHead>
+                        <TableHead className="text-left">الإجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {customerInvoices.map((inv) => {
+                        const unpaid = Number(inv.unpaid_amount) || 0;
+                        const isCashInv = Number(inv.cash_amount) > 0;
+
+                        return (
+                          <TableRow key={inv.id} className="hover:bg-accent/30 transition-colors">
+                            <TableCell className="text-right">
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+                                <Calendar className="h-3.5 w-3.5" />
+                                <span>{formatDate(inv.created_at)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-sm">
+                              {inv.oil_produced} كغم
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">
+                              {inv.container_count && inv.container_count > 0 ? (
+                                <span>{inv.container_count} ({inv.container_type || "تنكة"})</span>
+                              ) : (
+                                <span>-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge
+                                variant={inv.payment_type === 'oil' ? 'default' : inv.payment_type === 'cash' ? 'secondary' : 'outline'}
+                                className="text-xs"
+                              >
+                                {paymentLabel(inv.payment_type)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-sm text-foreground">
+                              {inv.total_display}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {isCashInv ? (
+                                unpaid > 0 ? (
+                                  <Badge variant="destructive" className="text-xs font-mono">
+                                    متبقي دين: {unpaid} ₪
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50/50">
+                                    مدفوع كاش
+                                  </Badge>
+                                )
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">
+                                  سداد عيني
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-left">
+                              <div className="flex items-center gap-1.5 justify-end">
+                                {isCashInv && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-[11px] gap-1 rounded-md text-muted-foreground hover:text-foreground"
+                                    onClick={() => toggleInvoiceUnpaid(inv)}
+                                    title={unpaid > 0 ? "تحديد كمدفوعة" : "تحديد كدين بذمة الزبون"}
+                                  >
+                                    <CreditCard className="h-3 w-3" />
+                                    <span>{unpaid > 0 ? "سداد الفاتورة" : "قيد كدين"}</span>
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs gap-1 rounded-md"
+                                  onClick={() => setPreviewInvoice(inv)}
+                                  title="معاينة الفاتورة"
+                                >
+                                  <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span>معاينة</span>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs gap-1 rounded-md"
+                                  onClick={() => handleOpenEdit(inv)}
+                                  title="تعديل الفاتورة"
+                                >
+                                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span>تعديل</span>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2 text-xs gap-1 rounded-md bg-primary text-primary-foreground shadow-xs"
+                                  onClick={() => printThermalReceipt({
+                                    customer_name: inv.customer_name,
+                                    oil_produced: inv.oil_produced,
+                                    container_count: inv.container_count,
+                                    container_type: inv.container_type,
+                                    payment_type: inv.payment_type,
+                                    oil_amount: inv.oil_amount,
+                                    cash_amount: inv.cash_amount,
+                                    total_display: inv.total_display,
+                                    created_at: inv.created_at,
+                                    season_name: activeSeason?.name,
+                                  }, millName)}
+                                  title="طباعة إيصال حراري (80mm)"
+                                >
+                                  <Printer className="h-3.5 w-3.5" />
+                                  <span>طباعة</span>
+                                </Button>
+                                {customerInvoices.length > 1 && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground rounded-md"
+                                    onClick={() => separateInvoiceToNewCustomer(inv)}
+                                    title="فصل هذه الفاتورة لزبون جديد مستقل"
+                                  >
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* TAB 2: DEBT SETTLEMENT PAYMENTS */}
+            <TabsContent value="payments" className="mt-4">
+              {!selectedCustomerDebts || selectedCustomerDebts.payments.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <HandCoins className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-medium">لا توجد سندات قبض أو سداد ديون مسجلة لهذا الزبون</p>
+                  <Button
+                    size="sm"
+                    onClick={() => setPaymentDialogOpen(true)}
+                    className="mt-3 gap-1.5 font-bold"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>تسجيل أول دفعة سداد</span>
+                  </Button>
+                </div>
+              ) : (
+                <div className="overflow-hidden border border-border/70 rounded-xl bg-card">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead className="text-right">تاريخ السند</TableHead>
+                        <TableHead className="text-right">المبلغ المسدد</TableHead>
+                        <TableHead className="text-right">طريقة الدفع</TableHead>
+                        <TableHead className="text-right">البيان / الملاحظات</TableHead>
+                        <TableHead className="text-left">طباعة السند</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedCustomerDebts.payments.map((p) => (
+                        <TableRow key={p.id} className="hover:bg-accent/30 transition-colors">
+                          <TableCell className="text-right">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>{formatDate(p.created_at)}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-black text-sm text-emerald-600 dark:text-emerald-400 font-mono">
+                            {p.amount} ₪
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            <Badge variant="outline" className="font-semibold">
+                              {p.payment_method === 'cash' ? 'نقدي (صندوق)' : p.payment_method}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {p.notes || "سداد دفعة حساب"}
+                          </TableCell>
+                          <TableCell className="text-left">
                             <Button
                               size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground rounded-md"
-                              onClick={() => separateInvoiceToNewCustomer(inv)}
-                              title="فصل هذه الفاتورة لزبون جديد مستقل"
+                              variant="outline"
+                              className="h-7 px-2 text-xs gap-1 rounded-md"
+                              onClick={() => {
+                                printThermalReceipt({
+                                  customer_name: selectedCustomer?.name || "",
+                                  oil_produced: 0,
+                                  payment_type: "cash",
+                                  cash_amount: p.amount,
+                                  total_display: `${p.amount} ₪`,
+                                  created_at: p.created_at,
+                                  season_name: activeSeason?.name,
+                                }, `${millName} - سند قبض`);
+                              }}
                             >
-                              <UserPlus className="h-3.5 w-3.5" />
+                              <Printer className="h-3 w-3" />
+                              <span>طباعة سند</span>
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Payment Voucher Dialog (سند قبض نقدي) */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl p-5" dir="rtl">
+          <DialogHeader className="text-right">
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+              <HandCoins className="h-5 w-5 text-emerald-600" />
+              تسجيل سند قبض / سداد دين
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              استلام دفعة نقدية من الزبون ({selectedCustomer?.name}) وتوريدها مباشرة إلى الصندوق
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-foreground">
+                المبلغ المسدد (شيكل) <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                type="number"
+                step="1"
+                min="1"
+                placeholder="أدخل المبلغ المقبوض"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                className="text-base font-bold font-mono h-10"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRecordPayment();
+                }}
+              />
             </div>
-          )}
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-foreground">البيان / ملاحظات السند</Label>
+              <Input
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                placeholder="مثال: دفعة تحت الحساب / رقم سند يدوي"
+                className="text-sm font-medium h-9"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRecordPayment();
+                }}
+              />
+            </div>
+
+            <div className="p-3 rounded-xl bg-muted/40 border text-xs space-y-1 text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>الحركة المالية:</span>
+                <span className="font-semibold text-emerald-600">قبض نقدي (توريد للصندوق)</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>الأثر المحاسبي:</span>
+                <span>تخفيض دين الزبون + زيادة رصيد الكاش</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t">
+            <Button variant="outline" size="sm" onClick={() => setPaymentDialogOpen(false)}>
+              إلغاء
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleRecordPayment}
+              disabled={savingPayment || !paymentAmount || Number(paymentAmount) <= 0}
+              className="gap-1.5 font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <CheckCircle className="h-4 w-4" />
+              {savingPayment ? "جارٍ التوريد..." : "اعتماد سند القبض"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -747,12 +1137,12 @@ const Customers = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs font-semibold">زيت الرد (كغم)</Label>
+                <Label className="text-xs font-semibold">المبلغ المتبقي كدين (شيكل)</Label>
                 <Input
                   type="number"
-                  step="0.1"
-                  value={editFormData.oil_amount}
-                  onChange={(e) => setEditFormData(p => ({ ...p, oil_amount: Number(e.target.value) }))}
+                  step="0.5"
+                  value={editFormData.unpaid_amount}
+                  onChange={(e) => setEditFormData(p => ({ ...p, unpaid_amount: Number(e.target.value) }))}
                   className="h-9 text-sm"
                 />
               </div>

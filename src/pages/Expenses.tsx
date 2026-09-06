@@ -18,6 +18,7 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatDate, formatNumber } from "@/lib/formatters";
+import { recordExpenseAtomic } from "@/lib/financialCore";
 
 interface Expense {
   id: string;
@@ -112,13 +113,13 @@ const Expenses = () => {
     setSavingExpense(true);
 
     try {
-      // 1. Insert into expenses table
-      const { error } = await supabase.from("expenses").insert({
-        user_id: targetUserId!,
-        season_id: activeSeason!.id,
+      // 1. Record expense atomically (inserts into expenses, financial_transactions, and deducts inventory cash)
+      const { error } = await recordExpenseAtomic({
+        seasonId: activeSeason!.id,
         category: finalCategory,
         amount,
         description: newExpense.description.trim() || null,
+        targetUserId: targetUserId!,
       });
 
       if (error) throw error;
@@ -138,12 +139,9 @@ const Expenses = () => {
         } catch {}
       }
 
-      // 3. Update inventory cash
-      await updateInventory({ total_cash: inventory.total_cash - amount });
-
       toast({
         title: "تمت إضافة المصروف بنجاح",
-        description: `تم تسجيل مصروف "${finalCategory}" بقيمة ${amount} شيكل`,
+        description: `تم تسجيل مصروف "${finalCategory}" بقيمة ${amount} شيكل وتوثيقه مالياً`,
       });
 
       // Reset form

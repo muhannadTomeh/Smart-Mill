@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
+import { useRole } from "@/contexts/RoleContext";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -37,6 +38,7 @@ interface InvoiceRecord {
 
 export default function InvoicesHistory() {
   const { user, effectiveUserId, profile } = useAuth();
+  const { isEmployee } = useRole();
   const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const { currency } = useCurrency();
@@ -136,25 +138,27 @@ export default function InvoicesHistory() {
           </div>
         </div>
 
-        {/* Action: الفواتير المحذوفة */}
-        <Button
-          variant="outline"
-          onClick={() => setDeletedDialogOpen(true)}
-          className="gap-2 border-border hover:bg-destructive/5 hover:border-destructive/30 hover:text-destructive transition-colors relative"
-          title="عرض الفواتير والأدوار المحذوفة خلال الـ 24 ساعة الماضية"
-        >
-          <Trash2 className="h-4 w-4 text-muted-foreground" />
-          <span>الفواتير المحذوفة</span>
-          {deletedCount > 0 && (
-            <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs font-mono rounded-full">
-              {deletedCount}
-            </Badge>
-          )}
-        </Button>
+        {/* Action: الفواتير المحذوفة (مخصصة للمدير فقط) */}
+        {!isEmployee && (
+          <Button
+            variant="outline"
+            onClick={() => setDeletedDialogOpen(true)}
+            className="gap-2 border-border hover:bg-destructive/5 hover:border-destructive/30 hover:text-destructive transition-colors relative"
+            title="عرض الفواتير والأدوار المحذوفة خلال الـ 24 ساعة الماضية"
+          >
+            <Trash2 className="h-4 w-4 text-muted-foreground" />
+            <span>الفواتير المحذوفة</span>
+            {deletedCount > 0 && (
+              <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs font-mono rounded-full">
+                {deletedCount}
+              </Badge>
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Summary Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className={`grid ${isEmployee ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} gap-3`}>
         <Card className="p-4 bg-card border-muted">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground font-medium">عدد الفواتير</p>
@@ -175,27 +179,32 @@ export default function InvoicesHistory() {
           <p className="text-[11px] text-muted-foreground mt-0.5">كغم زيت صافي</p>
         </Card>
 
-        <Card className="p-4 bg-card border-muted">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground font-medium">زيت الرد المحصل</p>
-            <Droplets className="h-4 w-4 text-amber-600" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-amber-600">
-            {totals.oilFees.toLocaleString("en-US", { maximumFractionDigits: 1 })}
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">كغم للمخزن</p>
-        </Card>
+        {/* الإيرادات النقدية والزيت تظهر فقط للمدير والإدارة */}
+        {!isEmployee && (
+          <>
+            <Card className="p-4 bg-card border-muted">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground font-medium">زيت الرد المحصل</p>
+                <Droplets className="h-4 w-4 text-amber-600" />
+              </div>
+              <p className="text-2xl font-bold mt-1 text-amber-600">
+                {totals.oilFees.toLocaleString("en-US", { maximumFractionDigits: 1 })}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">كغم للمخزن</p>
+            </Card>
 
-        <Card className="p-4 bg-card border-muted">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground font-medium">النقد المحصل</p>
-            <Wallet className="h-4 w-4 text-blue-600" />
-          </div>
-          <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400">
-            {totals.cashFees.toLocaleString("en-US", { maximumFractionDigits: 1 })} {currency}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">شيكل بالصندوق</p>
-        </Card>
+            <Card className="p-4 bg-card border-muted">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground font-medium">النقد المحصل</p>
+                <Wallet className="h-4 w-4 text-blue-600" />
+              </div>
+              <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400">
+                {totals.cashFees.toLocaleString("en-US", { maximumFractionDigits: 1 })} {currency}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">شيكل بالصندوق</p>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Main Table Card */}

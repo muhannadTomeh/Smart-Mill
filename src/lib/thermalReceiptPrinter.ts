@@ -597,6 +597,318 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
   printHtmlViaIframe(zReportHtml);
 }
 
+export interface ThermalShiftReceiptData {
+  shift_id: string;
+  handover_date: string;
+  season_name?: string;
+  cashier_name: string;
+  opening_cash: number;
+  actual_cash: number;
+  expected_cash?: number;
+  difference?: number;
+  show_financial_details?: boolean;
+  invoices_count?: number;
+  notes?: string;
+  denominations?: { [denom: string]: number };
+}
+
+export function printThermalShiftReceipt(data: ThermalShiftReceiptData, millName = "المعصرة الذكية", currency = "₪") {
+  const dateObj = data.handover_date ? new Date(data.handover_date) : new Date();
+  const formattedDate = dateObj.toLocaleDateString("ar-u-nu-latn", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const formattedTime = dateObj.toLocaleTimeString("ar-u-nu-latn", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  const hasDiff = data.show_financial_details && data.difference !== undefined;
+  const diffStatus = hasDiff
+    ? Math.abs(data.difference!) < 0.01
+      ? `مطابق تماماً (0 ${currency})`
+      : data.difference! > 0
+      ? `فائض (+${data.difference!.toFixed(2)} ${currency})`
+      : `عجز (${data.difference!.toFixed(2)} ${currency})`
+    : "";
+
+  const denomEntries = data.denominations ? Object.entries(data.denominations).filter(([_, count]) => count > 0) : [];
+
+  const shiftHtml = `
+<!DOCTYPE html>
+<html lang="ar-u-nu-latn" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>إيصال تسليم وردية - ${millName}</title>
+  <style>
+    @page {
+      size: 80mm auto;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, -apple-system, BlinkMacSystemFont;
+      -webkit-print-color-adjust: exact;
+      -webkit-font-feature-settings: "locl" 0;
+      font-feature-settings: "locl" 0;
+      font-variant-numeric: tabular-nums;
+      print-color-adjust: exact;
+    }
+    body {
+      width: 78mm;
+      max-width: 78mm;
+      margin: 0 auto;
+      padding: 3mm 2mm 8mm 2mm;
+      font-size: 11.5px;
+      line-height: 1.35;
+      color: #000;
+      background: #fff;
+    }
+    .text-center { text-align: center; }
+    .bold { font-weight: 700; }
+    
+    .header {
+      text-align: center;
+      padding-bottom: 4px;
+    }
+    .mill-title {
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 2px;
+    }
+    .report-title {
+      font-size: 13px;
+      font-weight: 800;
+      background: #000;
+      color: #fff;
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 3px;
+      margin: 3px 0;
+    }
+    .subtitle {
+      font-size: 11px;
+      color: #333;
+    }
+    
+    .divider {
+      border-top: 1px dashed #000;
+      margin: 5px 0;
+    }
+    .divider-double {
+      border-top: 2px solid #000;
+      margin: 6px 0;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5px 0;
+    }
+    .info-label {
+      color: #333;
+    }
+    .info-value {
+      font-weight: 600;
+      text-align: left;
+    }
+
+    .summary-box {
+      border: 1.5px solid #000;
+      padding: 5px 6px;
+      margin: 6px 0;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 2px 0;
+    }
+
+    .big-amount-box {
+      border: 2px solid #000;
+      padding: 6px;
+      margin: 6px 0;
+      text-align: center;
+      background: #fdfdfd;
+      border-radius: 4px;
+    }
+    .big-amount-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #333;
+    }
+    .big-amount-val {
+      font-size: 18px;
+      font-weight: 900;
+      margin-top: 2px;
+    }
+
+    .difference-box {
+      border: 1.5px solid #000;
+      padding: 4px;
+      margin: 6px 0;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .denom-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 4px 0;
+      font-size: 10.5px;
+    }
+    .denom-table th, .denom-table td {
+      padding: 2px 4px;
+      border-bottom: 1px dotted #ccc;
+    }
+    .denom-table th {
+      text-align: right;
+      font-weight: 700;
+    }
+
+    .signatures {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 14px;
+      padding-top: 6px;
+      border-top: 1px dashed #777;
+    }
+    .sig-col {
+      text-align: center;
+      width: 48%;
+      font-size: 10.5px;
+    }
+    .sig-line {
+      margin-top: 18px;
+      border-top: 1px solid #000;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 9.5px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="mill-title">🫒 ${millName}</div>
+    ${data.season_name ? `<div class="subtitle">موسم: ${data.season_name}</div>` : ''}
+    <div class="report-title">إيصال تسليم وردية (Shift Handover)</div>
+    <div class="subtitle">رقم الوردية: #${data.shift_id}</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="info-row">
+    <span class="info-label">تاريخ ووقت التسليم:</span>
+    <span class="info-value">${formattedDate} - ${formattedTime}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">الكاشير المسلّم:</span>
+    <span class="info-value bold">${data.cashier_name}</span>
+  </div>
+  ${data.invoices_count !== undefined ? `
+  <div class="info-row">
+    <span class="info-label">عدد فواتير الوردية:</span>
+    <span class="info-value">${data.invoices_count} فاتورة</span>
+  </div>` : ''}
+
+  <div class="divider"></div>
+
+  <!-- عهدة البداية والمبلغ المسلّم -->
+  <div class="summary-box">
+    <div class="summary-row">
+      <span>الرصيد الافتتاحي (عهدة البداية):</span>
+      <span class="bold">${data.opening_cash.toFixed(2)} ${currency}</span>
+    </div>
+  </div>
+
+  <div class="big-amount-box">
+    <div class="big-amount-label">إجمالي النقد الفعلي المسلّم</div>
+    <div class="big-amount-val">${data.actual_cash.toFixed(2)} ${currency}</div>
+  </div>
+
+  ${denomEntries.length > 0 ? `
+  <div class="divider"></div>
+  <div style="font-weight: 700; font-size: 11px; margin-bottom: 2px;">تفصيل الفئات النقدية المعدودة:</div>
+  <table class="denom-table">
+    <thead>
+      <tr>
+        <th>الفئة</th>
+        <th style="text-align: center;">العدد</th>
+        <th style="text-align: left;">المجموع</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${denomEntries.map(([denom, count]) => `
+        <tr>
+          <td>فئة ${denom} ${currency}</td>
+          <td style="text-align: center;">${count}</td>
+          <td style="text-align: left; font-weight: 600;">${(Number(denom) * count).toFixed(2)} ${currency}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+  ` : ''}
+
+  ${data.show_financial_details && data.expected_cash !== undefined ? `
+  <div class="divider"></div>
+  <div class="summary-box">
+    <div class="summary-row">
+      <span>النقد المفترض بالنظام:</span>
+      <span class="bold">${data.expected_cash.toFixed(2)} ${currency}</span>
+    </div>
+    <div class="summary-row">
+      <span>النقد الفعلي المسلّم:</span>
+      <span class="bold">${data.actual_cash.toFixed(2)} ${currency}</span>
+    </div>
+  </div>
+  <div class="difference-box">
+    حالة التدقيق: ${diffStatus}
+  </div>
+  ` : ''}
+
+  ${data.notes ? `
+  <div class="info-row" style="font-size: 10.5px; margin-top: 3px;">
+    <span class="info-label">ملاحظات:</span>
+    <span class="info-value">${data.notes}</span>
+  </div>` : ''}
+
+  <!-- التواقيع الرسمية -->
+  <div class="signatures">
+    <div class="sig-col">
+      <div>توقيع الكاشير المسلّم</div>
+      <div class="sig-line"></div>
+    </div>
+    <div class="sig-col">
+      <div>توقيع المشرف المستلم</div>
+      <div class="sig-line"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>تم إيداع النقدية وحفظ سجل الوردية في النظام</div>
+    <div>نظام المعصرة الذكية — تسليم الوردية</div>
+  </div>
+</body>
+</html>
+  `;
+
+  printHtmlViaIframe(shiftHtml);
+}
+
 export interface ThermalQueueTicketData {
   turn_number: number | string;
   customer_name: string;

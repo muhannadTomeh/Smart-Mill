@@ -232,6 +232,14 @@ export default function Invoices() {
     });
   };
 
+  // Net oil remaining for customer after deducting mill return fee
+  const netOilForCustomer = useMemo(() => {
+    return Math.max(
+      0,
+      (invoiceData.oilProduced || 0) - Number(selectedPayment?.oilAmount || 0)
+    );
+  }, [invoiceData.oilProduced, selectedPayment]);
+
   const confirmInvoice = async (shouldPrint = false) => {
     if (!selectedPayment) {
       toast({ title: "تنبيه", description: "يرجى اختيار طريقة الدفع أولاً", variant: "destructive" });
@@ -306,7 +314,8 @@ export default function Invoices() {
         p_cash_amount: selectedPayment.cashAmount,
         p_total_display: selectedPayment.total,
         p_queue_id: queueId && queueId !== "manual" ? queueId : null,
-      });
+        p_target_user_id: targetUserId || undefined,
+      } as any);
 
       if (error) {
         console.error("create_invoice_and_settle error", error);

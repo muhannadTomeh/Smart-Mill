@@ -189,7 +189,8 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       p_cash_amount: selected.cashAmount,
       p_total_display: selected.label,
       p_queue_id: customer.id,
-    });
+      p_target_user_id: targetUserId || undefined,
+    } as any);
 
     if (error) {
       console.error("create_invoice_and_settle error", error);

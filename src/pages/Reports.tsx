@@ -1,49 +1,63 @@
 import { useEffect, useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableRow, TableHeader, TableHead } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { FileText, DollarSign, Users, Package, TrendingUp, Droplets, Banknote, Lock, Eye, EyeOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { 
+  FileText, DollarSign, Users, Package, TrendingUp, TrendingDown,
+  Droplets, Banknote, Lock, Eye, EyeOff, Scale, Wallet, ArrowDownLeft,
+  ArrowUpLeft, ShieldAlert, CheckCircle2, UserCheck, RefreshCw, ShoppingCart
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useRole } from "@/contexts/RoleContext";
+import { useCurrency } from "@/hooks/useCurrency";
 import { Navigate } from "react-router-dom";
+import { 
+  calculateAccurateFinancialReport, 
+  type AccurateFinancialSummary 
+} from "@/lib/financialCore";
 
+type Period = "daily" | "weekly" | "monthly" | "yearly" | "all";
 
-
-type Period = "daily" | "weekly" | "monthly" | "yearly";
-
-function getDateRange(period: Period): string {
+function getDateRange(period: Period): string | null {
   const now = new Date();
   switch (period) {
-    case "daily":
-      return now.toISOString().split("T")[0];
+    case "daily": {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return today.toISOString();
+    }
     case "weekly": {
       const d = new Date(now);
       d.setDate(d.getDate() - 7);
-      return d.toISOString().split("T")[0];
+      return d.toISOString();
     }
     case "monthly": {
       const d = new Date(now);
       d.setMonth(d.getMonth() - 1);
-      return d.toISOString().split("T")[0];
+      return d.toISOString();
     }
     case "yearly": {
       const d = new Date(now);
       d.setFullYear(d.getFullYear() - 1);
-      return d.toISOString().split("T")[0];
+      return d.toISOString();
     }
+    case "all":
+      return null;
   }
 }
 
 const periodLabels: Record<Period, string> = {
-  daily: "يومي",
-  weekly: "أسبوعي",
-  monthly: "شهري",
-  yearly: "سنوي",
+  daily: "اليوم",
+  weekly: "آخر 7 أيام",
+  monthly: "آخر 30 يوم",
+  yearly: "هذا العام",
+  all: "كامل الموسم",
 };
 
 export default function Reports() {
@@ -51,72 +65,155 @@ export default function Reports() {
   const targetUserId = effectiveUserId || user?.id;
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
+
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
+  const { currency } = useCurrency();
+
   const [period, setPeriod] = useState<Period>("daily");
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [stats, setStats] = useState({
-    totalOilProduced: 0,
-    totalOilReturn: 0,
-    totalCashEarned: 0,
-    completedCustomers: 0,
-    totalExpenses: 0,
-    totalWorkerPayments: 0,
-    totalOilSales: 0,
-    totalOilSalesAmount: 0,
-    totalOilPurchases: 0,
-    totalOilPurchasesAmount: 0,
+  // Financial Core Report Summary
+  const [financialSummary, setFinancialSummary] = useState<AccurateFinancialSummary>({
+    pressingRevenue: 0,
+    oilSalesRevenue: 0,
+    totalOperatingRevenue: 0,
+    operationalExpenses: 0,
+    workerWagesPaid: 0,
+    totalOperatingExpenses: 0,
+    operatingProfit: 0,
+    cashInflows: 0,
+    cashOutflows: 0,
+    netCashFlow: 0,
+    stockPurchasesCash: 0,
+    invoicesCount: 0,
+    expensesCount: 0,
+    tradesCount: 0,
   });
 
-  useEffect(() => {
-    if (targetUserId && activeSeason && isUnlocked) fetchReports();
-  }, [targetUserId, activeSeason, period, isUnlocked]);
+  // Additional Operational Stats
+  const [operationalStats, setOperationalStats] = useState({
+    totalOilProduced: 0,
+    totalOilReturn: 0,
+    totalOilSalesKg: 0,
+    totalOilPurchasesKg: 0,
+    workerTotalEarned: 0,
+    workerTotalPaid: 0,
+    workerRemainingDue: 0,
+    completedCustomersCount: 0,
+  });
 
-  const fetchReports = async () => {
+  const fetchReportData = async () => {
     if (!targetUserId || !activeSeason) return;
+    setLoading(true);
+
     const dateFrom = getDateRange(period);
 
-    const [invoicesRes, expensesRes, salesRes, purchasesRes, workerPaymentsRes] = await Promise.all([
-      supabase.from("invoices").select("*").eq("user_id", targetUserId).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
-      supabase.from("expenses").select("amount").eq("user_id", targetUserId).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
-      supabase.from("oil_transactions").select("total_price,amount").eq("user_id", targetUserId).eq("season_id", activeSeason.id).eq("type", "sell").gte("created_at", dateFrom),
-      supabase.from("oil_transactions").select("total_price,amount").eq("user_id", targetUserId).eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),
-      supabase.from("worker_payments").select("amount").eq("user_id", targetUserId).eq("season_id", activeSeason.id).gte("created_at", dateFrom),
-    ]);
+    try {
+      // 1. Fetch Accurate Financial Summary from Financial Core
+      const finSummary = await calculateAccurateFinancialReport({
+        millId: targetUserId,
+        seasonId: activeSeason.id,
+        dateFrom,
+      });
 
-    const invoices = invoicesRes.data || [];
-    const totalOilProduced = invoices.reduce((s, i: any) => s + Number(i.oil_produced), 0);
-    const totalOilReturn = invoices.reduce((s, i: any) => s + Number(i.oil_amount), 0);
-    const totalCashEarned = invoices.reduce((s, i: any) => s + Number(i.cash_amount), 0);
-    const completedCustomers = invoices.length;
-    const totalExpenses = (expensesRes.data || []).reduce((s, e: any) => s + Number(e.amount), 0);
-    const totalWorkerPayments = (workerPaymentsRes.data || []).reduce((s, w: any) => s + Number(w.amount), 0);
-    const totalOilSales = (salesRes.data || []).reduce((s, t: any) => s + Number(t.total_price), 0);
-    const totalOilSalesAmount = (salesRes.data || []).reduce((s, t: any) => s + Number(t.amount), 0);
-    const totalOilPurchases = (purchasesRes.data || []).reduce((s, t: any) => s + Number(t.total_price), 0);
-    const totalOilPurchasesAmount = (purchasesRes.data || []).reduce((s, t: any) => s + Number(t.amount), 0);
+      // 2. Fetch Operational details (Oil produced, workers due, etc.)
+      let invQuery = supabase
+        .from("invoices")
+        .select("oil_produced, oil_amount, cash_amount, customer_name")
+        .eq("user_id", targetUserId)
+        .eq("season_id", activeSeason.id);
 
-    setStats({
-      totalOilProduced,
-      totalOilReturn,
-      totalCashEarned,
-      completedCustomers,
-      totalExpenses,
-      totalWorkerPayments,
-      totalOilSales,
-      totalOilSalesAmount,
-      totalOilPurchases,
-      totalOilPurchasesAmount,
-    });
+      let oilSalesQuery = supabase
+        .from("oil_transactions")
+        .select("amount, total_price")
+        .eq("user_id", targetUserId)
+        .eq("season_id", activeSeason.id)
+        .eq("type", "sell");
+
+      let oilPurchasesQuery = supabase
+        .from("oil_transactions")
+        .select("amount, total_price")
+        .eq("user_id", targetUserId)
+        .eq("season_id", activeSeason.id)
+        .eq("type", "buy");
+
+      let workersQuery = supabase
+        .from("workers")
+        .select("total_earned, total_paid")
+        .eq("user_id", targetUserId)
+        .eq("season_id", activeSeason.id);
+
+      if (dateFrom) {
+        invQuery = invQuery.gte("created_at", dateFrom);
+        oilSalesQuery = oilSalesQuery.gte("created_at", dateFrom);
+        oilPurchasesQuery = oilPurchasesQuery.gte("created_at", dateFrom);
+      }
+
+      const [invRes, salesRes, purchasesRes, workersRes] = await Promise.all([
+        invQuery,
+        oilSalesQuery,
+        oilPurchasesQuery,
+        workersQuery,
+      ]);
+
+      const invoices = invRes.data || [];
+      const totalOilProduced = invoices.reduce((s, i: any) => s + (Number(i.oil_produced) || 0), 0);
+      const totalOilReturn = invoices.reduce((s, i: any) => s + (Number(i.oil_amount) || 0), 0);
+      const completedCustomersCount = invoices.length;
+
+      const totalOilSalesKg = (salesRes.data || []).reduce((s, t: any) => s + (Number(t.amount) || 0), 0);
+      const totalOilPurchasesKg = (purchasesRes.data || []).reduce((s, t: any) => s + (Number(t.amount) || 0), 0);
+
+      const workers = workersRes.data || [];
+      const workerTotalEarned = workers.reduce((s, w: any) => s + (Number(w.total_earned) || 0), 0);
+      const workerTotalPaid = workers.reduce((s, w: any) => s + (Number(w.total_paid) || 0), 0);
+      const workerRemainingDue = Math.max(0, workerTotalEarned - workerTotalPaid);
+
+      // Fallback if financial_transactions was not populated yet
+      if (finSummary.invoicesCount === 0 && invoices.length > 0) {
+        const legacyCash = invoices.reduce((s, i: any) => s + (Number(i.cash_amount) || 0), 0);
+        const legacySales = (salesRes.data || []).reduce((s, t: any) => s + (Number(t.total_price) || 0), 0);
+        const legacyPurchases = (purchasesRes.data || []).reduce((s, t: any) => s + (Number(t.total_price) || 0), 0);
+
+        finSummary.pressingRevenue = legacyCash;
+        finSummary.oilSalesRevenue = legacySales;
+        finSummary.totalOperatingRevenue = legacyCash + legacySales;
+        finSummary.stockPurchasesCash = legacyPurchases;
+        finSummary.operatingProfit = finSummary.totalOperatingRevenue - finSummary.totalOperatingExpenses;
+        finSummary.cashInflows = legacyCash + legacySales;
+        finSummary.cashOutflows = finSummary.operationalExpenses + finSummary.workerWagesPaid + legacyPurchases;
+        finSummary.netCashFlow = finSummary.cashInflows - finSummary.cashOutflows;
+        finSummary.invoicesCount = completedCustomersCount;
+      }
+
+      setFinancialSummary(finSummary);
+      setOperationalStats({
+        totalOilProduced,
+        totalOilReturn,
+        totalOilSalesKg,
+        totalOilPurchasesKg,
+        workerTotalEarned,
+        workerTotalPaid,
+        workerRemainingDue,
+        completedCustomersCount,
+      });
+    } catch (e) {
+      console.error("Error loading reports", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const totalOutgoing = stats.totalExpenses + stats.totalWorkerPayments + stats.totalOilPurchases;
-  const totalIncoming = stats.totalCashEarned + stats.totalOilSales;
-  const netProfit = totalIncoming - totalOutgoing;
+  useEffect(() => {
+    if (targetUserId && activeSeason && isUnlocked) {
+      fetchReportData();
+    }
+  }, [targetUserId, activeSeason, period, isUnlocked]);
 
   const handleUnlock = async () => {
     try {
@@ -140,35 +237,47 @@ export default function Reports() {
 
   if (!isUnlocked) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]" dir="rtl">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-3 h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
-              <Lock className="h-7 w-7 text-primary" />
+      <div className="flex items-center justify-center min-h-[65vh]" dir="rtl">
+        <Card className="w-full max-w-sm border shadow-lg">
+          <CardHeader className="text-center pb-2">
+            <div className="mx-auto mb-3 h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner">
+              <Lock className="h-7 w-7" />
             </div>
-            <CardTitle className="text-xl">صفحة التقارير محمية</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">أدخل كلمة السر للوصول</p>
+            <CardTitle className="text-xl font-bold">صفحة التقارير محمية</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              التقارير المالية والتحليلات مخصصة للإدارة فقط. أدخل رمز الحماية للمتابعة:
+            </p>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-2">
             <div className="relative">
               <Input
                 type={showPassword ? "text" : "password"}
-                placeholder="كلمة السر"
+                placeholder="رمز الحماية (PIN)"
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); setPasswordError(false); }}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError(false);
+                }}
                 onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
-                className={passwordError ? "border-destructive" : ""}
+                className={`text-center font-mono text-lg font-bold h-11 ${passwordError ? "border-destructive" : ""}`}
+                dir="ltr"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {passwordError && <p className="text-sm text-destructive">كلمة السر غير صحيحة</p>}
-            <Button onClick={handleUnlock} className="w-full">دخول</Button>
+            {passwordError && (
+              <p className="text-xs text-destructive text-center font-semibold">
+                رمز الحماية غير صحيح. حاول مجدداً.
+              </p>
+            )}
+            <Button onClick={handleUnlock} className="w-full h-11 font-bold text-base">
+              دخول للتقارير
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -176,134 +285,309 @@ export default function Reports() {
   }
 
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-6 max-w-7xl mx-auto" dir="rtl">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-card border shadow-sm">
         <div className="flex items-center gap-3">
-          <FileText className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">التقارير</h1>
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-inner">
+            <FileText className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground">التقارير والتحليلات المالية</h1>
+              <Badge variant="outline" className="text-xs font-semibold">
+                Financial Core
+              </Badge>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              موسم: {activeSeason?.name || "الموسم الحالي"} — فصل الأرباح التشغيلية عن حركة الصندوق والمخزون
+            </p>
+          </div>
         </div>
-        <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="daily">يومي</SelectItem>
-            <SelectItem value="weekly">أسبوعي</SelectItem>
-            <SelectItem value="monthly">شهري</SelectItem>
-            <SelectItem value="yearly">سنوي</SelectItem>
-          </SelectContent>
-        </Select>
+
+        <div className="flex items-center gap-2 self-stretch sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchReportData}
+            disabled={loading}
+            className="gap-1.5 h-10 text-xs font-semibold"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            تحديث
+          </Button>
+          <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
+            <SelectTrigger className="w-44 h-10 font-bold text-xs bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent dir="rtl">
+              <SelectItem value="daily">اليوم</SelectItem>
+              <SelectItem value="weekly">آخر 7 أيام</SelectItem>
+              <SelectItem value="monthly">آخر 30 يوم</SelectItem>
+              <SelectItem value="yearly">هذا العام</SelectItem>
+              <SelectItem value="all">كامل الموسم</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <p className="text-muted-foreground text-sm">تقرير {periodLabels[period]} — {activeSeason?.name || ""}</p>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">الزيت المنتج</CardTitle>
-            <Droplets className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats.totalOilProduced.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">كغم</span></div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">كمية الرد (زيت)</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats.totalOilReturn.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">كغم</span></div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">كمية الكاش</CardTitle>
-            <Banknote className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats.totalCashEarned.toFixed(0)} <span className="text-sm font-normal text-muted-foreground">ش</span></div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">زبائن بنجاح</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats.completedCustomers}</div></CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Financial Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" /> ملخص مالي شامل</CardTitle>
+      {/* 4 Core Financial KPI Cards */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {/* 1. Operating Profit */}
+        <Card className="border-2 border-primary/40 bg-gradient-to-br from-primary/5 to-primary/15 shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-bold text-foreground">الربح التشغيلي الحقيقي</CardTitle>
+            <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
+              <Scale className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className={`text-2xl sm:text-3xl font-black font-mono ${financialSummary.operatingProfit >= 0 ? "text-primary" : "text-destructive"}`} dir="ltr">
+              {financialSummary.operatingProfit >= 0 ? `+${financialSummary.operatingProfit.toFixed(0)}` : financialSummary.operatingProfit.toFixed(0)} {currency}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t border-primary/20">
+              الإيرادات ({financialSummary.totalOperatingRevenue.toFixed(0)}) - المصاريف ({financialSummary.totalOperatingExpenses.toFixed(0)})
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 2. Total Operating Revenue */}
+        <Card className="border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-bold text-emerald-800 dark:text-emerald-300">إجمالي الإيرادات التشغيلية</CardTitle>
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-700 dark:text-emerald-400 font-mono" dir="ltr">
+              +{financialSummary.totalOperatingRevenue.toFixed(0)} {currency}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t border-emerald-500/10">
+              عصر: {financialSummary.pressingRevenue.toFixed(0)} {currency} | بيع زيت: {financialSummary.oilSalesRevenue.toFixed(0)} {currency}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 3. Operating Expenses */}
+        <Card className="border-rose-500/20 bg-rose-50/40 dark:bg-rose-950/20 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-bold text-rose-800 dark:text-rose-300">المصاريف التشغيلية والأجور</CardTitle>
+            <div className="w-8 h-8 rounded-lg bg-rose-500/15 text-rose-600 flex items-center justify-center">
+              <TrendingDown className="h-4 w-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl sm:text-3xl font-black text-rose-700 dark:text-rose-400 font-mono" dir="ltr">
+              -{financialSummary.totalOperatingExpenses.toFixed(0)} {currency}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t border-rose-500/10">
+              تشغيل: {financialSummary.operationalExpenses.toFixed(0)} {currency} | عمال: {financialSummary.workerWagesPaid.toFixed(0)} {currency}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 4. Cash Flow */}
+        <Card className="border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-bold text-foreground">صافي حركة الصندوق (Cash Flow)</CardTitle>
+            <div className="w-8 h-8 rounded-lg bg-muted text-muted-foreground flex items-center justify-center">
+              <Wallet className="h-4 w-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl sm:text-3xl font-black font-mono ${financialSummary.netCashFlow >= 0 ? "text-foreground" : "text-amber-600"}`} dir="ltr">
+              {financialSummary.netCashFlow >= 0 ? `+${financialSummary.netCashFlow.toFixed(0)}` : financialSummary.netCashFlow.toFixed(0)} {currency}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t">
+              وارد: +{financialSummary.cashInflows.toFixed(0)} | صادر: -{financialSummary.cashOutflows.toFixed(0)} {currency}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tables & Deep Breakdowns */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* 1. Income Statement Summary (قائمة الدخل والربح التشغيلي) */}
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <Scale className="h-5 w-5 text-primary" />
+              <span>بيان الأرباح والخسائر التشغيلية (P&L Summary)</span>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              حساب دقيق للأرباح: الإيرادات ناقص المصاريف والأجور (مشتريات الزيت لا تُخصم كخسارة لأنها أصل مخزني)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table dir="rtl">
               <TableBody>
-                <TableRow>
-                  <TableCell className="text-right font-medium text-green-600">إيرادات الفواتير (كاش)</TableCell>
-                  <TableCell className="text-right text-green-600">+{stats.totalCashEarned.toFixed(0)} ش</TableCell>
+                {/* Revenue Section */}
+                <TableRow className="bg-muted/30">
+                  <TableCell className="font-bold text-xs text-foreground" colSpan={2}>
+                    1. الإيرادات التشغيلية المكتسبة (+)
+                  </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-green-600">إيرادات الفواتير (زيت)</TableCell>
-                  <TableCell className="text-right text-green-600">+{stats.totalOilReturn.toFixed(2)} كغم</TableCell>
+                  <TableCell className="text-right text-xs">
+                    <div>إيرادات فواتير العصر والتنكات (نقد)</div>
+                    <div className="text-[11px] text-muted-foreground">عدد الفواتير: {operationalStats.completedCustomersCount}</div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-bold text-emerald-600" dir="ltr">
+                    +{financialSummary.pressingRevenue.toFixed(2)} {currency}
+                  </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-green-600">مبيعات زيت ({stats.totalOilSalesAmount.toFixed(1)} كغم)</TableCell>
-                  <TableCell className="text-right text-green-600">+{stats.totalOilSales.toFixed(0)} ش</TableCell>
+                  <TableCell className="text-right text-xs">
+                    <div>مبيعات الزيت النقدية</div>
+                    <div className="text-[11px] text-muted-foreground">الكمية المباعة: {operationalStats.totalOilSalesKg.toFixed(1)} كغم</div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-bold text-emerald-600" dir="ltr">
+                    +{financialSummary.oilSalesRevenue.toFixed(2)} {currency}
+                  </TableCell>
                 </TableRow>
-                <TableRow className="border-t-2">
-                  <TableCell className="text-right font-medium text-destructive">مشتريات زيت ({stats.totalOilPurchasesAmount.toFixed(1)} كغم)</TableCell>
-                  <TableCell className="text-right text-destructive">-{stats.totalOilPurchases.toFixed(0)} ش</TableCell>
+                <TableRow className="border-t font-semibold bg-emerald-500/5">
+                  <TableCell className="text-right text-xs text-emerald-800 dark:text-emerald-300">إجمالي الإيرادات التشغيلية</TableCell>
+                  <TableCell className="text-right font-mono font-black text-emerald-700 dark:text-emerald-400" dir="ltr">
+                    +{financialSummary.totalOperatingRevenue.toFixed(2)} {currency}
+                  </TableCell>
+                </TableRow>
+
+                {/* Expenses Section */}
+                <TableRow className="bg-muted/30">
+                  <TableCell className="font-bold text-xs text-foreground" colSpan={2}>
+                    2. المصاريف التشغيلية والأجور (-)
+                  </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-destructive">مصاريف عامة</TableCell>
-                  <TableCell className="text-right text-destructive">-{stats.totalExpenses.toFixed(0)} ش</TableCell>
+                  <TableCell className="text-right text-xs">المصاريف التشغيلية العامة (محروقات، صيانة، تنظيف...)</TableCell>
+                  <TableCell className="text-right font-mono font-bold text-rose-600" dir="ltr">
+                    -{financialSummary.operationalExpenses.toFixed(2)} {currency}
+                  </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-destructive">أجور العمال</TableCell>
-                  <TableCell className="text-right text-destructive">-{stats.totalWorkerPayments.toFixed(0)} ش</TableCell>
+                  <TableCell className="text-right text-xs">أجور ودفعات العمال المسددة</TableCell>
+                  <TableCell className="text-right font-mono font-bold text-rose-600" dir="ltr">
+                    -{financialSummary.workerWagesPaid.toFixed(2)} {currency}
+                  </TableCell>
                 </TableRow>
-                <TableRow className="border-t-2">
-                  <TableCell className="text-right font-bold">صافي الربح</TableCell>
-                  <TableCell className={`text-right font-bold text-lg ${netProfit >= 0 ? "text-green-600" : "text-destructive"}`}>{netProfit >= 0 ? "+" : ""}{netProfit.toFixed(0)} ش</TableCell>
+                <TableRow className="border-t font-semibold bg-rose-500/5">
+                  <TableCell className="text-right text-xs text-rose-800 dark:text-rose-300">إجمالي المصاريف التشغيلية</TableCell>
+                  <TableCell className="text-right font-mono font-black text-rose-700 dark:text-rose-400" dir="ltr">
+                    -{financialSummary.totalOperatingExpenses.toFixed(2)} {currency}
+                  </TableCell>
+                </TableRow>
+
+                {/* Net Operating Profit Row */}
+                <TableRow className="border-t-2 bg-primary/10 font-bold">
+                  <TableCell className="text-right text-sm font-black">صافي الربح التشغيلي للمدة</TableCell>
+                  <TableCell className={`text-right font-mono font-black text-base ${financialSummary.operatingProfit >= 0 ? "text-primary" : "text-destructive"}`} dir="ltr">
+                    {financialSummary.operatingProfit >= 0 ? `+${financialSummary.operatingProfit.toFixed(2)}` : financialSummary.operatingProfit.toFixed(2)} {currency}
+                  </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </CardContent>
         </Card>
 
-        {/* Current Inventory */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><DollarSign className="h-5 w-5" /> المخزون الحالي</CardTitle>
+        {/* 2. Cash Flow & Inventory Snapshot */}
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-emerald-600" />
+              <span>الصندوق والمخزون الفعلي (Cash & Stock Ledger)</span>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              متابعة حركة النقد الفعلي بالدرج وحركة مخزون الزيت في المعصرة
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between p-4 rounded-lg bg-primary/5 border">
-              <div className="flex items-center gap-3">
-                <Droplets className="h-8 w-8 text-primary" />
+          <CardContent className="p-5 space-y-4">
+            {/* Live Snapshots */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-xl bg-card border flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                  <Banknote className="h-5 w-5" />
+                </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">مخزون الزيت</p>
-                  <p className="text-2xl font-bold">{inventory.total_oil} كغم</p>
+                  <p className="text-xs text-muted-foreground">رصيد الصندوق الحالي</p>
+                  <p className="text-xl font-black font-mono" dir="ltr">{inventory.total_cash.toFixed(2)} {currency}</p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-card border flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Droplets className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">مخزون الزيت الحالي</p>
+                  <p className="text-xl font-black font-mono" dir="ltr">{inventory.total_oil.toFixed(1)} كغم</p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between p-4 rounded-lg bg-green-500/5 border">
-              <div className="flex items-center gap-3">
-                <Banknote className="h-8 w-8 text-green-600" />
-                <div>
-                  <p className="text-sm text-muted-foreground">مخزون الكاش</p>
-                  <p className="text-2xl font-bold">{inventory.total_cash} ش</p>
+
+            {/* Cash Flow Summary */}
+            <div className="p-4 rounded-xl bg-muted/30 border space-y-2.5 text-xs">
+              <p className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                <Wallet className="h-4 w-4 text-primary" />
+                <span>حركة تدفقات الصندوق (Cash Flow Breakdown)</span>
+              </p>
+              <div className="flex justify-between items-center py-1 border-b">
+                <span className="text-muted-foreground">إجمالي النقد المقبوض في الصندوق (+)</span>
+                <span className="font-bold font-mono text-emerald-600" dir="ltr">+{financialSummary.cashInflows.toFixed(2)} {currency}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b">
+                <span className="text-muted-foreground">إجمالي النقد المدفوع من الصندوق (-)</span>
+                <span className="font-bold font-mono text-rose-600" dir="ltr">-{financialSummary.cashOutflows.toFixed(2)} {currency}</span>
+              </div>
+              {financialSummary.stockPurchasesCash > 0 && (
+                <div className="flex justify-between items-center py-1 border-b text-muted-foreground">
+                  <span>منها مشتريات زيت كأصل مخزني (ليست خسارة):</span>
+                  <span className="font-mono font-semibold" dir="ltr">{financialSummary.stockPurchasesCash.toFixed(2)} {currency}</span>
                 </div>
+              )}
+              <div className="flex justify-between items-center pt-1 font-bold text-sm">
+                <span>صافي حركة النقدية:</span>
+                <span className="font-mono font-black" dir="ltr">
+                  {financialSummary.netCashFlow >= 0 ? `+${financialSummary.netCashFlow.toFixed(2)}` : financialSummary.netCashFlow.toFixed(2)} {currency}
+                </span>
               </div>
             </div>
-            <div className="p-4 rounded-lg bg-muted/50 border space-y-2">
-              <p className="text-sm font-medium">ملخص سريع</p>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">إجمالي الوارد</span>
-                <span className="text-green-600 font-medium">+{totalIncoming.toFixed(0)} ش</span>
+
+            {/* Oil Movement Summary */}
+            <div className="p-4 rounded-xl bg-muted/30 border space-y-2.5 text-xs">
+              <p className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                <Droplets className="h-4 w-4 text-primary" />
+                <span>حركة الزيت خلال المدة ({periodLabels[period]})</span>
+              </p>
+              <div className="flex justify-between items-center py-1 border-b">
+                <span className="text-muted-foreground">إجمالي الزيت المعصور المنتج:</span>
+                <span className="font-mono font-bold">{operationalStats.totalOilProduced.toFixed(1)} كغم</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">إجمالي الصادر</span>
-                <span className="text-destructive font-medium">-{totalOutgoing.toFixed(0)} ش</span>
+              <div className="flex justify-between items-center py-1 border-b">
+                <span className="text-muted-foreground">زيت الرد المحصل للمعصرة:</span>
+                <span className="font-mono font-bold text-emerald-600">+{operationalStats.totalOilReturn.toFixed(1)} كغم</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b">
+                <span className="text-muted-foreground">مشتريات الزيت من المزارعين:</span>
+                <span className="font-mono font-bold text-primary">+{operationalStats.totalOilPurchasesKg.toFixed(1)} كغم</span>
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <span className="text-muted-foreground">مبيعات الزيت المباعة:</span>
+                <span className="font-mono font-bold text-rose-600">-{operationalStats.totalOilSalesKg.toFixed(1)} كغم</span>
+              </div>
+            </div>
+
+            {/* Payables & Receivables (الذمم والمستحقات) */}
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2 text-xs">
+              <p className="font-bold text-sm text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                <UserCheck className="h-4 w-4 text-amber-600" />
+                <span>المستحقات والذمم المعلقة</span>
+              </p>
+              <div className="flex justify-between items-center">
+                <span className="text-amber-800 dark:text-amber-300">مستحقات العمال المتبقية (أجور لم تسدد بعد):</span>
+                <span className="font-mono font-bold text-amber-900 dark:text-amber-200" dir="ltr">
+                  {operationalStats.workerRemainingDue.toFixed(2)} {currency}
+                </span>
               </div>
             </div>
           </CardContent>
