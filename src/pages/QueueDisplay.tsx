@@ -220,10 +220,11 @@ export default function QueueDisplay() {
                   </span>
                   <div className="flex flex-col gap-0.5 overflow-hidden">
                     <span
-                      className="font-semibold truncate"
+                      className="font-semibold truncate inline-block max-w-full pb-1.5 leading-normal"
                       style={{
                         fontSize: idx === 0 ? "1.75rem" : "1.35rem",
                         color: idx === 0 ? "#fef3c7" : "rgba(255,255,255,0.45)",
+                        lineHeight: 1.4,
                       }}
                     >
                       {item.name}

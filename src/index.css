@@ -178,6 +178,11 @@ All colors MUST be HSL.
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); background-clip: content-box; }
+
+  /* Prevent Arabic letters and descenders (ي، م، ر، ج، etc.) from clipping on truncated elements */
+  .truncate {
+    padding-bottom: 0.18em;
+  }
 }
 
 @layer utilities {

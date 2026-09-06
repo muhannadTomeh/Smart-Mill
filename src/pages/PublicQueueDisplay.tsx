@@ -457,8 +457,11 @@ export default function PublicQueueDisplay() {
 
                 {/* Customer Name */}
                 <span
-                  className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-3 tracking-wide truncate max-w-full px-4 drop-shadow"
-                  style={{ textShadow: "0 2px 10px rgba(0,0,0,0.7)" }}
+                  className="text-white text-3xl md:text-4xl lg:text-5xl font-black mt-2 tracking-normal truncate max-w-full px-4 pt-1 pb-4 leading-normal drop-shadow inline-block"
+                  style={{
+                    textShadow: "0 2px 10px rgba(0,0,0,0.7)",
+                    lineHeight: 1.45,
+                  }}
                 >
                   {currentItem.name}
                 </span>
@@ -563,8 +566,11 @@ export default function PublicQueueDisplay() {
 
                       {/* Customer Name */}
                       <span
-                        className="text-white font-black truncate text-xl md:text-2xl lg:text-3xl tracking-wide drop-shadow"
-                        style={{ textShadow: "0 2px 8px rgba(0,0,0,0.7)" }}
+                        className="text-white font-black truncate text-xl md:text-2xl lg:text-3xl tracking-normal drop-shadow inline-block max-w-full pt-0.5 pb-2 leading-normal"
+                        style={{
+                          textShadow: "0 2px 8px rgba(0,0,0,0.7)",
+                          lineHeight: 1.4,
+                        }}
                       >
                         {item.name}
                       </span>
