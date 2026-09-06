@@ -20,7 +20,6 @@ import {
   Sliders,
   Sparkles,
   Info,
-  Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/useSettings";
@@ -29,10 +28,8 @@ import { useCurrency } from "@/hooks/useCurrency";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { InvoicePreview, type InvoicePreviewData } from "@/components/invoices/InvoicePreview";
-import { DeletedInvoicesDialog } from "@/components/invoices/DeletedInvoicesDialog";
-import { useDeletedInvoices } from "@/hooks/useDeletedInvoices";
 import { 
   calculatePaymentOptions, 
   calculateCustomMixedFromOil, 
@@ -65,7 +62,6 @@ export default function Invoices() {
   const { refetch: refetchInventory } = useInventory();
   const { currency } = useCurrency();
   const location = useLocation();
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   const targetUserId = effectiveUserId || user?.id;
@@ -102,10 +98,6 @@ export default function Invoices() {
 
   // Preview Dialog Modal
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-
-  // Deleted Invoices Modal (24h retention)
-  const [deletedModalOpen, setDeletedModalOpen] = useState(false);
-  const { count: deletedCount } = useDeletedInvoices();
 
   // Submitting state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -412,7 +404,7 @@ export default function Invoices() {
           </div>
         </div>
 
-        {/* Action buttons: الآلة الحاسبة + الفواتير المحذوفة + سجل الفواتير */}
+        {/* Action buttons: الآلة الحاسبة */}
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Button to open system native calculator */}
           <Button
@@ -425,32 +417,6 @@ export default function Invoices() {
               <CalcIcon className="h-4 w-4 text-primary" />
               <span>الآلة الحاسبة</span>
             </a>
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={() => setDeletedModalOpen(true)}
-            className="gap-2 border-border hover:bg-destructive/5 hover:border-destructive/30 hover:text-destructive transition-colors relative"
-            title="عرض الفواتير والأدوار المحذوفة خلال الـ 24 ساعة الماضية"
-          >
-            <Trash2 className="h-4 w-4 text-muted-foreground" />
-            <span>الفواتير المحذوفة</span>
-            {deletedCount > 0 && (
-              <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs font-mono rounded-full">
-                {deletedCount}
-              </Badge>
-            )}
-          </Button>
-
-          {/* Quick link to Invoices History */}
-          <Button
-            variant="outline"
-            onClick={() => navigate("/invoices-history")}
-            className="gap-2 border-primary/30 hover:bg-primary/5 text-primary font-semibold"
-          >
-            <FileText className="h-4 w-4" />
-            <span>سجل الفواتير</span>
-            <ArrowLeft className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -887,24 +853,6 @@ export default function Invoices() {
         </DialogContent>
       </Dialog>
 
-      {/* Deleted Invoices Dialog (Saved for 24 hours) */}
-      <DeletedInvoicesDialog
-        open={deletedModalOpen}
-        onOpenChange={setDeletedModalOpen}
-        onSelectForInvoice={(item) => {
-          setInvoiceData((p) => ({
-            ...p,
-            customerName: item.name,
-            customerPhone: item.phone || "",
-            notes: item.notes || p.notes,
-          }));
-          setQueueId(item.id);
-          toast({
-            title: "تم تحميل بيانات الفاتورة",
-            description: `تم إدراج الزبون "${item.name}" في نموذج الفاتورة`,
-          });
-        }}
-      />
     </div>
   );
 }
