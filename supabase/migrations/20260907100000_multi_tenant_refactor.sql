@@ -1273,19 +1273,20 @@ BEGIN
       now()
     );
 
-    INSERT INTO auth.identities (
-      id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
-    ) VALUES (
-      gen_random_uuid(),
-      v_owner_user_id,
-      jsonb_build_object('sub', v_owner_user_id::text, 'email', v_email),
-      'email',
-      v_owner_user_id::text,
-      now(),
-      now(),
-      now()
-    )
-    ON CONFLICT DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM auth.identities WHERE user_id = v_owner_user_id AND provider = 'email') THEN
+      INSERT INTO auth.identities (
+        id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        gen_random_uuid(),
+        v_owner_user_id,
+        jsonb_build_object('sub', v_owner_user_id::text, 'email', v_email),
+        'email',
+        v_owner_user_id::text,
+        now(),
+        now(),
+        now()
+      );
+    END IF;
   ELSE
     -- المستخدم موجود مسبقاً (مثلاً من معصرة محذوفة سابقاً): تحديث كلمة المرور وربطه بالمعصرة الجديدة
     UPDATE auth.users
@@ -1300,19 +1301,20 @@ BEGIN
         updated_at = now()
     WHERE id = v_owner_user_id;
 
-    INSERT INTO auth.identities (
-      id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
-    ) VALUES (
-      gen_random_uuid(),
-      v_owner_user_id,
-      jsonb_build_object('sub', v_owner_user_id::text, 'email', v_email),
-      'email',
-      v_owner_user_id::text,
-      now(),
-      now(),
-      now()
-    )
-    ON CONFLICT DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM auth.identities WHERE user_id = v_owner_user_id AND provider = 'email') THEN
+      INSERT INTO auth.identities (
+        id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        gen_random_uuid(),
+        v_owner_user_id,
+        jsonb_build_object('sub', v_owner_user_id::text, 'email', v_email),
+        'email',
+        v_owner_user_id::text,
+        now(),
+        now(),
+        now()
+      );
+    END IF;
   END IF;
 
   -- 3. Create or update profile
@@ -1475,19 +1477,20 @@ BEGIN
       now()
     );
 
-    INSERT INTO auth.identities (
-      id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
-    ) VALUES (
-      gen_random_uuid(),
-      v_emp_user_id,
-      jsonb_build_object('sub', v_emp_user_id::text, 'email', v_email),
-      'email',
-      v_emp_user_id::text,
-      now(),
-      now(),
-      now()
-    )
-    ON CONFLICT DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM auth.identities WHERE user_id = v_emp_user_id AND provider = 'email') THEN
+      INSERT INTO auth.identities (
+        id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        gen_random_uuid(),
+        v_emp_user_id,
+        jsonb_build_object('sub', v_emp_user_id::text, 'email', v_email),
+        'email',
+        v_emp_user_id::text,
+        now(),
+        now(),
+        now()
+      );
+    END IF;
   ELSE
     -- الحساب كان موجوداً من قبل: تحديث كلمة المرور وربطه بالمعصرة
     UPDATE auth.users
@@ -1500,19 +1503,20 @@ BEGIN
         updated_at = now()
     WHERE id = v_emp_user_id;
 
-    INSERT INTO auth.identities (
-      id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
-    ) VALUES (
-      gen_random_uuid(),
-      v_emp_user_id,
-      jsonb_build_object('sub', v_emp_user_id::text, 'email', v_email),
-      'email',
-      v_emp_user_id::text,
-      now(),
-      now(),
-      now()
-    )
-    ON CONFLICT DO NOTHING;
+    IF NOT EXISTS (SELECT 1 FROM auth.identities WHERE user_id = v_emp_user_id AND provider = 'email') THEN
+      INSERT INTO auth.identities (
+        id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        gen_random_uuid(),
+        v_emp_user_id,
+        jsonb_build_object('sub', v_emp_user_id::text, 'email', v_email),
+        'email',
+        v_emp_user_id::text,
+        now(),
+        now(),
+        now()
+      );
+    END IF;
   END IF;
 
   -- Create or update Profile
