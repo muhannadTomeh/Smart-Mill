@@ -63,9 +63,10 @@ const paymentLabel = (type: string) => {
 };
 
 const Customers = () => {
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, currentMillId, effectiveUserId, profile } = useAuth();
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
-  const targetUserId = effectiveUserId || user?.id;
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const { activeSeason } = useSeason();
   const { toast } = useToast();
 
@@ -157,22 +158,22 @@ const Customers = () => {
   };
 
   const fetchCustomers = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!targetMillId || !activeSeason) return;
     const { data } = await supabase
       .from("customers")
       .select("*")
-      .eq("user_id", targetUserId)
+      .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
       .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: false });
     setCustomers((data as Customer[]) || []);
   };
 
   const fetchInvoices = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!targetMillId || !activeSeason) return;
     const { data } = await supabase
       .from("invoices")
       .select("*")
-      .eq("user_id", targetUserId)
+      .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
       .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: false });
     setInvoices((data as InvoiceRecord[]) || []);
@@ -204,7 +205,8 @@ const Customers = () => {
       const { error } = await supabase
         .from("customers")
         .insert({
-          user_id: targetUserId!,
+          mill_id: targetMillId!,
+          user_id: user?.id || targetMillId!,
           season_id: activeSeason!.id,
           name: newCustName.trim(),
           phone: newCustPhone.trim() || null,

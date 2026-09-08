@@ -117,12 +117,14 @@ export function clearAllDeletedInvoices(seasonId?: string | null): void {
  */
 export async function restoreDeletedInvoiceToQueue(
   item: DeletedInvoice,
-  targetUserId: string
+  targetMillId: string,
+  targetUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // 1. Re-insert or upsert into queue with status "completed"
     const payload: any = {
       id: item.id,
+      mill_id: (item as any).mill_id || targetMillId,
       user_id: item.user_id || targetUserId,
       season_id: item.season_id || null,
       name: item.name,

@@ -178,6 +178,7 @@ export default function MillDetails() {
       }
 
       // 3. Fetch all related records safely
+      const targetMillGuid = millObj?.id;
       const [
         seasonsRes,
         invoicesRes,
@@ -188,14 +189,26 @@ export default function MillDetails() {
         inventoryRes,
         paymentsRes
       ] = await Promise.all([
-        supabase.from("seasons").select("*").eq("user_id", resolvedOwner).limit(5),
-        supabase.from("invoices").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
-        supabase.from("queue").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
-        supabase.from("expenses").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
-        supabase.from("oil_transactions").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
+        targetMillGuid 
+          ? supabase.from("seasons").select("*").or(`mill_id.eq.${targetMillGuid},user_id.eq.${resolvedOwner}`).limit(5)
+          : supabase.from("seasons").select("*").eq("user_id", resolvedOwner).limit(5),
+        targetMillGuid
+          ? supabase.from("invoices").select("*").or(`mill_id.eq.${targetMillGuid},user_id.eq.${resolvedOwner}`).order("created_at", { ascending: false })
+          : supabase.from("invoices").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
+        targetMillGuid
+          ? supabase.from("queue").select("*").or(`mill_id.eq.${targetMillGuid},user_id.eq.${resolvedOwner}`).order("created_at", { ascending: false })
+          : supabase.from("queue").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
+        targetMillGuid
+          ? supabase.from("expenses").select("*").or(`mill_id.eq.${targetMillGuid},user_id.eq.${resolvedOwner}`).order("created_at", { ascending: false })
+          : supabase.from("expenses").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
+        targetMillGuid
+          ? supabase.from("oil_transactions").select("*").or(`mill_id.eq.${targetMillGuid},user_id.eq.${resolvedOwner}`).order("created_at", { ascending: false })
+          : supabase.from("oil_transactions").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
         supabase.from("profiles").select("*").eq("parent_mill_id", resolvedOwner).order("created_at", { ascending: false }),
-        supabase.from("inventory").select("*").eq("user_id", resolvedOwner).limit(1),
-        supabase.from("subscription_payments").select("*").eq("mill_user_id", resolvedOwner).order("payment_date", { ascending: false })
+        targetMillGuid
+          ? supabase.from("inventory").select("*").or(`mill_id.eq.${targetMillGuid},user_id.eq.${resolvedOwner}`).limit(1)
+          : supabase.from("inventory").select("*").eq("user_id", resolvedOwner).limit(1),
+        supabase.from("subscription_payments").select("*").or(`mill_user_id.eq.${resolvedOwner}${targetMillGuid ? `,mill_id.eq.${targetMillGuid}` : ''}`).order("payment_date", { ascending: false })
       ]);
 
       const seasons = seasonsRes.data || [];
@@ -213,7 +226,7 @@ export default function MillDetails() {
         try {
           const { data: mems } = await supabase
             .from("mill_memberships")
-            .select("id, user_id, role, display_username, created_at, profiles(display_name, phone, employee_pin)")
+            .select("id, user_id, role, username, display_username, created_at, profiles(display_name, phone, employee_pin)")
             .eq("mill_id", millObj.id)
             .eq("role", "mill_employee");
           membershipsData = mems || [];
@@ -234,8 +247,8 @@ export default function MillDetails() {
           .map((m: any) => ({
             id: m.id,
             user_id: m.user_id,
-            display_name: m.profiles?.display_name || m.display_username,
-            phone: m.profiles?.phone || m.display_username,
+            display_name: m.profiles?.display_name || m.display_username || m.username,
+            phone: m.profiles?.phone || m.username || m.display_username,
             employee_pin: m.profiles?.employee_pin || null,
             created_at: m.created_at,
             parent_mill_id: resolvedOwner,

@@ -47,8 +47,9 @@ const kindMeta: Record<MovementKind, { label: string; icon: any; color: string }
 const Inventory = () => {
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, currentMillId, effectiveUserId } = useAuth();
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const { activeSeason } = useSeason();
   const { inventory, loading: invLoading } = useInventory();
   const { dailyInv, loading: dailyLoading, updateDailyInv } = useDailyInventory();
@@ -75,22 +76,22 @@ const Inventory = () => {
   }, [dailyInv]);
 
   useEffect(() => {
-    if (targetUserId && activeSeason) fetchAll();
-  }, [targetUserId, activeSeason]);
+    if (targetMillId && activeSeason) fetchAll();
+  }, [targetMillId, activeSeason]);
 
   const fetchAll = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!targetMillId || !activeSeason) return;
     setLoading(true);
 
     const [invoicesRes, oilTxRes, expensesRes, workerPayRes] = await Promise.all([
-      supabase.from("invoices").select("*").eq("user_id", targetUserId).eq("season_id", activeSeason.id),
-      supabase.from("oil_transactions").select("*").eq("user_id", targetUserId).eq("season_id", activeSeason.id),
-      supabase.from("expenses").select("*").eq("user_id", targetUserId).eq("season_id", activeSeason.id),
+      supabase.from("invoices").select("*").or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`).eq("season_id", activeSeason.id),
+      supabase.from("oil_transactions").select("*").or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`).eq("season_id", activeSeason.id),
+      supabase.from("expenses").select("*").or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`).eq("season_id", activeSeason.id),
       supabase
         .from("worker_payments")
         .select("*, workers(name)")
-        .eq("user_id", targetUserId)
-        .eq("season_id", activeSeason.id),
+        .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
+        .eq("season_id", activeSeason.id)
     ]);
 
     const list: Movement[] = [];

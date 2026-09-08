@@ -92,16 +92,26 @@ const Auth = () => {
         if (isAdminRole) {
           navigate("/admin");
         } else {
-          const { data: profileRow } = await supabase
-            .from('profiles')
-            .select('parent_mill_id')
+          const { data: memberRow } = await supabase
+            .from('mill_memberships')
+            .select('role')
             .eq('user_id', data.user.id)
             .maybeSingle();
 
-          if (profileRow?.parent_mill_id) {
+          if (memberRow?.role === 'mill_employee') {
             navigate("/queue");
           } else {
-            navigate("/seasons");
+            const { data: profileRow } = await supabase
+              .from('profiles')
+              .select('parent_mill_id')
+              .eq('user_id', data.user.id)
+              .maybeSingle();
+
+            if (profileRow?.parent_mill_id) {
+              navigate("/queue");
+            } else {
+              navigate("/seasons");
+            }
           }
         }
       } else {

@@ -27,8 +27,9 @@ interface Transaction {
 }
 
 const OilTrading = () => {
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, currentMillId, effectiveUserId } = useAuth();
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
@@ -39,11 +40,11 @@ const OilTrading = () => {
   });
 
   useEffect(() => {
-    if (targetUserId) fetchTransactions();
-  }, [targetUserId, activeSeason]);
+    if (targetMillId) fetchTransactions();
+  }, [targetMillId, activeSeason]);
 
   const fetchTransactions = async () => {
-    const { data } = await supabase.from("oil_transactions").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("oil_transactions").select("*").or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
     setTransactions(data as Transaction[] || []);
     setLoading(false);
   };

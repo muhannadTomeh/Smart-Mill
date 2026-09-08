@@ -55,8 +55,8 @@ const COUNTRIES = [
 ];
 
 export default function Settings() {
-  const { user, profile, refreshProfile, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, profile, refreshProfile, currentMillId, currentMill } = useAuth();
+  const targetMillId = currentMillId;
   const { activeSeason, refetch: refetchSeasons } = useSeason();
   const { settings, loading } = useSettings();
   const { inventory, updateInventory } = useInventory();
@@ -311,15 +311,16 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    if (user) {
+    if (currentMillId) {
       supabase
-        .from("profiles")
-        .select("id, display_name, phone, created_at")
-        .eq("parent_mill_id", targetUserId)
+        .from("mill_memberships")
+        .select("id, user_id, username, display_name, phone, role, is_active, created_at")
+        .eq("mill_id", currentMillId)
+        .eq("role", "mill_employee")
         .order("created_at", { ascending: false })
         .then(({ data }) => setEmployees(data || []));
     }
-  }, [user, targetUserId]);
+  }, [currentMillId]);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -327,17 +328,17 @@ export default function Settings() {
   const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    if (profile) {
+    if (currentMill || profile) {
       setProfileForm({
-        mill_name: profile.mill_name || "",
-        display_name: profile.display_name || "",
-        country: profile.country || "فلسطين",
-        mill_location: profile.mill_location || "",
-        phone: profile.phone || "",
-        secondary_phone: profile.secondary_phone || ""
+        mill_name: currentMill?.name || profile?.mill_name || "",
+        display_name: profile?.display_name || "",
+        country: currentMill?.country || profile?.country || "فلسطين",
+        mill_location: currentMill?.location || profile?.mill_location || "",
+        phone: currentMill?.phone || profile?.phone || "",
+        secondary_phone: currentMill?.secondary_phone || profile?.secondary_phone || ""
       });
     }
-  }, [profile]);
+  }, [currentMill, profile]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -347,6 +348,20 @@ export default function Settings() {
     }
     setSavingProfile(true);
     try {
+      if (currentMillId) {
+        await supabase
+          .from("mills")
+          .update({
+            name: profileForm.mill_name.trim(),
+            country: profileForm.country,
+            location: profileForm.mill_location.trim(),
+            phone: profileForm.phone.trim(),
+            secondary_phone: profileForm.secondary_phone.trim() || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", currentMillId);
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -399,27 +414,28 @@ export default function Settings() {
   }, [loading, settings, inventory]);
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (currentMillId && activeSeason) {
       fetchContainerTypes();
       fetchExpenseCategories();
     }
-  }, [targetUserId, activeSeason]);
+  }, [currentMillId, activeSeason]);
 
   const fetchExpenseCategories = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!currentMillId || !activeSeason) return;
     const { data } = await supabase
       .from("expense_categories")
       .select("*")
-      .eq("user_id", targetUserId)
+      .eq("mill_id", currentMillId)
       .eq("season_id", activeSeason.id)
       .order("name", { ascending: true });
     setExpenseCategories(data || []);
   };
 
   const addExpenseCategory = async () => {
-    if (!targetUserId || !activeSeason || !newExpenseCategoryName.trim()) return;
+    if (!currentMillId || !activeSeason || !newExpenseCategoryName.trim()) return;
     const { error } = await supabase.from("expense_categories").insert({
-      user_id: targetUserId,
+      mill_id: currentMillId,
+      user_id: user?.id,
       season_id: activeSeason.id,
       name: newExpenseCategoryName.trim()
     });
@@ -439,20 +455,21 @@ export default function Settings() {
   };
 
   const fetchContainerTypes = async () => {
-    if (!targetUserId || !activeSeason) return;
-    const { data } = await supabase.
-    from("container_types").
-    select("*").
-    eq("user_id", targetUserId).
-    eq("season_id", activeSeason.id).
-    order("created_at", { ascending: true });
+    if (!currentMillId || !activeSeason) return;
+    const { data } = await supabase
+      .from("container_types")
+      .select("*")
+      .eq("mill_id", currentMillId)
+      .eq("season_id", activeSeason.id)
+      .order("created_at", { ascending: true });
     setContainerTypes(data as ContainerType[] || []);
   };
 
   const addContainerType = async () => {
-    if (!targetUserId || !activeSeason || !newContainerName.trim() || !newContainerPrice) return;
+    if (!currentMillId || !activeSeason || !newContainerName.trim() || !newContainerPrice) return;
     const { error } = await supabase.from("container_types").insert({
-      user_id: targetUserId,
+      mill_id: currentMillId,
+      user_id: user?.id,
       season_id: activeSeason.id,
       name: newContainerName.trim(),
       price: parseFloat(newContainerPrice)

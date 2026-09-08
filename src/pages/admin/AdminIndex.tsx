@@ -26,9 +26,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, User, Building2, Receipt, Droplets, CalendarCheck, Filter, UserPlus, Copy, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Users, User, Building2, CalendarCheck, Filter, UserPlus, Copy, RefreshCw, CheckCircle2, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -38,11 +48,11 @@ export default function AdminIndex() {
     activeMills: 0,
     newThisWeek: 0,
     newThisMonth: 0,
-    totalInvoices: 0,
-    totalOil: 0,
   });
   const [mills, setMills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTargetMill, setDeleteTargetMill] = useState<any | null>(null);
+  const [deletingMill, setDeletingMill] = useState(false);
   const [contactLink, setContactLink] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
@@ -171,40 +181,61 @@ export default function AdminIndex() {
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`تم نسخ ${label}`);
+  const handleDeleteMill = async () => {
+    if (!deleteTargetMill) return;
+    setDeletingMill(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('admin_delete_mill', {
+        p_mill_id: deleteTargetMill.id
+      });
+
+      if (error) {
+        // Fallback: direct delete from mills table
+        const fallbackRes = await (supabase as any).from('mills').delete().eq('id', deleteTargetMill.id);
+        if (fallbackRes.error) {
+          throw fallbackRes.error;
+        }
+      }
+
+      toast.success(`تم حذف معصرة "${deleteTargetMill.millName}" وجميع بياناتها بنجاح`);
+      setMills(prev => prev.filter(m => m.id !== deleteTargetMill.id));
+      setStats(prev => ({
+        ...prev,
+        totalMills: Math.max(0, prev.totalMills - 1),
+        activeMills: deleteTargetMill.isActive ? Math.max(0, prev.activeMills - 1) : prev.activeMills
+      }));
+      setDeleteTargetMill(null);
+    } catch (err: any) {
+      console.error("Error deleting mill:", err);
+      toast.error(err.message || "حدث خطأ أثناء حذف المعصرة");
+    } finally {
+      setDeletingMill(false);
+    }
   };
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // ============================================================
-        // الاستعلام الجديد: من جدول mills مع بيانات المالك عبر mill_memberships
-        // كل صف = معصرة واحدة فقط
-        // ============================================================
         const [
           { data: millsData, error: millsError },
           { data: lastPayments },
           { data: seasons },
-          { data: invoices },
           { data: adminRoles }
         ] = await Promise.all([
           (supabase as any).from("mills").select(`
             id, name, location, country, phone, secondary_phone,
             mill_code, subscription_status, monthly_fee, owner_user_id, created_at,
-            mill_memberships(id, user_id, role, display_username)
+            mill_memberships(id, user_id, role, username, display_username)
           `).order("created_at", { ascending: false }),
           (supabase as any).from("subscription_payments").select("mill_user_id, payment_date, mill_id").order("payment_date", { ascending: false }),
-          supabase.from("seasons").select("user_id, status"),
-          supabase.from("invoices").select("oil_produced, created_at, user_id"),
+          supabase.from("seasons").select("user_id, status, mill_id"),
           supabase.from("user_roles").select("user_id").eq("role", "platform_admin")
         ]);
 
         // إذا لم يكن جدول mills موجوداً بعد، Fallback لجدول profiles
         if (millsError || !millsData) {
-          await fetchFromProfiles(lastPayments, seasons, invoices);
+          await fetchFromProfiles(lastPayments, seasons);
           return;
         }
 
@@ -214,36 +245,31 @@ export default function AdminIndex() {
         const now = new Date();
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const oneMonthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
-        const totalOil = (invoices || []).reduce((sum: number, inv: any) => sum + (inv.oil_produced || 0), 0);
-        const activeUserIds = new Set((seasons || []).filter((s: any) => s.status === 'open').map((s: any) => s.user_id));
+        const activeMillIds = new Set((seasons || []).filter((s: any) => s.status === 'open' || s.status === 'active').map((s: any) => s.mill_id || s.user_id));
 
         setStats({
           totalMills: pureMillsData.length,
-          activeMills: pureMillsData.filter((m: any) => activeUserIds.has(m.owner_user_id)).length,
+          activeMills: pureMillsData.filter((m: any) => activeMillIds.has(m.id) || activeMillIds.has(m.owner_user_id)).length,
           newThisWeek: pureMillsData.filter((m: any) => new Date(m.created_at) >= oneWeekAgo).length,
           newThisMonth: pureMillsData.filter((m: any) => new Date(m.created_at) >= oneMonthAgo).length,
-          totalInvoices: (invoices || []).length,
-          totalOil,
         });
 
         const millList = pureMillsData.map((mill: any) => {
           const ownerMembership = (mill.mill_memberships || []).find((mm: any) => mm.role === 'mill_owner');
           const employeeCount = (mill.mill_memberships || []).filter((mm: any) => mm.role === 'mill_employee').length;
-          const millInvoices = (invoices || []).filter((inv: any) => inv.user_id === mill.owner_user_id);
           const millPayments = (lastPayments || []).filter((p: any) => p.mill_id === mill.id || p.mill_user_id === mill.owner_user_id);
           return {
             id: mill.id,
             ownerUserId: mill.owner_user_id,
             millName: mill.name,
-            ownerName: ownerMembership?.display_username || "غير محدد",
+            ownerName: ownerMembership?.display_username || ownerMembership?.username || "غير محدد",
             country: mill.country || "فلسطين",
             millLocation: mill.location || "غير محدد",
             phone: mill.phone || "---",
             secondaryPhone: mill.secondary_phone,
             createdAt: mill.created_at,
-            isActive: activeUserIds.has(mill.owner_user_id),
+            isActive: activeMillIds.has(mill.id) || activeMillIds.has(mill.owner_user_id),
             subscriptionStatus: mill.subscription_status || 'pending',
-            invoiceCount: millInvoices.length,
             employeeCount,
             lastPaymentDate: millPayments.length > 0 ? millPayments[0].payment_date : null,
           };
@@ -258,19 +284,18 @@ export default function AdminIndex() {
       } catch (error: any) {
         console.error("Admin data fetch error (mills):", error);
         // Fallback
-        const [{ data: lastPayments }, { data: seasons }, { data: invoices }] = await Promise.all([
+        const [{ data: lastPayments }, { data: seasons }] = await Promise.all([
           supabase.from("subscription_payments").select("mill_user_id, payment_date").order("payment_date", { ascending: false }),
-          supabase.from("seasons").select("user_id, status"),
-          supabase.from("invoices").select("oil_produced, created_at, user_id")
+          supabase.from("seasons").select("user_id, status")
         ]);
-        await fetchFromProfiles(lastPayments, seasons, invoices);
+        await fetchFromProfiles(lastPayments, seasons);
       } finally {
         setLoading(false);
       }
     };
 
     // Fallback: إذا لم يكتمل migration بعد، اقرأ من profiles (ملاك فقط بدون parent_mill_id وبدون حساب الأدمن)
-    const fetchFromProfiles = async (lastPayments: any, seasons: any, invoices: any) => {
+    const fetchFromProfiles = async (lastPayments: any, seasons: any) => {
       const [
         { data: profiles },
         { data: adminRoles }
@@ -284,7 +309,6 @@ export default function AdminIndex() {
       const millProfiles = (profiles || []).filter((p: any) => !adminUserIds.has(p.user_id));
 
       const activeUserIds = new Set((seasons || []).filter((s: any) => s.status === 'open').map((s: any) => s.user_id));
-      const totalOil = (invoices || []).reduce((sum: number, inv: any) => sum + (inv.oil_produced || 0), 0);
       const now = new Date();
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const oneMonthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -294,12 +318,9 @@ export default function AdminIndex() {
         activeMills: millProfiles.filter((p: any) => activeUserIds.has(p.user_id)).length,
         newThisWeek: millProfiles.filter((p: any) => new Date(p.created_at) >= oneWeekAgo).length,
         newThisMonth: millProfiles.filter((p: any) => new Date(p.created_at) >= oneMonthAgo).length,
-        totalInvoices: (invoices || []).length,
-        totalOil,
       });
 
       const millList = millProfiles.map((profile: any) => {
-        const userInvoices = (invoices || []).filter((inv: any) => inv.user_id === profile.user_id);
         const millPayments = (lastPayments || []).filter((p: any) => p.mill_user_id === profile.user_id);
         return {
           id: profile.user_id,
@@ -313,7 +334,6 @@ export default function AdminIndex() {
           createdAt: profile.created_at,
           isActive: activeUserIds.has(profile.user_id),
           subscriptionStatus: profile.subscription_status || 'pending',
-          invoiceCount: userInvoices.length,
           employeeCount: 0,
           lastPaymentDate: millPayments.length > 0 ? millPayments[0].payment_date : null,
         };
@@ -662,7 +682,7 @@ export default function AdminIndex() {
       </Card>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-right">إجمالي المعاصر</CardTitle>
@@ -683,26 +703,6 @@ export default function AdminIndex() {
           <CardContent className="text-right">
             <div className="text-2xl font-bold">{stats.activeMills}</div>
             <p className="text-xs text-muted-foreground mt-1">بمواسم مفتوحة حالياً</p>
-          </CardContent>
-        </Card>
-        <Card className="text-right">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-right">إجمالي الفواتير</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="text-right">
-            <div className="text-2xl font-bold">{stats.totalInvoices}</div>
-            <p className="text-xs text-muted-foreground mt-1">فاتورة صادرة</p>
-          </CardContent>
-        </Card>
-        <Card className="text-right">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-right">إجمالي الزيت المعالج</CardTitle>
-            <Droplets className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="text-right">
-            <div className="text-2xl font-bold">{(Number(stats.totalOil) || 0).toLocaleString()} كغم</div>
-            <p className="text-xs text-muted-foreground mt-1">إنتاج إجمالي</p>
           </CardContent>
         </Card>
         <Card className="text-right">
@@ -746,7 +746,6 @@ export default function AdminIndex() {
                 <TableHead className="text-right">الهاتف</TableHead>
                 <TableHead className="text-right">تاريخ التسجيل</TableHead>
                 <TableHead className="text-right">حالة الاشتراك</TableHead>
-                <TableHead className="text-right">الفواتير</TableHead>
                 <TableHead className="text-right">الحسابات</TableHead>
                 <TableHead className="text-right">الإجراءات</TableHead>
               </TableRow>
@@ -770,7 +769,6 @@ export default function AdminIndex() {
                   <TableCell className="text-right">
                     {getStatusBadge(mill.subscriptionStatus)}
                   </TableCell>
-                  <TableCell className="text-xs font-semibold text-right">{mill.invoiceCount}</TableCell>
                   <TableCell className="text-right">
                     {mill.employeeCount > 0 ? (
                       <Badge variant="outline" className="text-xs gap-1">
@@ -782,19 +780,30 @@ export default function AdminIndex() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => navigate(`/admin/mill/${mill.id}`)}
-                    >
-                      عرض التفاصيل
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => navigate(`/admin/mill/${mill.id}`)}
+                      >
+                        عرض التفاصيل
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 px-2"
+                        title="حذف المعصرة"
+                        onClick={() => setDeleteTargetMill(mill)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
               {filteredMills.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     لا توجد معاصر مسجلة بعد
                   </TableCell>
                 </TableRow>
@@ -803,6 +812,30 @@ export default function AdminIndex() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Alert Dialog */}
+      <AlertDialog open={!!deleteTargetMill} onOpenChange={(open) => !open && setDeleteTargetMill(null)}>
+        <AlertDialogContent className="text-right" dir="rtl">
+          <AlertDialogHeader className="text-right sm:text-right">
+            <AlertDialogTitle className="text-right">حذف المعصرة نهائياً</AlertDialogTitle>
+            <AlertDialogDescription className="text-right text-muted-foreground text-sm">
+              هل أنت متأكد من حذف معصرة <span className="font-bold text-foreground">"{deleteTargetMill?.millName}"</span>؟
+              <br />
+              سيتم حذف جميع البيانات المرتبطة بها نهائياً (المواسم، الفواتير، الطابور، المصاريف، وحسابات الموظفين) فورياً ولا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse justify-start gap-2 sm:justify-start">
+            <AlertDialogAction
+              onClick={handleDeleteMill}
+              disabled={deletingMill}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold"
+            >
+              {deletingMill ? "جارٍ الحذف..." : "تأكيد الحذف النهائي"}
+            </AlertDialogAction>
+            <AlertDialogCancel disabled={deletingMill}>إلغاء</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -55,7 +55,7 @@ const paymentLabel = (type: string) => {
 };
 
 export default function Invoices() {
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, currentMillId, effectiveUserId, profile } = useAuth();
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
@@ -64,7 +64,8 @@ export default function Invoices() {
   const location = useLocation();
   const { toast } = useToast();
 
-  const targetUserId = effectiveUserId || user?.id;
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
 
   const [invoiceData, setInvoiceData] = useState({
     customerName: "",
@@ -118,12 +119,12 @@ export default function Invoices() {
   }, [targetUserId, activeSeason]);
 
   const fetchContainerTypes = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!targetMillId || !activeSeason) return;
     try {
       const { data } = await supabase
         .from("container_types")
         .select("*")
-        .eq("user_id", targetUserId)
+        .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
         .eq("season_id", activeSeason.id)
         .order("created_at", { ascending: true });
       const types = (data as ContainerType[]) || [];
@@ -141,12 +142,12 @@ export default function Invoices() {
   };
 
   const fetchQueueCustomers = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!targetMillId || !activeSeason) return;
     try {
       const { data } = await supabase
         .from("queue")
         .select("id, name, phone, position")
-        .eq("user_id", targetUserId)
+        .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
         .eq("season_id", activeSeason.id)
         .neq("status", "done")
         .order("position", { ascending: true });
@@ -275,7 +276,7 @@ export default function Invoices() {
           const { data } = await supabase
             .from("customers")
             .select("id")
-            .eq("user_id", targetUserId!)
+            .or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`)
             .eq("season_id", activeSeason!.id)
             .eq("name", invoiceData.customerName.trim())
             .eq("phone", cleanPhone)
@@ -289,7 +290,8 @@ export default function Invoices() {
           const { data: newCust } = await supabase
             .from("customers")
             .insert({
-              user_id: targetUserId!,
+              mill_id: targetMillId!,
+              user_id: user?.id || targetMillId!,
               season_id: activeSeason!.id,
               name: invoiceData.customerName.trim(),
               phone: cleanPhone || null,

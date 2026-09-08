@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export interface Season {
   id: string;
+  mill_id?: string;
   user_id: string;
   name: string;
   start_date: string | null;
@@ -40,46 +41,45 @@ const SeasonContext = createContext<SeasonContextType>({
 export const useSeason = () => useContext(SeasonContext);
 
 export const SeasonProvider = ({ children }: { children: ReactNode }) => {
-  const { user, effectiveUserId } = useAuth();
+  const { user, currentMillId, effectiveUserId } = useAuth();
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const targetUserId = effectiveUserId || user?.id;
+  const resolvedMillId = currentMillId || effectiveUserId || user?.id;
 
   useEffect(() => {
-    if (targetUserId) {
+    if (resolvedMillId) {
       fetchSeasons();
     } else {
       setSeasons([]);
       setLoading(false);
     }
-  }, [targetUserId]);
+  }, [resolvedMillId]);
 
   const fetchSeasons = async () => {
-    if (!targetUserId) return;
+    if (!resolvedMillId) return;
     const { data } = await supabase
       .from("seasons")
       .select("*")
-      .eq("user_id", targetUserId)
+      .or(`mill_id.eq.${resolvedMillId},user_id.eq.${resolvedMillId}`)
       .order("created_at", { ascending: false });
     setSeasons((data as Season[]) || []);
     setLoading(false);
   };
 
   const enterSeason = async (seasonId: string) => {
-    if (!targetUserId) return;
-    // Deactivate all seasons for this mill first
+    if (!resolvedMillId) return;
+    // Deactivate all active seasons for this mill first
     await supabase
       .from("seasons")
       .update({ status: "closed" })
-      .eq("user_id", targetUserId)
+      .or(`mill_id.eq.${resolvedMillId},user_id.eq.${resolvedMillId}`)
       .eq("status", "active");
     // Activate selected season
     await supabase
       .from("seasons")
       .update({ status: "active" })
-      .eq("id", seasonId)
-      .eq("user_id", targetUserId);
+      .eq("id", seasonId);
     await fetchSeasons();
   };
 

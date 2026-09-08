@@ -26,8 +26,9 @@ import {
 export default function Dashboard() {
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, currentMillId, effectiveUserId } = useAuth();
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
   const navigate = useNavigate();
@@ -48,11 +49,11 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (targetMillId && activeSeason) {
       fetchStats();
       fetchQueueData();
     }
-  }, [targetUserId, activeSeason]);
+  }, [targetMillId, activeSeason]);
 
   const fetchStats = async () => {
     const today = new Date().toISOString().split("T")[0];
@@ -60,20 +61,19 @@ export default function Dashboard() {
       supabase
         .from("queue")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", targetUserId!)
+        .or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`)
         .eq("season_id", activeSeason!.id)
         .eq("status", "waiting"),
       supabase
         .from("queue")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", targetUserId!)
+        .or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`)
         .eq("season_id", activeSeason!.id)
-        .eq("status", "completed")
-        .gte("created_at", today),
+        .eq("status", "done"),
       supabase
         .from("expenses")
         .select("amount")
-        .eq("user_id", targetUserId!)
+        .or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`)
         .eq("season_id", activeSeason!.id)
         .gte("created_at", today),
     ]);
@@ -90,7 +90,7 @@ export default function Dashboard() {
     const { data: procData } = await supabase
       .from("queue")
       .select("*")
-      .eq("user_id", targetUserId!)
+      .or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`)
       .eq("season_id", activeSeason!.id)
       .eq("status", "processing")
       .order("position", { ascending: true })
@@ -102,7 +102,7 @@ export default function Dashboard() {
     const { data: waitData } = await supabase
       .from("queue")
       .select("*")
-      .eq("user_id", targetUserId!)
+      .or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`)
       .eq("season_id", activeSeason!.id)
       .eq("status", "waiting")
       .order("position", { ascending: true })

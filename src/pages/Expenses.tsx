@@ -44,8 +44,9 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 const Expenses = () => {
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, currentMillId, effectiveUserId } = useAuth();
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
@@ -65,17 +66,17 @@ const Expenses = () => {
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (targetMillId && activeSeason) {
       fetchExpenses();
       fetchCategories();
     }
-  }, [targetUserId, activeSeason]);
+  }, [targetMillId, activeSeason]);
 
   const fetchCategories = async () => {
     const { data } = await supabase
       .from("expense_categories")
       .select("*")
-      .eq("user_id", targetUserId!)
+      .or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`)
       .eq("season_id", activeSeason!.id)
       .order("name", { ascending: true });
     const list = (data as ExpenseCategory[]) || [];
@@ -90,7 +91,7 @@ const Expenses = () => {
     const { data } = await supabase
       .from("expenses")
       .select("*")
-      .eq("user_id", targetUserId!)
+      .or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`)
       .eq("season_id", activeSeason!.id)
       .order("created_at", { ascending: false });
     setExpenses((data as Expense[]) || []);
@@ -119,7 +120,7 @@ const Expenses = () => {
         category: finalCategory,
         amount,
         description: newExpense.description.trim() || null,
-        targetUserId: targetUserId!,
+        targetUserId: targetMillId!,
       });
 
       if (error) throw error;
@@ -128,10 +129,11 @@ const Expenses = () => {
       const alreadyExists = categories.some(
         (c) => c.name.trim().toLowerCase() === finalCategory.toLowerCase()
       );
-      if (!alreadyExists && activeSeason && targetUserId) {
+      if (!alreadyExists && activeSeason && targetMillId) {
         try {
           await supabase.from("expense_categories").insert({
-            user_id: targetUserId,
+            mill_id: targetMillId,
+            user_id: user?.id || targetMillId,
             season_id: activeSeason.id,
             name: finalCategory,
           });

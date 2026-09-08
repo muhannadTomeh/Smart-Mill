@@ -34,8 +34,8 @@ interface QuickInvoiceSheetProps {
 type PaymentType = "oil" | "cash" | "mixed";
 
 export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }: QuickInvoiceSheetProps) {
-  const { user, effectiveUserId, profile } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, currentMillId, profile } = useAuth();
+  const targetMillId = currentMillId;
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
   const { refetch: refetchInventory } = useInventory();
@@ -51,7 +51,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
-    if (open && targetUserId && activeSeason) {
+    if (open && targetMillId && activeSeason) {
       fetchContainerTypes();
       // reset
       setOilProduced(0);
@@ -60,14 +60,14 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       setPaymentType(null);
       setCustomMixedOil(null);
     }
-  }, [open, targetUserId, activeSeason]);
+  }, [open, targetMillId, activeSeason]);
 
   const fetchContainerTypes = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!targetMillId || !activeSeason) return;
     const { data } = await supabase
       .from("container_types")
       .select("*")
-      .eq("user_id", targetUserId)
+      .eq("mill_id", targetMillId)
       .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: true });
     const types = (data as ContainerType[]) || [];
@@ -151,7 +151,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
         const { data } = await supabase
           .from("customers")
           .select("id")
-          .eq("user_id", targetUserId!)
+          .eq("mill_id", targetMillId!)
           .eq("season_id", activeSeason!.id)
           .eq("name", customer.name.trim())
           .eq("phone", cleanPhone)
@@ -166,7 +166,8 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
         const { data: newCust } = await supabase
           .from("customers")
           .insert({
-            user_id: targetUserId!,
+            mill_id: targetMillId!,
+            user_id: user?.id,
             season_id: activeSeason!.id,
             name: customer.name.trim(),
             phone: cleanPhone || null,
@@ -189,7 +190,8 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       p_cash_amount: selected.cashAmount,
       p_total_display: selected.label,
       p_queue_id: customer.id,
-      p_target_user_id: targetUserId || undefined,
+      p_mill_id: targetMillId || undefined,
+      p_target_user_id: targetMillId || undefined,
     } as any);
 
     if (error) {

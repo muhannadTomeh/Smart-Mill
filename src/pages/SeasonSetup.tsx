@@ -11,8 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function SeasonSetup() {
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, currentMillId } = useAuth();
+  const targetMillId = currentMillId;
   const { seasons, refetch } = useSeason();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -70,7 +70,8 @@ export default function SeasonSetup() {
     setSaving(true);
 
     const payload = {
-      user_id: targetUserId!,
+      mill_id: targetMillId!,
+      user_id: user?.id,
       name: form.name.trim(),
       start_date: form.start_date || null,
       end_date: form.end_date || null,
@@ -92,18 +93,26 @@ export default function SeasonSetup() {
         navigate("/seasons");
       }
     } else {
-      // Close all active seasons first
-      await supabase
-        .from("seasons")
-        .update({ status: "closed" })
-        .eq("user_id", targetUserId!)
-        .eq("status", "active");
+      // Close all active seasons for this mill first
+      if (targetMillId) {
+        await supabase
+          .from("seasons")
+          .update({ status: "closed" })
+          .eq("mill_id", targetMillId)
+          .eq("status", "active");
+      }
 
       const { data, error } = await supabase.from("seasons").insert({ ...payload, status: "active" }).select().single();
       if (error) {
         toast({ title: "خطأ", description: error.message, variant: "destructive" });
       } else {
-        await supabase.from("inventory").insert({ user_id: targetUserId!, season_id: data.id });
+        if (targetMillId) {
+          await supabase.from("inventory").insert({ 
+            mill_id: targetMillId,
+            user_id: user?.id, 
+            season_id: data.id 
+          });
+        }
         toast({ title: "تم الإنشاء", description: `تم إنشاء ${form.name} وتفعيله` });
         await refetch();
         navigate("/dashboard");

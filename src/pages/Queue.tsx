@@ -79,7 +79,7 @@ const Queue = () => {
   // Guard ref to prevent Realtime echoes or concurrent fetches from clobbering an in-progress reorder
   const isReorderingRef = useRef(false);
 
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, currentMillId, effectiveUserId, profile } = useAuth();
   const { activeSeason } = useSeason();
 
   useEffect(() => {
@@ -95,7 +95,8 @@ const Queue = () => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  const targetUserId = effectiveUserId || user?.id;
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
 
   const processing = allItems
     .filter((i) => i.status === "processing")
@@ -138,7 +139,7 @@ const Queue = () => {
     const { data } = await supabase
       .from("queue")
       .select("*")
-      .eq("user_id", targetUserId)
+      .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
       .eq("season_id", activeSeason.id)
       .order("position", { ascending: true });
 
@@ -209,7 +210,8 @@ const Queue = () => {
       const { data: newCustRecord } = await supabase
         .from("customers")
         .insert({
-          user_id: targetUserId!,
+          mill_id: targetMillId!,
+          user_id: user?.id || targetMillId!,
           season_id: activeSeason!.id,
           name: newCustomer.name.trim(),
           phone: newCustomer.phone?.trim() || null,
@@ -234,7 +236,8 @@ const Queue = () => {
     const nextPosition = maxPos + 1;
 
     const basePayload: any = {
-      user_id: targetUserId!,
+      mill_id: targetMillId!,
+      user_id: user?.id || targetMillId!,
       season_id: activeSeason!.id,
       name: newCustomer.name.trim(),
       phone: newCustomer.phone?.trim() || null,

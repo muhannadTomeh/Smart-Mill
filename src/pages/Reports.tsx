@@ -61,8 +61,9 @@ const periodLabels: Record<Period, string> = {
 };
 
 export default function Reports() {
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, currentMillId, effectiveUserId } = useAuth();
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
 
@@ -90,6 +91,7 @@ export default function Reports() {
     cashOutflows: 0,
     netCashFlow: 0,
     stockPurchasesCash: 0,
+    customerDebtsCollected: 0,
     invoicesCount: 0,
     expensesCount: 0,
     tradesCount: 0,
@@ -108,7 +110,7 @@ export default function Reports() {
   });
 
   const fetchReportData = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!targetMillId || !activeSeason) return;
     setLoading(true);
 
     const dateFrom = getDateRange(period);
@@ -116,7 +118,7 @@ export default function Reports() {
     try {
       // 1. Fetch Accurate Financial Summary from Financial Core
       const finSummary = await calculateAccurateFinancialReport({
-        millId: targetUserId,
+        millId: targetMillId,
         seasonId: activeSeason.id,
         dateFrom,
       });
@@ -125,27 +127,27 @@ export default function Reports() {
       let invQuery = supabase
         .from("invoices")
         .select("oil_produced, oil_amount, cash_amount, customer_name")
-        .eq("user_id", targetUserId)
+        .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
         .eq("season_id", activeSeason.id);
 
       let oilSalesQuery = supabase
         .from("oil_transactions")
         .select("amount, total_price")
-        .eq("user_id", targetUserId)
+        .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
         .eq("season_id", activeSeason.id)
         .eq("type", "sell");
 
       let oilPurchasesQuery = supabase
         .from("oil_transactions")
         .select("amount, total_price")
-        .eq("user_id", targetUserId)
+        .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
         .eq("season_id", activeSeason.id)
         .eq("type", "buy");
 
       let workersQuery = supabase
         .from("workers")
         .select("total_earned, total_paid")
-        .eq("user_id", targetUserId)
+        .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
         .eq("season_id", activeSeason.id);
 
       if (dateFrom) {

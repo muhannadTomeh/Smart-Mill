@@ -18,7 +18,7 @@ const SubscriptionContext = createContext<SubscriptionContextType>({
 export const useSubscription = () => useContext(SubscriptionContext);
 
 export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth();
+  const { user, currentMill, currentMillId } = useAuth();
   const { isAdmin } = useRole();
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +38,29 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      // Check currentMill from AuthContext first
+      if (currentMill?.subscription_status) {
+        setStatus(currentMill.subscription_status as SubscriptionStatus);
+        setLoading(false);
+        return;
+      }
+
+      // Check mills table directly if currentMillId is present
+      if (currentMillId) {
+        const { data: millData } = await supabase
+          .from('mills')
+          .select('subscription_status')
+          .eq('id', currentMillId)
+          .maybeSingle();
+
+        if (millData?.subscription_status) {
+          setStatus(millData.subscription_status as SubscriptionStatus);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fallback to profiles
       const { data, error } = await supabase
         .from('profiles')
         .select('subscription_status, parent_mill_id')
@@ -48,7 +71,6 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
         console.error("Error fetching subscription status:", error);
         setStatus('pending');
       } else if (data.parent_mill_id) {
-        // If employee/cashier, inherit subscription status from parent mill
         const { data: parentData } = await supabase
           .from('profiles')
           .select('subscription_status')
@@ -64,7 +86,7 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
     if (isAdmin !== null) {
       fetchStatus();
     }
-  }, [user, isAdmin]);
+  }, [user, isAdmin, currentMill, currentMillId]);
 
   return (
     <SubscriptionContext.Provider value={{ status, loading }}>

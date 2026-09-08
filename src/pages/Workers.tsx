@@ -45,8 +45,9 @@ interface WorkerPayment {
 }
 
 const Workers = () => {
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, currentMillId, effectiveUserId } = useAuth();
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory } = useInventory();
@@ -92,22 +93,22 @@ const Workers = () => {
   const [payFilterToday, setPayFilterToday] = useState(false);
 
   useEffect(() => {
-    if (targetUserId) { fetchWorkers(); fetchRecords(); fetchPayments(); }
-  }, [targetUserId, activeSeason]);
+    if (targetMillId) { fetchWorkers(); fetchRecords(); fetchPayments(); }
+  }, [targetMillId, activeSeason]);
 
   const fetchWorkers = async () => {
-    const { data } = await supabase.from("workers").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("workers").select("*").or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
     setWorkers((data as Worker[]) || []);
     setLoading(false);
   };
 
   const fetchRecords = async () => {
-    const { data } = await supabase.from("work_records").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("work_records").select("*").or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
     setWorkRecords((data as WorkRecord[]) || []);
   };
 
   const fetchPayments = async () => {
-    const { data } = await supabase.from("worker_payments").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("worker_payments").select("*").or(`mill_id.eq.${targetMillId!},user_id.eq.${targetMillId!}`).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
     setPayments((data as WorkerPayment[]) || []);
   };
 
@@ -117,7 +118,8 @@ const Workers = () => {
       return;
     }
     const { error } = await supabase.from("workers").insert({
-      user_id: targetUserId!,
+      mill_id: targetMillId!,
+      user_id: user?.id || targetMillId!,
       season_id: activeSeason!.id,
       name: newWorker.name,
       type: newWorker.type,

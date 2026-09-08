@@ -37,9 +37,10 @@ interface InvoiceRecord {
 }
 
 export default function InvoicesHistory() {
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, currentMillId, effectiveUserId, profile } = useAuth();
   const { isEmployee } = useRole();
-  const targetUserId = effectiveUserId || user?.id;
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const { activeSeason } = useSeason();
   const { currency } = useCurrency();
   const navigate = useNavigate();
@@ -56,13 +57,13 @@ export default function InvoicesHistory() {
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
 
   const fetchInvoices = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!targetMillId || !activeSeason) return;
     setLoading(true);
     try {
       const { data } = await supabase
         .from("invoices")
         .select("*")
-        .eq("user_id", targetUserId)
+        .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
         .eq("season_id", activeSeason.id)
         .order("created_at", { ascending: false });
       setInvoices((data as InvoiceRecord[]) || []);

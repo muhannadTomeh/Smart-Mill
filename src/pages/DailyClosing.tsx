@@ -102,11 +102,12 @@ export interface ShiftHandoverRecord {
 const COMMON_DENOMINATIONS = [200, 100, 50, 20, 10, 5, 1, 0.5];
 
 export default function DailyClosing() {
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, currentMillId, effectiveUserId, profile } = useAuth();
   const { activeSeason } = useSeason();
   const { isEmployee } = useRole();
   const { currency } = useCurrency();
-  const targetUserId = effectiveUserId || user?.id;
+  const targetMillId = currentMillId || effectiveUserId || user?.id;
+  const targetUserId = targetMillId;
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
   const cashierName = profile?.display_name || user?.email?.split("@")[0] || "مسؤول الصندوق";
 
@@ -239,21 +240,21 @@ export default function DailyClosing() {
         supabase
           .from("invoices")
           .select("*")
-          .eq("user_id", targetUserId)
+          .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
           .eq("season_id", activeSeason.id)
           .gte("created_at", startOfTodayIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("expenses")
           .select("*")
-          .eq("user_id", targetUserId)
+          .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
           .eq("season_id", activeSeason.id)
           .gte("created_at", startOfTodayIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("oil_transactions")
           .select("*")
-          .eq("user_id", targetUserId)
+          .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
           .eq("season_id", activeSeason.id)
           .eq("type", "sell")
           .gte("created_at", startOfTodayIso)
@@ -261,7 +262,7 @@ export default function DailyClosing() {
         supabase
           .from("oil_transactions")
           .select("*")
-          .eq("user_id", targetUserId)
+          .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
           .eq("season_id", activeSeason.id)
           .eq("type", "buy")
           .gte("created_at", startOfTodayIso)
@@ -269,14 +270,14 @@ export default function DailyClosing() {
         supabase
           .from("worker_payments")
           .select("*")
-          .eq("user_id", targetUserId)
+          .or(`mill_id.eq.${targetMillId},user_id.eq.${targetMillId}`)
           .eq("season_id", activeSeason.id)
           .gte("created_at", startOfTodayIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("customer_payments")
           .select("*")
-          .eq("season_id", activeSeason.id)
+          .or(`mill_id.eq.${targetMillId},season_id.eq.${activeSeason.id}`)
           .gte("created_at", startOfTodayIso)
           .order("created_at", { ascending: false }),
       ]);
