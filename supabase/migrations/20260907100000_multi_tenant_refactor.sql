@@ -522,6 +522,9 @@ END $$;
 -- Enforce UNIQUE(mill_id) on settings (one settings configuration per mill)
 DO $$
 BEGIN
+    -- Drop legacy UNIQUE(user_id) constraint
+    ALTER TABLE public.settings DROP CONSTRAINT IF EXISTS settings_user_id_key;
+
     -- Deduplicate settings keeping the latest row per mill_id
     DELETE FROM public.settings s1
     USING public.settings s2
@@ -1343,9 +1346,20 @@ BEGIN
   ON CONFLICT (user_id, role) DO NOTHING;
 
   -- 6. Initialize mill settings
+  BEGIN
+    EXECUTE 'ALTER TABLE public.settings DROP CONSTRAINT IF EXISTS settings_user_id_key';
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  -- Delete any orphaned settings row for this user or mill
+  DELETE FROM public.settings 
+  WHERE mill_id = v_mill_id 
+     OR (user_id = v_owner_user_id AND (mill_id IS NULL OR mill_id NOT IN (SELECT id FROM public.mills)));
+
   INSERT INTO public.settings (mill_id, user_id)
   VALUES (v_mill_id, v_owner_user_id)
-  ON CONFLICT (mill_id) DO NOTHING;
+  ON CONFLICT (mill_id) DO UPDATE SET user_id = EXCLUDED.user_id;
 
   RETURN jsonb_build_object(
     'success', true,
