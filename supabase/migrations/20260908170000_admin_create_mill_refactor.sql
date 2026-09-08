@@ -1,11 +1,180 @@
 -- ==============================================================================
 -- Migration: 20260908170000_admin_create_mill_refactor.sql
--- Goal: Redesign admin_create_mill RPC with strict 10-step atomic sequence,
---       guarantee owner_user_id is set upon insertion, enforce single-path,
---       and establish clean RLS policies for tenant isolation without affecting Platform Admin.
+-- Goal: Fix root cause of ON CONFLICT failure in on_auth_user_created_setup trigger,
+--       fix handle_new_user_setup, ensure clean constraints, and harden admin_create_mill.
 -- ==============================================================================
 
--- 1. Helper Functions: Hardened Role Checks
+-- ==============================================================================
+-- 1. FIX ROOT CAUSE: handle_new_user_setup & Triggers on auth.users
+-- ==============================================================================
+-- Drop the problematic trigger on auth.users that was trying to insert settings by user_id
+DROP TRIGGER IF EXISTS on_auth_user_created_setup ON auth.users;
+
+-- Re-define handle_new_user_setup to remove settings/inventory inserts by user_id
+CREATE OR REPLACE FUNCTION public.handle_new_user_setup()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    cat TEXT;
+    categories TEXT[] := ARRAY['صيانة المعدات', 'فطور العمال', 'مواد التشحيم', 'النقل والمواصلات', 'فواتير الكهرباء', 'مواد التنظيف', 'أدوات ومستلزمات', 'أخرى'];
+BEGIN
+    -- Only trigger when a season is created on public.seasons
+    IF TG_TABLE_NAME = 'seasons' THEN
+        FOREACH cat IN ARRAY categories LOOP
+            IF NOT EXISTS (SELECT 1 FROM public.expense_categories WHERE season_id = NEW.id AND name = cat) THEN
+                INSERT INTO public.expense_categories (user_id, season_id, name)
+                VALUES (NEW.user_id, NEW.id, cat);
+            END IF;
+        END LOOP;
+        
+        IF NOT EXISTS (SELECT 1 FROM public.container_types WHERE season_id = NEW.id AND name = 'بلاستيك') THEN
+            INSERT INTO public.container_types (user_id, season_id, name, price)
+            VALUES (NEW.user_id, NEW.id, 'بلاستيك', 10);
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM public.container_types WHERE season_id = NEW.id AND name = 'حديد') THEN
+            INSERT INTO public.container_types (user_id, season_id, name, price)
+            VALUES (NEW.user_id, NEW.id, 'حديد', 15);
+        END IF;
+            
+        IF NOT EXISTS (SELECT 1 FROM public.inventory WHERE season_id = NEW.id) THEN
+            INSERT INTO public.inventory (user_id, season_id, total_oil, total_cash)
+            VALUES (NEW.user_id, NEW.id, 0, 0);
+        END IF;
+    END IF;
+
+    -- On auth.users: DO NOT insert into settings or inventory!
+    -- Settings are created per mill via admin_create_mill.
+    RETURN NEW;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.handle_new_user_setup() TO service_role;
+
+-- Ensure handle_new_user for profiles is idempotent and does not fail on conflict
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE user_id = NEW.id) THEN
+    INSERT INTO public.profiles (user_id, display_name, mill_name, phone)
+    VALUES (
+      NEW.id, 
+      COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.raw_user_meta_data->>'owner_name', NEW.email),
+      NEW.raw_user_meta_data->>'mill_name',
+      NEW.raw_user_meta_data->>'phone'
+    );
+  ELSE
+    UPDATE public.profiles
+    SET display_name = COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.raw_user_meta_data->>'owner_name', display_name),
+        mill_name = COALESCE(NEW.raw_user_meta_data->>'mill_name', mill_name),
+        phone = COALESCE(NEW.raw_user_meta_data->>'phone', phone),
+        updated_at = now()
+    WHERE user_id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.handle_new_user() TO service_role;
+
+-- ==============================================================================
+-- 2. ENSURE REQUIRED CONSTRAINTS
+-- ==============================================================================
+DO $$
+BEGIN
+    -- 1. Drop legacy UNIQUE(user_id) on settings if exists
+    ALTER TABLE public.settings DROP CONSTRAINT IF EXISTS settings_user_id_key;
+
+    -- 2. Ensure settings.mill_id UNIQUE
+    -- Deduplicate settings if needed
+    DELETE FROM public.settings s1
+    USING public.settings s2
+    WHERE s1.mill_id = s2.mill_id AND s1.ctid < s2.ctid AND s1.mill_id IS NOT NULL;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'settings_mill_id_key' AND conrelid = 'public.settings'::regclass
+    ) THEN
+        BEGIN
+            ALTER TABLE public.settings ADD CONSTRAINT settings_mill_id_key UNIQUE (mill_id);
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+    END IF;
+
+    -- 3. Ensure profiles.user_id UNIQUE
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'profiles_user_id_key' AND conrelid = 'public.profiles'::regclass
+    ) THEN
+        BEGIN
+            ALTER TABLE public.profiles ADD CONSTRAINT profiles_user_id_key UNIQUE (user_id);
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+    END IF;
+
+    -- 4. Ensure mill_memberships.user_id UNIQUE
+    DELETE FROM public.mill_memberships m1
+    USING public.mill_memberships m2
+    WHERE m1.user_id = m2.user_id AND m1.ctid < m2.ctid;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'mill_memberships_user_id_key' AND conrelid = 'public.mill_memberships'::regclass
+    ) THEN
+        BEGIN
+            ALTER TABLE public.mill_memberships ADD CONSTRAINT mill_memberships_user_id_key UNIQUE (user_id);
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+    END IF;
+
+    -- 5. Ensure mill_memberships(mill_id, user_id) UNIQUE
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'mill_memberships_mill_user_key' AND conrelid = 'public.mill_memberships'::regclass
+    ) THEN
+        BEGIN
+            ALTER TABLE public.mill_memberships ADD CONSTRAINT mill_memberships_mill_user_key UNIQUE (mill_id, user_id);
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+    END IF;
+
+    -- 6. Ensure user_roles(user_id, role) UNIQUE
+    DELETE FROM public.user_roles r1
+    USING public.user_roles r2
+    WHERE r1.user_id = r2.user_id AND r1.role = r2.role AND r1.ctid < r2.ctid;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'user_roles_user_id_role_key' AND conrelid = 'public.user_roles'::regclass
+    ) THEN
+        BEGIN
+            ALTER TABLE public.user_roles ADD CONSTRAINT user_roles_user_id_role_key UNIQUE (user_id, role);
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+    END IF;
+
+    -- 7. Ensure mills.mill_code UNIQUE
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'mills_mill_code_key' AND conrelid = 'public.mills'::regclass
+    ) THEN
+        BEGIN
+            ALTER TABLE public.mills ADD CONSTRAINT mills_mill_code_key UNIQUE (mill_code);
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+    END IF;
+END $$;
+
+-- ==============================================================================
+-- 3. HELPER FUNCTIONS: Hardened Role Checks
+-- ==============================================================================
 CREATE OR REPLACE FUNCTION public.is_platform_admin(_uid uuid DEFAULT auth.uid())
 RETURNS boolean
 LANGUAGE sql
@@ -36,7 +205,9 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.has_role(uuid, text) TO authenticated, anon, service_role;
 
--- 2. Redesigned Atomic RPC: admin_create_mill
+-- ==============================================================================
+-- 4. ATOMIC RPC: admin_create_mill
+-- ==============================================================================
 CREATE OR REPLACE FUNCTION public.admin_create_mill(
   p_mill_name TEXT,
   p_country TEXT DEFAULT 'فلسطين',
@@ -59,7 +230,7 @@ DECLARE
   v_email TEXT;
 BEGIN
   -- -------------------------------------------------------------
-  -- STEP 1: Verify auth.uid() is truly Platform Admin from user_roles
+  -- STEP 1: Verify auth.uid() is truly Platform Admin
   -- -------------------------------------------------------------
   IF v_caller_id IS NULL OR NOT public.is_platform_admin(v_caller_id) THEN
     RAISE EXCEPTION 'Only platform admins can create mills';
@@ -73,7 +244,6 @@ BEGIN
     RAISE EXCEPTION 'يرجى إدخال اسم مستخدم صالح';
   END IF;
 
-  -- Remove any invalid characters
   v_clean_username := regexp_replace(v_clean_username, '[^a-z0-9_.-]', '', 'g');
   IF v_clean_username = '' THEN
     RAISE EXCEPTION 'اسم المستخدم يجب أن يحتوي على أحرف إنجليزية أو أرقام فقط';
@@ -139,13 +309,11 @@ BEGIN
       );
     END IF;
   ELSE
-    -- If user already exists in auth.users (e.g. from previously deleted mill),
-    -- safeguard: NEVER allow taking over a Platform Admin account!
+    -- Safeguard: NEVER allow taking over a Platform Admin account!
     IF public.is_platform_admin(v_owner_user_id) THEN
       RAISE EXCEPTION 'لا يمكن ربط معصرة بحساب المشرف العام';
     END IF;
 
-    -- Update password and user metadata
     UPDATE auth.users
     SET encrypted_password = extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf')),
         raw_user_meta_data = jsonb_build_object(
@@ -233,23 +401,14 @@ BEGIN
   -- -------------------------------------------------------------
   -- STEP 8: Create user_roles (user_id, role='mill_owner')
   -- -------------------------------------------------------------
-  -- Ensure platform admin role is NEVER removed or changed
   IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = v_owner_user_id AND role::text = 'mill_owner') THEN
     INSERT INTO public.user_roles (user_id, role)
     VALUES (v_owner_user_id, 'mill_owner');
   END IF;
 
   -- -------------------------------------------------------------
-  -- STEP 9: Initialize settings for the Mill
+  -- STEP 9: Initialize settings for the Mill (linked via mill_id)
   -- -------------------------------------------------------------
-  -- Clean any legacy unique constraint on user_id if present
-  BEGIN
-    EXECUTE 'ALTER TABLE public.settings DROP CONSTRAINT IF EXISTS settings_user_id_key';
-  EXCEPTION WHEN OTHERS THEN
-    NULL;
-  END;
-
-  -- Clean any orphaned settings for this user/mill
   DELETE FROM public.settings 
   WHERE mill_id = v_mill_id 
      OR (user_id = v_owner_user_id AND (mill_id IS NULL OR mill_id NOT IN (SELECT id FROM public.mills)));
@@ -276,37 +435,32 @@ BEGIN
 END;
 $$;
 
--- 3. Security Hardening for admin_create_mill
 -- Revoke all permissions from anon and PUBLIC
 REVOKE EXECUTE ON FUNCTION public.admin_create_mill(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.admin_create_mill(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM anon;
--- Grant exclusively to authenticated and service_role
 GRANT EXECUTE ON FUNCTION public.admin_create_mill(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
 
--- 4. Rebuild Clean Row Level Security (RLS) Policies
--- Enable RLS on core tenant tables
+-- ==============================================================================
+-- 5. REBUILD ROW LEVEL SECURITY (RLS) POLICIES
+-- ==============================================================================
 ALTER TABLE public.mills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mill_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
--- -------------------------------------------------------------
--- RLS: public.mills
--- -------------------------------------------------------------
+-- RLS: mills
 DROP POLICY IF EXISTS "platform_admin_full_access_mills" ON public.mills;
 DROP POLICY IF EXISTS "mill_owner_select_mills" ON public.mills;
 DROP POLICY IF EXISTS "mill_owner_update_mills" ON public.mills;
 DROP POLICY IF EXISTS "mill_employee_select_mills" ON public.mills;
 
--- Platform Admin can manage all mills
 CREATE POLICY "platform_admin_full_access_mills"
   ON public.mills FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
   WITH CHECK (public.is_platform_admin(auth.uid()));
 
--- Mill Owner can view and update their own mill
 CREATE POLICY "mill_owner_select_mills"
   ON public.mills FOR SELECT
   TO authenticated
@@ -321,21 +475,17 @@ CREATE POLICY "mill_owner_update_mills"
   USING (owner_user_id = auth.uid() OR id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner'))
   WITH CHECK (owner_user_id = auth.uid() OR id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner'));
 
--- -------------------------------------------------------------
--- RLS: public.mill_memberships
--- -------------------------------------------------------------
+-- RLS: mill_memberships
 DROP POLICY IF EXISTS "platform_admin_full_access_memberships" ON public.mill_memberships;
 DROP POLICY IF EXISTS "mill_owner_manage_memberships" ON public.mill_memberships;
 DROP POLICY IF EXISTS "users_view_own_membership" ON public.mill_memberships;
 
--- Platform Admin can view and manage all memberships
 CREATE POLICY "platform_admin_full_access_memberships"
   ON public.mill_memberships FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
   WITH CHECK (public.is_platform_admin(auth.uid()));
 
--- Mill Owner can manage memberships within their own mill
 CREATE POLICY "mill_owner_manage_memberships"
   ON public.mill_memberships FOR ALL
   TO authenticated
@@ -352,34 +502,28 @@ CREATE POLICY "mill_owner_manage_memberships"
     )
   );
 
--- Users can view their own membership
 CREATE POLICY "users_view_own_membership"
   ON public.mill_memberships FOR SELECT
   TO authenticated
   USING (user_id = auth.uid());
 
--- -------------------------------------------------------------
--- RLS: public.profiles
--- -------------------------------------------------------------
+-- RLS: profiles
 DROP POLICY IF EXISTS "platform_admin_full_access_profiles" ON public.profiles;
 DROP POLICY IF EXISTS "users_manage_own_profile" ON public.profiles;
 DROP POLICY IF EXISTS "mill_owner_view_mill_profiles" ON public.profiles;
 
--- Platform Admin can view and manage all profiles
 CREATE POLICY "platform_admin_full_access_profiles"
   ON public.profiles FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
   WITH CHECK (public.is_platform_admin(auth.uid()));
 
--- Users can view and update their own profile
 CREATE POLICY "users_manage_own_profile"
   ON public.profiles FOR ALL
   TO authenticated
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
--- Mill Owner can view profiles of their mill employees
 CREATE POLICY "mill_owner_view_mill_profiles"
   ON public.profiles FOR SELECT
   TO authenticated
@@ -393,39 +537,31 @@ CREATE POLICY "mill_owner_view_mill_profiles"
     )
   );
 
--- -------------------------------------------------------------
--- RLS: public.user_roles
--- -------------------------------------------------------------
+-- RLS: user_roles
 DROP POLICY IF EXISTS "platform_admin_full_access_user_roles" ON public.user_roles;
 DROP POLICY IF EXISTS "users_read_own_user_roles" ON public.user_roles;
 
--- Platform Admin full access on user_roles
 CREATE POLICY "platform_admin_full_access_user_roles"
   ON public.user_roles FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
   WITH CHECK (public.is_platform_admin(auth.uid()));
 
--- Authenticated users can read their own roles
 CREATE POLICY "users_read_own_user_roles"
   ON public.user_roles FOR SELECT
   TO authenticated
   USING (user_id = auth.uid());
 
--- -------------------------------------------------------------
--- RLS: public.settings
--- -------------------------------------------------------------
+-- RLS: settings
 DROP POLICY IF EXISTS "platform_admin_full_access_settings" ON public.settings;
 DROP POLICY IF EXISTS "mill_members_access_settings" ON public.settings;
 
--- Platform Admin full access on settings
 CREATE POLICY "platform_admin_full_access_settings"
   ON public.settings FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
   WITH CHECK (public.is_platform_admin(auth.uid()));
 
--- Mill members (owner/employee) can access their mill settings
 CREATE POLICY "mill_members_access_settings"
   ON public.settings FOR ALL
   TO authenticated
