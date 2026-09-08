@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
-import { useRole } from "./RoleContext";
 
 export type SubscriptionStatus = 'pending' | 'active' | 'suspended';
 
@@ -18,53 +17,94 @@ const SubscriptionContext = createContext<SubscriptionContextType>({
 export const useSubscription = () => useContext(SubscriptionContext);
 
 export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth();
-  const { isAdmin } = useRole();
+  const { user, millId, mill, isAdmin, loading: authLoading } = useAuth();
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchStatus = async () => {
+      if (authLoading) return;
+
       if (!user) {
-        setStatus(null);
-        setLoading(false);
+        if (isMounted) {
+          setStatus(null);
+          setLoading(false);
+        }
         return;
       }
 
-      // Skip check for admins
+      // Rule 5: Platform Admin never requires mill_id or membership and is never blocked by subscription
       if (isAdmin === true) {
-        setStatus('active');
-        setLoading(false);
+        if (isMounted) {
+          setStatus('active');
+          setLoading(false);
+        }
         return;
       }
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('subscription_status, parent_mill_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // 1. Fast path: mill metadata already retrieved in AuthContext
+      if (mill?.subscription_status) {
+        if (isMounted) {
+          setStatus(mill.subscription_status as SubscriptionStatus);
+          setLoading(false);
+        }
+        return;
+      }
 
-      if (error || !data) {
-        console.error("Error fetching subscription status:", error);
-        setStatus('pending');
-      } else if (data.parent_mill_id) {
-        // If employee/cashier, inherit subscription status from parent mill
-        const { data: parentData } = await supabase
+      // 2. Canonical query: fetch subscription_status from mills table using millId
+      if (millId) {
+        try {
+          const { data: millData, error } = await supabase
+            .from('mills')
+            .select('subscription_status')
+            .eq('id', millId)
+            .maybeSingle();
+
+          if (!error && millData?.subscription_status) {
+            if (isMounted) {
+              setStatus(millData.subscription_status as SubscriptionStatus);
+              setLoading(false);
+            }
+            return;
+          }
+        } catch (err) {
+          console.error("Error querying mills subscription status:", err);
+        }
+      }
+
+      // 3. Fallback for unmigrated legacy users
+      try {
+        const { data, error } = await supabase
           .from('profiles')
           .select('subscription_status')
-          .eq('user_id', data.parent_mill_id)
+          .eq('user_id', user.id)
           .maybeSingle();
-        setStatus((parentData?.subscription_status || data.subscription_status || 'active') as SubscriptionStatus);
-      } else {
-        setStatus((data.subscription_status || 'pending') as SubscriptionStatus);
+
+        if (isMounted) {
+          if (!error && data?.subscription_status) {
+            setStatus(data.subscription_status as SubscriptionStatus);
+          } else {
+            setStatus('pending');
+          }
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error fetching fallback subscription status:", err);
+        if (isMounted) {
+          setStatus('pending');
+          setLoading(false);
+        }
       }
-      setLoading(false);
     };
 
-    if (isAdmin !== null) {
-      fetchStatus();
-    }
-  }, [user, isAdmin]);
+    fetchStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, millId, mill, isAdmin, authLoading]);
 
   return (
     <SubscriptionContext.Provider value={{ status, loading }}>
@@ -72,3 +112,4 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
     </SubscriptionContext.Provider>
   );
 };
+
