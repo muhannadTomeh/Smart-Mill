@@ -1315,17 +1315,24 @@ BEGIN
     ON CONFLICT DO NOTHING;
   END IF;
 
-  -- 3. Create profile
-  INSERT INTO public.profiles (
-    user_id, display_name, mill_name, phone, secondary_phone, country, subscription_status
-  ) VALUES (
-    v_owner_user_id, p_owner_name, p_mill_name, p_owner_phone, p_owner_email, p_country, 'active'
-  )
-  ON CONFLICT (user_id) DO UPDATE SET
-    mill_name = EXCLUDED.mill_name,
-    display_name = EXCLUDED.display_name,
-    phone = EXCLUDED.phone,
-    country = EXCLUDED.country;
+  -- 3. Create or update profile
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE user_id = v_owner_user_id) THEN
+    UPDATE public.profiles
+    SET mill_name = p_mill_name,
+        display_name = p_owner_name,
+        phone = p_owner_phone,
+        secondary_phone = p_owner_email,
+        country = p_country,
+        subscription_status = 'active',
+        updated_at = now()
+    WHERE user_id = v_owner_user_id;
+  ELSE
+    INSERT INTO public.profiles (
+      user_id, display_name, mill_name, phone, secondary_phone, country, subscription_status
+    ) VALUES (
+      v_owner_user_id, p_owner_name, p_mill_name, p_owner_phone, p_owner_email, p_country, 'active'
+    );
+  END IF;
 
   -- 4. Create Mill Membership
   IF EXISTS (SELECT 1 FROM public.mill_memberships WHERE user_id = v_owner_user_id) THEN
@@ -1341,9 +1348,10 @@ BEGIN
   END IF;
 
   -- 5. Assign mill_owner role in user_roles
-  INSERT INTO public.user_roles (user_id, role)
-  VALUES (v_owner_user_id, 'mill_owner')
-  ON CONFLICT (user_id, role) DO NOTHING;
+  IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = v_owner_user_id AND role = 'mill_owner') THEN
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (v_owner_user_id, 'mill_owner');
+  END IF;
 
   -- 6. Initialize mill settings
   BEGIN
@@ -1357,9 +1365,15 @@ BEGIN
   WHERE mill_id = v_mill_id 
      OR (user_id = v_owner_user_id AND (mill_id IS NULL OR mill_id NOT IN (SELECT id FROM public.mills)));
 
-  INSERT INTO public.settings (mill_id, user_id)
-  VALUES (v_mill_id, v_owner_user_id)
-  ON CONFLICT (mill_id) DO UPDATE SET user_id = EXCLUDED.user_id;
+  -- Safe update or insert without requiring any ON CONFLICT unique constraint
+  IF EXISTS (SELECT 1 FROM public.settings WHERE mill_id = v_mill_id) THEN
+    UPDATE public.settings
+    SET user_id = v_owner_user_id, updated_at = now()
+    WHERE mill_id = v_mill_id;
+  ELSE
+    INSERT INTO public.settings (mill_id, user_id)
+    VALUES (v_mill_id, v_owner_user_id);
+  END IF;
 
   RETURN jsonb_build_object(
     'success', true,
@@ -1501,14 +1515,22 @@ BEGIN
     ON CONFLICT DO NOTHING;
   END IF;
 
-  -- Create Profile
-  INSERT INTO public.profiles (
-    user_id, display_name, phone, employee_pin, subscription_status
-  ) VALUES (
-    v_emp_user_id, p_display_name, v_clean_username, p_password, 'active'
-  )
-  ON CONFLICT (user_id) DO UPDATE SET
-    display_name = EXCLUDED.display_name;
+  -- Create or update Profile
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE user_id = v_emp_user_id) THEN
+    UPDATE public.profiles
+    SET display_name = p_display_name,
+        phone = v_clean_username,
+        employee_pin = p_password,
+        subscription_status = 'active',
+        updated_at = now()
+    WHERE user_id = v_emp_user_id;
+  ELSE
+    INSERT INTO public.profiles (
+      user_id, display_name, phone, employee_pin, subscription_status
+    ) VALUES (
+      v_emp_user_id, p_display_name, v_clean_username, p_password, 'active'
+    );
+  END IF;
 
   -- Create Mill Membership
   INSERT INTO public.mill_memberships (
@@ -1518,9 +1540,10 @@ BEGIN
   );
 
   -- Assign mill_employee role
-  INSERT INTO public.user_roles (user_id, role)
-  VALUES (v_emp_user_id, 'mill_employee')
-  ON CONFLICT (user_id, role) DO NOTHING;
+  IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = v_emp_user_id AND role = 'mill_employee') THEN
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (v_emp_user_id, 'mill_employee');
+  END IF;
 
   RETURN jsonb_build_object(
     'success', true,
