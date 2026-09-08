@@ -1199,7 +1199,7 @@ CREATE OR REPLACE FUNCTION public.admin_create_mill(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, auth
+SET search_path = public, auth, extensions
 AS $$
 DECLARE
   v_caller_id UUID := auth.uid();
@@ -1246,7 +1246,7 @@ BEGIN
       v_owner_user_id,
       '00000000-0000-0000-0000-000000000000',
       v_email,
-      crypt(COALESCE(p_password, '12345678'), gen_salt('bf')),
+      extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf')),
       now(),
       '{"provider": "email", "providers": ["email"]}'::jsonb,
       jsonb_build_object(
@@ -1332,7 +1332,7 @@ CREATE OR REPLACE FUNCTION public.admin_create_cashier(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, auth
+SET search_path = public, auth, extensions
 AS $$
 DECLARE
   v_caller_id UUID := auth.uid();
@@ -1391,7 +1391,7 @@ BEGIN
     v_emp_user_id,
     '00000000-0000-0000-0000-000000000000',
     v_email,
-    crypt(p_password, gen_salt('bf')),
+    extensions.crypt(p_password, extensions.gen_salt('bf')),
     now(),
     '{"provider": "email", "providers": ["email"]}'::jsonb,
     jsonb_build_object(
@@ -1459,7 +1459,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, auth
+SET search_path = public, auth, extensions
 AS $$
 DECLARE
   v_clean TEXT := lower(trim(p_username));
@@ -1499,7 +1499,7 @@ CREATE OR REPLACE FUNCTION public.admin_delete_mill(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, auth
+SET search_path = public, auth, extensions
 AS $$
 DECLARE
   v_caller_id UUID := auth.uid();

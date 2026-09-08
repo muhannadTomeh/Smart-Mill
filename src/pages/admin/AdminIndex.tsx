@@ -449,7 +449,6 @@ export default function AdminIndex() {
                       <Input 
                         id="owner_name" 
                         required 
-                        placeholder="مثال: رائف عمار"
                         className="text-right h-9 text-sm"
                         value={newAccountData.owner_name}
                         onChange={e => setNewAccountData(prev => ({...prev, owner_name: e.target.value}))}
@@ -462,7 +461,6 @@ export default function AdminIndex() {
                         id="owner_phone" 
                         required
                         dir="ltr"
-                        placeholder="مثال: 0569945677"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.owner_phone}
                         onChange={e => setNewAccountData(prev => ({...prev, owner_phone: e.target.value}))}
@@ -478,7 +476,6 @@ export default function AdminIndex() {
                         id="owner_email" 
                         type="email" 
                         dir="ltr"
-                        placeholder="example@gmail.com (اختياري للإشعارات والتواصل)"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.owner_email}
                         onChange={e => setNewAccountData(prev => ({...prev, owner_email: e.target.value}))}
@@ -498,7 +495,6 @@ export default function AdminIndex() {
                       <Input 
                         id="mill_name" 
                         required 
-                        placeholder="مثال: معصرة قفين الغربية"
                         className="text-right h-9 text-sm"
                         value={newAccountData.mill_name}
                         onChange={e => setNewAccountData(prev => ({...prev, mill_name: e.target.value}))}
@@ -512,7 +508,6 @@ export default function AdminIndex() {
                         required
                         className="text-right h-9 text-sm"
                         value={newAccountData.country}
-                        placeholder="مثال: قفين - طولكرم"
                         onChange={e => setNewAccountData(prev => ({...prev, country: e.target.value}))}
                       />
                     </div>
@@ -523,7 +518,6 @@ export default function AdminIndex() {
                         id="username" 
                         required 
                         dir="ltr"
-                        placeholder="مثال: raef أو qaffin_mill"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.username}
                         onChange={e => setNewAccountData(prev => ({...prev, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "")}))}
@@ -539,7 +533,6 @@ export default function AdminIndex() {
                           type="text" 
                           required 
                           dir="ltr"
-                          placeholder="أدخل كلمة المرور"
                           className="text-left font-mono h-9 text-sm"
                           value={newAccountData.password}
                           onChange={e => setNewAccountData(prev => ({...prev, password: e.target.value}))}
