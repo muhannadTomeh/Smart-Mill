@@ -382,6 +382,12 @@ export default function Invoices() {
     };
   }, [invoiceData, selectedPayment, containerCounts, containerTypes, activeSeason]);
 
+  // Net oil due to customer after fee deduction
+  const netOilForCustomer = Math.max(
+    0,
+    Number(invoiceData.oilProduced || 0) - Number(selectedPayment?.oilAmount || 0)
+  );
+
   const openSystemCalculator = () => {
     try {
       window.location.href = "calculator:";
