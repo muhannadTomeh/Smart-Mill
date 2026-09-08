@@ -177,8 +177,8 @@ export default function AdminIndex() {
           (supabase as any).from("mills").select("*").order("created_at", { ascending: false }),
           (supabase as any).from("mill_memberships").select("id, mill_id, user_id, role, username, display_username"),
           (supabase as any).from("subscription_payments").select("mill_user_id, payment_date, mill_id").order("payment_date", { ascending: false }),
-          supabase.from("seasons").select("user_id, status"),
-          supabase.from("invoices").select("oil_produced, created_at, user_id"),
+          (supabase as any).from("seasons").select("mill_id, status"),
+          (supabase as any).from("invoices").select("oil_produced, created_at, user_id, mill_id"),
           supabase.from("user_roles").select("user_id").eq("role", "platform_admin")
         ]);
 
@@ -210,11 +210,15 @@ export default function AdminIndex() {
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const oneMonthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
         const totalOil = (invoices || []).reduce((sum: number, inv: any) => sum + (inv.oil_produced || 0), 0);
-        const activeUserIds = new Set((seasons || []).filter((s: any) => s.status === 'open').map((s: any) => s.user_id));
+        const activeMillIds = new Set(
+          (seasons || [])
+            .filter((s: any) => s.status === 'active' && s.mill_id)
+            .map((s: any) => s.mill_id)
+        );
 
         setStats({
           totalMills: pureMillsData.length,
-          activeMills: pureMillsData.filter((m: any) => activeUserIds.has(m.owner_user_id)).length,
+          activeMills: pureMillsData.filter((m: any) => activeMillIds.has(m.id)).length,
           newThisWeek: pureMillsData.filter((m: any) => new Date(m.created_at) >= oneWeekAgo).length,
           newThisMonth: pureMillsData.filter((m: any) => new Date(m.created_at) >= oneMonthAgo).length,
           totalInvoices: (invoices || []).length,
@@ -225,8 +229,8 @@ export default function AdminIndex() {
           const millMembers = membershipsByMill.get(mill.id) || [];
           const ownerMembership = millMembers.find((mm: any) => mm.role === 'mill_owner' || mm.user_id === mill.owner_user_id);
           const employeeCount = millMembers.filter((mm: any) => mm.role === 'mill_employee').length;
-          const millInvoices = (invoices || []).filter((inv: any) => inv.user_id === mill.owner_user_id);
-          const millPayments = (lastPayments || []).filter((p: any) => p.mill_id === mill.id || p.mill_user_id === mill.owner_user_id);
+          const millInvoices = (invoices || []).filter((inv: any) => inv.mill_id === mill.id);
+          const millPayments = (lastPayments || []).filter((p: any) => p.mill_id === mill.id);
           return {
             id: mill.id,
             ownerUserId: mill.owner_user_id,
@@ -237,7 +241,7 @@ export default function AdminIndex() {
             phone: mill.phone || "---",
             secondaryPhone: mill.secondary_phone,
             createdAt: mill.created_at,
-            isActive: activeUserIds.has(mill.owner_user_id),
+            isActive: activeMillIds.has(mill.id),
             subscriptionStatus: mill.subscription_status || 'pending',
             invoiceCount: millInvoices.length,
             employeeCount,
