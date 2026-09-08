@@ -1,7 +1,8 @@
 -- ==============================================================================
 -- Migration: 20260908170000_admin_create_mill_refactor.sql
--- Goal: Fix root cause of ON CONFLICT failure in on_auth_user_created_setup trigger,
---       fix handle_new_user_setup, ensure clean constraints, and harden admin_create_mill.
+-- Goal: Fix root cause of ON CONFLICT failure in on_auth_user_created_setup,
+--       clean all RLS duplicate policies, make auth user creation 100% GoTrue-compatible,
+--       and establish atomic admin_create_mill RPC.
 -- ==============================================================================
 
 -- ==============================================================================
@@ -85,15 +86,45 @@ $$;
 GRANT EXECUTE ON FUNCTION public.handle_new_user() TO service_role;
 
 -- ==============================================================================
--- 2. ENSURE REQUIRED CONSTRAINTS
+-- 2. FIX EXISTING auth.users SCAN ERRORS (Database error querying schema)
+-- ==============================================================================
+-- Supabase GoTrue crashes with HTTP 500 'Database error querying schema' when scanning NULL strings
+UPDATE auth.users
+SET confirmation_token = COALESCE(confirmation_token, ''),
+    recovery_token = COALESCE(recovery_token, ''),
+    email_change_token_new = COALESCE(email_change_token_new, ''),
+    email_change = COALESCE(email_change, ''),
+    email_change_token_current = COALESCE(email_change_token_current, ''),
+    phone_change = COALESCE(phone_change, ''),
+    phone_change_token = COALESCE(phone_change_token, ''),
+    reauthentication_token = COALESCE(reauthentication_token, ''),
+    is_super_admin = COALESCE(is_super_admin, false),
+    is_sso_user = COALESCE(is_sso_user, false),
+    is_anonymous = COALESCE(is_anonymous, false),
+    confirmed_at = COALESCE(confirmed_at, email_confirmed_at, now()),
+    email_confirmed_at = COALESCE(email_confirmed_at, now())
+WHERE confirmation_token IS NULL
+   OR recovery_token IS NULL
+   OR email_change_token_new IS NULL
+   OR email_change IS NULL
+   OR email_change_token_current IS NULL
+   OR phone_change IS NULL
+   OR phone_change_token IS NULL
+   OR reauthentication_token IS NULL
+   OR is_super_admin IS NULL
+   OR is_sso_user IS NULL
+   OR is_anonymous IS NULL
+   OR confirmed_at IS NULL;
+
+-- ==============================================================================
+-- 3. ENSURE REQUIRED CONSTRAINTS
 -- ==============================================================================
 DO $$
 BEGIN
-    -- 1. Drop legacy UNIQUE(user_id) on settings if exists
+    -- Drop legacy UNIQUE(user_id) on settings if exists
     ALTER TABLE public.settings DROP CONSTRAINT IF EXISTS settings_user_id_key;
 
-    -- 2. Ensure settings.mill_id UNIQUE
-    -- Deduplicate settings if needed
+    -- Ensure settings.mill_id UNIQUE
     DELETE FROM public.settings s1
     USING public.settings s2
     WHERE s1.mill_id = s2.mill_id AND s1.ctid < s2.ctid AND s1.mill_id IS NOT NULL;
@@ -108,7 +139,7 @@ BEGIN
         END;
     END IF;
 
-    -- 3. Ensure profiles.user_id UNIQUE
+    -- Ensure profiles.user_id UNIQUE
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint 
         WHERE conname = 'profiles_user_id_key' AND conrelid = 'public.profiles'::regclass
@@ -119,7 +150,7 @@ BEGIN
         END;
     END IF;
 
-    -- 4. Ensure mill_memberships.user_id UNIQUE
+    -- Ensure mill_memberships.user_id UNIQUE
     DELETE FROM public.mill_memberships m1
     USING public.mill_memberships m2
     WHERE m1.user_id = m2.user_id AND m1.ctid < m2.ctid;
@@ -134,7 +165,7 @@ BEGIN
         END;
     END IF;
 
-    -- 5. Ensure mill_memberships(mill_id, user_id) UNIQUE
+    -- Ensure mill_memberships(mill_id, user_id) UNIQUE
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint 
         WHERE conname = 'mill_memberships_mill_user_key' AND conrelid = 'public.mill_memberships'::regclass
@@ -145,7 +176,7 @@ BEGIN
         END;
     END IF;
 
-    -- 6. Ensure user_roles(user_id, role) UNIQUE
+    -- Ensure user_roles(user_id, role) UNIQUE
     DELETE FROM public.user_roles r1
     USING public.user_roles r2
     WHERE r1.user_id = r2.user_id AND r1.role = r2.role AND r1.ctid < r2.ctid;
@@ -160,7 +191,7 @@ BEGIN
         END;
     END IF;
 
-    -- 7. Ensure mills.mill_code UNIQUE
+    -- Ensure mills.mill_code UNIQUE
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint 
         WHERE conname = 'mills_mill_code_key' AND conrelid = 'public.mills'::regclass
@@ -173,7 +204,7 @@ BEGIN
 END $$;
 
 -- ==============================================================================
--- 3. HELPER FUNCTIONS: Hardened Role Checks
+-- 4. HELPER FUNCTIONS: Hardened Role Checks
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.is_platform_admin(_uid uuid DEFAULT auth.uid())
 RETURNS boolean
@@ -206,7 +237,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.has_role(uuid, text) TO authenticated, anon, service_role;
 
 -- ==============================================================================
--- 4. ATOMIC RPC: admin_create_mill
+-- 5. ATOMIC RPC: admin_create_mill (GoTrue Compatible)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.admin_create_mill(
   p_mill_name TEXT,
@@ -229,16 +260,12 @@ DECLARE
   v_clean_username TEXT;
   v_email TEXT;
 BEGIN
-  -- -------------------------------------------------------------
-  -- STEP 1: Verify auth.uid() is truly Platform Admin
-  -- -------------------------------------------------------------
+  -- 1. Check Platform Admin
   IF v_caller_id IS NULL OR NOT public.is_platform_admin(v_caller_id) THEN
     RAISE EXCEPTION 'Only platform admins can create mills';
   END IF;
 
-  -- -------------------------------------------------------------
-  -- STEP 2: Clean and validate username
-  -- -------------------------------------------------------------
+  -- 2. Clean and validate username
   v_clean_username := lower(trim(p_username));
   IF v_clean_username IS NULL OR v_clean_username = '' THEN
     RAISE EXCEPTION 'يرجى إدخال اسم مستخدم صالح';
@@ -249,11 +276,10 @@ BEGIN
     RAISE EXCEPTION 'اسم المستخدم يجب أن يحتوي على أحرف إنجليزية أو أرقام فقط';
   END IF;
 
-  -- Clean orphaned memberships from previously deleted mills to free usernames
+  -- Clean orphaned memberships from previously deleted mills
   DELETE FROM public.mill_memberships 
   WHERE mill_id IS NULL OR mill_id NOT IN (SELECT id FROM public.mills);
 
-  -- Check if username is already taken by an active mill
   IF EXISTS (
     SELECT 1 FROM public.mill_memberships mm
     JOIN public.mills m ON mm.mill_id = m.id
@@ -264,21 +290,24 @@ BEGIN
 
   v_email := v_clean_username || '@smartmill.com';
 
-  -- -------------------------------------------------------------
-  -- STEP 3 & 4: Create or find Auth User and acquire owner_user_id
-  -- -------------------------------------------------------------
+  -- 3 & 4. Create or find Auth User (Fully compatible with GoTrue)
   SELECT id INTO v_owner_user_id FROM auth.users WHERE lower(email) = lower(v_email);
 
   IF v_owner_user_id IS NULL THEN
     v_owner_user_id := gen_random_uuid();
     INSERT INTO auth.users (
-      id, instance_id, email, encrypted_password, email_confirmed_at,
-      raw_app_meta_data, raw_user_meta_data, role, aud, created_at, updated_at
+      id, instance_id, email, encrypted_password, email_confirmed_at, confirmed_at,
+      raw_app_meta_data, raw_user_meta_data, role, aud,
+      confirmation_token, recovery_token, email_change_token_new, email_change, email_change_token_current,
+      phone_change, phone_change_token, reauthentication_token,
+      is_super_admin, is_sso_user, is_anonymous,
+      created_at, updated_at
     ) VALUES (
       v_owner_user_id,
       '00000000-0000-0000-0000-000000000000',
       v_email,
-      extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf')),
+      extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf', 10)),
+      now(),
       now(),
       '{"provider": "email", "providers": ["email"]}'::jsonb,
       jsonb_build_object(
@@ -290,6 +319,9 @@ BEGIN
       ),
       'authenticated',
       'authenticated',
+      '', '', '', '', '',
+      '', '', '',
+      false, false, false,
       now(),
       now()
     );
@@ -315,7 +347,20 @@ BEGIN
     END IF;
 
     UPDATE auth.users
-    SET encrypted_password = extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf')),
+    SET encrypted_password = extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf', 10)),
+        email_confirmed_at = COALESCE(email_confirmed_at, now()),
+        confirmed_at = COALESCE(confirmed_at, now()),
+        confirmation_token = COALESCE(confirmation_token, ''),
+        recovery_token = COALESCE(recovery_token, ''),
+        email_change_token_new = COALESCE(email_change_token_new, ''),
+        email_change = COALESCE(email_change, ''),
+        email_change_token_current = COALESCE(email_change_token_current, ''),
+        phone_change = COALESCE(phone_change, ''),
+        phone_change_token = COALESCE(phone_change_token, ''),
+        reauthentication_token = COALESCE(reauthentication_token, ''),
+        is_super_admin = COALESCE(is_super_admin, false),
+        is_sso_user = COALESCE(is_sso_user, false),
+        is_anonymous = COALESCE(is_anonymous, false),
         raw_user_meta_data = jsonb_build_object(
           'display_name', p_owner_name,
           'mill_name', p_mill_name,
@@ -342,9 +387,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- -------------------------------------------------------------
-  -- STEP 5: Create new Mill with owner_user_id explicitly set
-  -- -------------------------------------------------------------
+  -- 5. Create new Mill with owner_user_id explicitly set upon insert
   INSERT INTO public.mills (
     name, country, phone, secondary_phone, subscription_status,
     owner_user_id, mill_code, created_at, updated_at
@@ -354,9 +397,7 @@ BEGIN
   )
   RETURNING id INTO v_mill_id;
 
-  -- -------------------------------------------------------------
-  -- STEP 6: Create or update profiles
-  -- -------------------------------------------------------------
+  -- 6. Create or update profile
   IF EXISTS (SELECT 1 FROM public.profiles WHERE user_id = v_owner_user_id) THEN
     UPDATE public.profiles
     SET mill_name = p_mill_name,
@@ -379,9 +420,7 @@ BEGIN
     );
   END IF;
 
-  -- -------------------------------------------------------------
-  -- STEP 7: Create mill_memberships (mill_id, user_id, role='mill_owner')
-  -- -------------------------------------------------------------
+  -- 7. Create mill membership
   IF EXISTS (SELECT 1 FROM public.mill_memberships WHERE user_id = v_owner_user_id) THEN
     UPDATE public.mill_memberships
     SET mill_id = v_mill_id,
@@ -398,17 +437,13 @@ BEGIN
     );
   END IF;
 
-  -- -------------------------------------------------------------
-  -- STEP 8: Create user_roles (user_id, role='mill_owner')
-  -- -------------------------------------------------------------
+  -- 8. Assign mill_owner role
   IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = v_owner_user_id AND role::text = 'mill_owner') THEN
     INSERT INTO public.user_roles (user_id, role)
     VALUES (v_owner_user_id, 'mill_owner');
   END IF;
 
-  -- -------------------------------------------------------------
-  -- STEP 9: Initialize settings for the Mill (linked via mill_id)
-  -- -------------------------------------------------------------
+  -- 9. Initialize settings for the Mill (linked via mill_id)
   DELETE FROM public.settings 
   WHERE mill_id = v_mill_id 
      OR (user_id = v_owner_user_id AND (mill_id IS NULL OR mill_id NOT IN (SELECT id FROM public.mills)));
@@ -422,9 +457,7 @@ BEGIN
     VALUES (v_mill_id, v_owner_user_id, now(), now());
   END IF;
 
-  -- -------------------------------------------------------------
-  -- STEP 10: Return atomic result
-  -- -------------------------------------------------------------
+  -- 10. Return atomic result
   RETURN jsonb_build_object(
     'success', true,
     'mill_id', v_mill_id,
@@ -435,27 +468,45 @@ BEGIN
 END;
 $$;
 
--- Revoke all permissions from anon and PUBLIC
 REVOKE EXECUTE ON FUNCTION public.admin_create_mill(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.admin_create_mill(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM anon;
 GRANT EXECUTE ON FUNCTION public.admin_create_mill(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
 
 -- ==============================================================================
--- 5. REBUILD ROW LEVEL SECURITY (RLS) POLICIES
+-- 6. CLEAN UP ALL DUPLICATE/OLD POLICIES AND REBUILD RLS
 -- ==============================================================================
+-- Drop ALL existing policies on target tables dynamically to prevent duplicate policy clashes
+DO $$
+DECLARE
+    pol RECORD;
+BEGIN
+    FOR pol IN
+        SELECT schemaname, tablename, policyname
+        FROM pg_policies
+        WHERE schemaname = 'public' 
+          AND tablename IN ('mills', 'mill_memberships', 'profiles', 'settings', 'user_roles')
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', pol.policyname, pol.schemaname, pol.tablename);
+    END LOOP;
+END $$;
+
+-- Enable RLS and grant authenticated access
 ALTER TABLE public.mills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mill_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
--- RLS: mills
-DROP POLICY IF EXISTS "platform_admin_full_access_mills" ON public.mills;
-DROP POLICY IF EXISTS "mill_owner_select_mills" ON public.mills;
-DROP POLICY IF EXISTS "mill_owner_update_mills" ON public.mills;
-DROP POLICY IF EXISTS "mill_employee_select_mills" ON public.mills;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.mills TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.mill_memberships TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_roles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.settings TO authenticated;
 
-CREATE POLICY "platform_admin_full_access_mills"
+-- -------------------------------------------------------------
+-- RLS: public.mills
+-- -------------------------------------------------------------
+CREATE POLICY "platform_admin_manage_mills"
   ON public.mills FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
@@ -472,21 +523,25 @@ CREATE POLICY "mill_owner_select_mills"
 CREATE POLICY "mill_owner_update_mills"
   ON public.mills FOR UPDATE
   TO authenticated
-  USING (owner_user_id = auth.uid() OR id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner'))
-  WITH CHECK (owner_user_id = auth.uid() OR id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner'));
+  USING (
+    owner_user_id = auth.uid() OR
+    id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner')
+  )
+  WITH CHECK (
+    owner_user_id = auth.uid() OR
+    id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner')
+  );
 
--- RLS: mill_memberships
-DROP POLICY IF EXISTS "platform_admin_full_access_memberships" ON public.mill_memberships;
-DROP POLICY IF EXISTS "mill_owner_manage_memberships" ON public.mill_memberships;
-DROP POLICY IF EXISTS "users_view_own_membership" ON public.mill_memberships;
-
-CREATE POLICY "platform_admin_full_access_memberships"
+-- -------------------------------------------------------------
+-- RLS: public.mill_memberships
+-- -------------------------------------------------------------
+CREATE POLICY "platform_admin_manage_memberships"
   ON public.mill_memberships FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
   WITH CHECK (public.is_platform_admin(auth.uid()));
 
-CREATE POLICY "mill_owner_manage_memberships"
+CREATE POLICY "mill_owner_manage_own_mill_memberships"
   ON public.mill_memberships FOR ALL
   TO authenticated
   USING (
@@ -507,12 +562,10 @@ CREATE POLICY "users_view_own_membership"
   TO authenticated
   USING (user_id = auth.uid());
 
--- RLS: profiles
-DROP POLICY IF EXISTS "platform_admin_full_access_profiles" ON public.profiles;
-DROP POLICY IF EXISTS "users_manage_own_profile" ON public.profiles;
-DROP POLICY IF EXISTS "mill_owner_view_mill_profiles" ON public.profiles;
-
-CREATE POLICY "platform_admin_full_access_profiles"
+-- -------------------------------------------------------------
+-- RLS: public.profiles
+-- -------------------------------------------------------------
+CREATE POLICY "platform_admin_manage_profiles"
   ON public.profiles FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
@@ -537,11 +590,10 @@ CREATE POLICY "mill_owner_view_mill_profiles"
     )
   );
 
--- RLS: user_roles
-DROP POLICY IF EXISTS "platform_admin_full_access_user_roles" ON public.user_roles;
-DROP POLICY IF EXISTS "users_read_own_user_roles" ON public.user_roles;
-
-CREATE POLICY "platform_admin_full_access_user_roles"
+-- -------------------------------------------------------------
+-- RLS: public.user_roles
+-- -------------------------------------------------------------
+CREATE POLICY "platform_admin_manage_user_roles"
   ON public.user_roles FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
@@ -552,17 +604,16 @@ CREATE POLICY "users_read_own_user_roles"
   TO authenticated
   USING (user_id = auth.uid());
 
--- RLS: settings
-DROP POLICY IF EXISTS "platform_admin_full_access_settings" ON public.settings;
-DROP POLICY IF EXISTS "mill_members_access_settings" ON public.settings;
-
-CREATE POLICY "platform_admin_full_access_settings"
+-- -------------------------------------------------------------
+-- RLS: public.settings
+-- -------------------------------------------------------------
+CREATE POLICY "platform_admin_manage_settings"
   ON public.settings FOR ALL
   TO authenticated
   USING (public.is_platform_admin(auth.uid()))
   WITH CHECK (public.is_platform_admin(auth.uid()));
 
-CREATE POLICY "mill_members_access_settings"
+CREATE POLICY "mill_members_manage_settings"
   ON public.settings FOR ALL
   TO authenticated
   USING (

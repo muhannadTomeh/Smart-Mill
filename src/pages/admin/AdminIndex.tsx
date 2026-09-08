@@ -165,32 +165,46 @@ export default function AdminIndex() {
         // الاستعلام الجديد: من جدول mills مع بيانات المالك عبر mill_memberships
         // كل صف = معصرة واحدة فقط
         // ============================================================
+        // 1. Fetch mills directly with select("*") without fragile nested relation
         const [
           { data: millsData, error: millsError },
+          { data: membershipsData, error: membershipsError },
           { data: lastPayments },
           { data: seasons },
           { data: invoices },
           { data: adminRoles }
         ] = await Promise.all([
-          (supabase as any).from("mills").select(`
-            id, name, location, country, phone, secondary_phone,
-            mill_code, subscription_status, monthly_fee, owner_user_id, created_at,
-            mill_memberships(id, user_id, role, display_username)
-          `).order("created_at", { ascending: false }),
+          (supabase as any).from("mills").select("*").order("created_at", { ascending: false }),
+          (supabase as any).from("mill_memberships").select("id, mill_id, user_id, role, username, display_username"),
           (supabase as any).from("subscription_payments").select("mill_user_id, payment_date, mill_id").order("payment_date", { ascending: false }),
           supabase.from("seasons").select("user_id, status"),
           supabase.from("invoices").select("oil_produced, created_at, user_id"),
           supabase.from("user_roles").select("user_id").eq("role", "platform_admin")
         ]);
 
-        // إذا لم يكن جدول mills موجوداً بعد، Fallback لجدول profiles
-        if (millsError || !millsData) {
-          await fetchFromProfiles(lastPayments, seasons, invoices);
+        if (millsError) {
+          console.error("Admin data fetch error (mills):", millsError);
+          toast.error("فشل جلب قائمة المعاصر: " + (millsError.message || "خطأ غير معروف"));
+          setLoading(false);
           return;
         }
 
+        if (membershipsError) {
+          console.warn("Admin data fetch warning (memberships):", membershipsError);
+        }
+
         const adminUserIds = new Set((adminRoles || []).map((r: any) => r.user_id));
-        const pureMillsData = millsData.filter((m: any) => !adminUserIds.has(m.owner_user_id));
+        const pureMillsData = (millsData || []).filter((m: any) => !adminUserIds.has(m.owner_user_id));
+
+        // Group memberships by mill_id
+        const membershipsByMill = new Map<string, any[]>();
+        (membershipsData || []).forEach((m: any) => {
+          if (m.mill_id) {
+            const list = membershipsByMill.get(m.mill_id) || [];
+            list.push(m);
+            membershipsByMill.set(m.mill_id, list);
+          }
+        });
 
         const now = new Date();
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -208,8 +222,9 @@ export default function AdminIndex() {
         });
 
         const millList = pureMillsData.map((mill: any) => {
-          const ownerMembership = (mill.mill_memberships || []).find((mm: any) => mm.role === 'mill_owner');
-          const employeeCount = (mill.mill_memberships || []).filter((mm: any) => mm.role === 'mill_employee').length;
+          const millMembers = membershipsByMill.get(mill.id) || [];
+          const ownerMembership = millMembers.find((mm: any) => mm.role === 'mill_owner' || mm.user_id === mill.owner_user_id);
+          const employeeCount = millMembers.filter((mm: any) => mm.role === 'mill_employee').length;
           const millInvoices = (invoices || []).filter((inv: any) => inv.user_id === mill.owner_user_id);
           const millPayments = (lastPayments || []).filter((p: any) => p.mill_id === mill.id || p.mill_user_id === mill.owner_user_id);
           return {
@@ -237,75 +252,11 @@ export default function AdminIndex() {
 
         setMills(millList);
       } catch (error: any) {
-        console.error("Admin data fetch error (mills):", error);
-        // Fallback
-        const [{ data: lastPayments }, { data: seasons }, { data: invoices }] = await Promise.all([
-          supabase.from("subscription_payments").select("mill_user_id, payment_date").order("payment_date", { ascending: false }),
-          supabase.from("seasons").select("user_id, status"),
-          supabase.from("invoices").select("oil_produced, created_at, user_id")
-        ]);
-        await fetchFromProfiles(lastPayments, seasons, invoices);
+        console.error("Admin data fetch error:", error);
+        toast.error("حدث خطأ أثناء تحميل بيانات المعاصر");
       } finally {
         setLoading(false);
       }
-    };
-
-    // Fallback: إذا لم يكتمل migration بعد، اقرأ من profiles (ملاك فقط بدون parent_mill_id وبدون حساب الأدمن)
-    const fetchFromProfiles = async (lastPayments: any, seasons: any, invoices: any) => {
-      const [
-        { data: profiles },
-        { data: adminRoles }
-      ] = await Promise.all([
-        supabase.from("profiles").select("*").is("parent_mill_id", null),
-        supabase.from("user_roles").select("user_id").eq("role", "platform_admin")
-      ]);
-
-      const adminUserIds = new Set((adminRoles || []).map((r: any) => r.user_id));
-      // استثناء حسابات الأدمن من قائمة المعاصر
-      const millProfiles = (profiles || []).filter((p: any) => !adminUserIds.has(p.user_id));
-
-      const activeUserIds = new Set((seasons || []).filter((s: any) => s.status === 'open').map((s: any) => s.user_id));
-      const totalOil = (invoices || []).reduce((sum: number, inv: any) => sum + (inv.oil_produced || 0), 0);
-      const now = new Date();
-      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const oneMonthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      setStats({
-        totalMills: millProfiles.length,
-        activeMills: millProfiles.filter((p: any) => activeUserIds.has(p.user_id)).length,
-        newThisWeek: millProfiles.filter((p: any) => new Date(p.created_at) >= oneWeekAgo).length,
-        newThisMonth: millProfiles.filter((p: any) => new Date(p.created_at) >= oneMonthAgo).length,
-        totalInvoices: (invoices || []).length,
-        totalOil,
-      });
-
-      const millList = millProfiles.map((profile: any) => {
-        const userInvoices = (invoices || []).filter((inv: any) => inv.user_id === profile.user_id);
-        const millPayments = (lastPayments || []).filter((p: any) => p.mill_user_id === profile.user_id);
-        return {
-          id: profile.user_id,
-          ownerUserId: profile.user_id,
-          ownerName: profile.display_name || "غير محدد",
-          millName: profile.mill_name || "معصرة غير مسماة",
-          country: profile.country || "فلسطين",
-          millLocation: profile.mill_location || "غير محدد",
-          phone: profile.phone || "---",
-          secondaryPhone: profile.secondary_phone,
-          createdAt: profile.created_at,
-          isActive: activeUserIds.has(profile.user_id),
-          subscriptionStatus: profile.subscription_status || 'pending',
-          invoiceCount: userInvoices.length,
-          employeeCount: 0,
-          lastPaymentDate: millPayments.length > 0 ? millPayments[0].payment_date : null,
-        };
-      });
-
-      millList.sort((a: any, b: any) => {
-        if (a.country !== b.country) return (a.country || "").localeCompare(b.country || "", 'ar');
-        return (a.millName || "").localeCompare(b.millName || "", 'ar');
-      });
-
-      setMills(millList);
     };
 
     const fetchContactSettings = async () => {
