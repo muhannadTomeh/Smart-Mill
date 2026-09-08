@@ -169,13 +169,10 @@ const SubscriptionGate = ({ children }: { children: React.ReactNode }) => {
   const loading = subLoading || roleLoading;
 
   const signOut = async () => {
-    if (isEmployee) {
-      localStorage.removeItem('employee_owner_id');
-      window.location.href = '/auth';
-    } else {
-      await authSignOut();
-    }
+    localStorage.removeItem('employee_owner_id');
+    await authSignOut();
   };
+
 
   if (loading) {
     return (

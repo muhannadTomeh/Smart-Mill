@@ -13,17 +13,7 @@ import { lookupCashierEmail } from "@/lib/authUtils";
 export type AuthView = "login" | "register" | "forgot-password";
 
 const Auth = () => {
-  const [view, setView] = useState<AuthView | "employee">("login");
-  const [employeePin, setEmployeePin] = useState("");
-  const [isVerifyingEmployee, setIsVerifyingEmployee] = useState(false);
-  const [searchParams] = useSearchParams();
-  const employeeOwnerId = searchParams.get("employee");
-
-  useState(() => {
-    if (employeeOwnerId) {
-      setView("employee");
-    }
-  });
+  const [view, setView] = useState<AuthView>("login");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -85,24 +75,43 @@ const Auth = () => {
       if (nextPath) {
         window.location.href = nextPath;
       } else if (data?.user) {
-        const { data: isAdminRole } = await supabase.rpc('has_role', {
-          _user_id: data.user.id,
-          _role: 'platform_admin'
-        });
+        // 1. Platform admin check
+        const isCanonicalAdmin = data.user.id === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114';
+        let isAdminRole = isCanonicalAdmin;
+        if (!isAdminRole) {
+          const { data: hasAdmin } = await supabase.rpc('has_role', {
+            _user_id: data.user.id,
+            _role: 'platform_admin'
+          });
+          isAdminRole = !!hasAdmin;
+        }
+
         if (isAdminRole) {
           navigate("/admin");
-        } else {
-          const { data: profileRow } = await supabase
-            .from('profiles')
-            .select('parent_mill_id')
-            .eq('user_id', data.user.id)
-            .maybeSingle();
+          return;
+        }
 
-          if (profileRow?.parent_mill_id) {
-            navigate("/queue");
-          } else {
-            navigate("/seasons");
-          }
+        // 2. Canonical membership role check & is_active check
+        const { data: memberRow } = await supabase
+          .from('mill_memberships')
+          .select('role, mill_id, is_active')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        if (memberRow && memberRow.is_active === false) {
+          await supabase.auth.signOut();
+          toast({
+            title: "الحساب معطّل",
+            description: "تم تعطيل هذا الحساب من قبل إدارة المعصرة أو المشرف العام.",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        if (memberRow?.role === 'mill_employee') {
+          navigate("/queue");
+        } else {
+          navigate("/seasons");
         }
       } else {
         navigate("/seasons");
@@ -162,32 +171,6 @@ const Auth = () => {
     }
   };
 
-  const handleEmployeeLogin = async () => {
-    if (!employeeOwnerId || !employeePin) return;
-    setIsVerifyingEmployee(true);
-    try {
-      const { data, error } = await supabase.rpc("verify_employee_pin" as any, {
-        owner_id: employeeOwnerId,
-        input_pin: employeePin
-      });
-
-      if (error) throw error;
-
-      if (data) {
-        localStorage.setItem('employee_owner_id', employeeOwnerId);
-        toast({ title: "تم تسجيل الدخول", description: "مرحباً بك في وضع الموظف" });
-        window.location.href = "/queue";
-      } else {
-        toast({ title: "خطأ", description: "رمز الدخول غير صحيح", variant: "destructive" });
-      }
-    } catch (err) {
-      console.error(err);
-      toast({ title: "خطأ", description: "فشل التحقق من الرمز", variant: "destructive" });
-    } finally {
-      setIsVerifyingEmployee(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col lg:flex-row" dir="rtl">
       {/* Branding Panel */}
@@ -219,40 +202,6 @@ const Auth = () => {
           )}
           {view === "forgot-password" && (
             <ForgotPasswordForm loading={loading} onSubmit={handleForgotPassword} onNavigate={setView} />
-          )}
-          {view === "employee" && (
-            <div className="space-y-6">
-              <div className="text-center space-y-2">
-                <h2 className="text-2xl font-bold">دخول الموظف</h2>
-                <p className="text-muted-foreground">أدخل الرمز المكون من 4 أرقام للمتابعة</p>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-center">
-                  <input
-                    type="password"
-                    maxLength={6}
-                    value={employeePin}
-                    onChange={(e) => setEmployeePin(e.target.value.replace(/\D/g, ""))}
-                    className="w-48 h-14 text-center text-3xl tracking-[1em] font-bold border-2 border-primary/20 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
-                    autoFocus
-                  />
-                </div>
-                <Button
-                  onClick={handleEmployeeLogin}
-                  disabled={isVerifyingEmployee || employeePin.length < 4}
-                  className="w-full h-12 text-lg"
-                >
-                  {isVerifyingEmployee ? "جارٍ التحقق..." : "تسجيل الدخول"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => setView("login")}
-                  className="w-full"
-                >
-                  الرجوع لتسجيل دخول المالك
-                </Button>
-              </div>
-            </div>
           )}
         </div>
 
