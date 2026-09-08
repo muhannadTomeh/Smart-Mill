@@ -15,7 +15,7 @@ import {
   Info, ArrowRight, Receipt, Package, Calendar, ShieldCheck, ShieldAlert, 
   Save, Plus, History, Banknote, Building2, MapPin, Phone, User, Globe, 
   Clock, UserCheck, ShoppingCart, Wallet, Lock, Mail, Users, CheckCircle2,
-  RotateCcw, Copy, Eye, EyeOff, Edit, Trash2, Key
+  RotateCcw, Copy, Eye, EyeOff, Edit, Trash2, Key, RefreshCw, UserX
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeUsernameToEmail, getDisplayUsername } from "@/lib/authUtils";
+import { 
+  revealCredential, 
+  updateUserAccount, 
+  deleteUserAccount, 
+  createEmployeeAccount, 
+  toggleUserAccountActive 
+} from "@/lib/credentialVault";
 import {
   Dialog,
   DialogContent,
@@ -76,6 +83,8 @@ export default function MillDetails() {
 
   // Cashier Passwords Visibility & Edit / Delete State
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [decryptedPasswords, setDecryptedPasswords] = useState<Record<string, string>>({});
+  const [decryptingLoading, setDecryptingLoading] = useState<Record<string, boolean>>({});
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: "", username: "", password: "" });
   const [showEditPassword, setShowEditPassword] = useState(false);
@@ -193,7 +202,6 @@ export default function MillDetails() {
         supabase.from("queue").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
         supabase.from("expenses").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
         supabase.from("oil_transactions").select("*").eq("user_id", resolvedOwner).order("created_at", { ascending: false }),
-        supabase.from("profiles").select("*").eq("parent_mill_id", resolvedOwner).order("created_at", { ascending: false }),
         supabase.from("inventory").select("*").eq("user_id", resolvedOwner).limit(1),
         supabase.from("subscription_payments").select("*").eq("mill_user_id", resolvedOwner).order("payment_date", { ascending: false })
       ]);
@@ -203,20 +211,32 @@ export default function MillDetails() {
       const queue = queueRes.data || [];
       const expensesData = expensesRes.data || [];
       const oilData = oilRes.data || [];
-      const employeesData = employeesRes.data || [];
       const inventory = inventoryRes.data || [];
       const paymentsData = paymentsRes.data || [];
 
-      // Safe check for mill_memberships table
-      let membershipsData: any[] = [];
-      if (millObj?.id) {
+      // Canonical Mill Memberships employee query
+      let combinedEmployees: any[] = [];
+      const targetMillId = millObj?.id || millId;
+      if (targetMillId) {
         try {
           const { data: mems } = await supabase
             .from("mill_memberships")
-            .select("id, user_id, role, display_username, created_at, profiles(display_name, phone, employee_pin)")
-            .eq("mill_id", millObj.id)
-            .eq("role", "mill_employee");
-          membershipsData = mems || [];
+            .select("id, user_id, role, display_username, is_active, created_at, profiles(display_name, phone)")
+            .eq("mill_id", targetMillId)
+            .eq("role", "mill_employee")
+            .order("created_at", { ascending: false });
+
+          if (mems) {
+            combinedEmployees = mems.map((m: any) => ({
+              id: m.id,
+              user_id: m.user_id,
+              display_name: m.profiles?.display_name || m.display_username,
+              phone: m.profiles?.phone || m.display_username,
+              username: m.display_username || m.profiles?.phone,
+              is_active: m.is_active !== false,
+              created_at: m.created_at,
+            }));
+          }
         } catch (e) {
           console.warn("Could not query mill_memberships:", e);
         }
@@ -224,24 +244,6 @@ export default function MillDetails() {
 
       // Find active or open season
       const currentSeason = seasons.find((s: any) => s.status === 'active' || s.status === 'open') || seasons[0] || null;
-
-      // Merge membership-based employees with profiles-based employees
-      let combinedEmployees: any[] = employeesData || [];
-      if (membershipsData && membershipsData.length > 0) {
-        const existingIds = new Set(combinedEmployees.map((e: any) => e.user_id));
-        const membershipEmployees = membershipsData
-          .filter((m: any) => !existingIds.has(m.user_id))
-          .map((m: any) => ({
-            id: m.id,
-            user_id: m.user_id,
-            display_name: m.profiles?.display_name || m.display_username,
-            phone: m.profiles?.phone || m.display_username,
-            employee_pin: m.profiles?.employee_pin || null,
-            created_at: m.created_at,
-            parent_mill_id: resolvedOwner,
-          }));
-        combinedEmployees = [...combinedEmployees, ...membershipEmployees];
-      }
 
       // Safe Profile guarantees strings for all required fields
       const safeProfile = {
@@ -493,18 +495,69 @@ export default function MillDetails() {
     }
   };
 
-  // Toggle Password Visibility in Table
-  const togglePasswordVisibility = (empId: string) => {
-    setVisiblePasswords((p) => ({ ...p, [empId]: !p[empId] }));
+  // Toggle Password Visibility in Table (On-Demand Decryption from Credential Vault)
+  const togglePasswordVisibility = async (emp: any) => {
+    const key = emp.user_id || emp.id;
+    if (visiblePasswords[key]) {
+      setVisiblePasswords((p) => ({ ...p, [key]: false }));
+      return;
+    }
+
+    if (decryptedPasswords[key]) {
+      setVisiblePasswords((p) => ({ ...p, [key]: true }));
+      return;
+    }
+
+    setDecryptingLoading((p) => ({ ...p, [key]: true }));
+    try {
+      const plain = await revealCredential(emp.user_id || emp.id);
+      if (plain) {
+        setDecryptedPasswords((p) => ({ ...p, [key]: plain }));
+        setVisiblePasswords((p) => ({ ...p, [key]: true }));
+      } else {
+        toast({
+          title: "تنبيه",
+          description: "لا توجد كلمة مرور مسجلة في الخزينة لهذا الحساب. يمكنك تعيينها من زر التعديل.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "خطأ في جلب كلمة المرور",
+        description: err.message || "تعذر فك تشفير كلمة المرور",
+        variant: "destructive"
+      });
+    } finally {
+      setDecryptingLoading((p) => ({ ...p, [key]: false }));
+    }
+  };
+
+  const handleCopyPassword = async (emp: any) => {
+    const key = emp.user_id || emp.id;
+    let pass = decryptedPasswords[key];
+    if (!pass) {
+      try {
+        pass = (await revealCredential(emp.user_id || emp.id)) || "";
+        if (pass) {
+          setDecryptedPasswords((p) => ({ ...p, [key]: pass }));
+        }
+      } catch {}
+    }
+    if (pass) {
+      navigator.clipboard.writeText(pass);
+      toast({ title: "تم النسخ", description: "تم نسخ كلمة المرور إلى الحافظة" });
+    } else {
+      toast({ title: "تنبيه", description: "يرجى إظهار كلمة المرور أو تعيينها أولاً", variant: "destructive" });
+    }
   };
 
   // Open Edit Employee Modal
   const handleOpenEdit = (emp: any) => {
+    const key = emp.user_id || emp.id;
     setEditingEmployee(emp);
     setEditForm({
       name: emp.display_name || "",
       username: emp.phone || emp.display_username || "",
-      password: emp.employee_pin || "",
+      password: decryptedPasswords[key] || "",
     });
     setShowEditPassword(false);
   };
@@ -518,44 +571,21 @@ export default function MillDetails() {
     }
     setSavingEdit(true);
     try {
-      const cleanUsername = editForm.username.trim(); // Preserves exact casing (e.g. Casherraef2)
+      const cleanUsername = editForm.username.trim();
       const cleanName = editForm.name.trim();
       const cleanPass = editForm.password.trim();
+      const empKey = editingEmployee.user_id || editingEmployee.id;
 
-      const profileUpdates: any = {
-        display_name: cleanName,
-        phone: cleanUsername,
-      };
+      await updateUserAccount(empKey, cleanName, cleanUsername, cleanPass || undefined);
+
       if (cleanPass) {
-        profileUpdates.employee_pin = cleanPass;
-      }
-
-      // Update in profiles table
-      if (editingEmployee.user_id) {
-        await supabase
-          .from("profiles")
-          .update(profileUpdates)
-          .eq("user_id", editingEmployee.user_id);
-      } else if (editingEmployee.id) {
-        await supabase
-          .from("profiles")
-          .update(profileUpdates)
-          .eq("id", editingEmployee.id);
-      }
-
-      // Update in mill_memberships table if exists
-      if (editingEmployee.user_id) {
-        try {
-          await supabase
-            .from("mill_memberships")
-            .update({ display_username: cleanUsername })
-            .eq("user_id", editingEmployee.user_id);
-        } catch {}
+        setDecryptedPasswords((p) => ({ ...p, [empKey]: cleanPass }));
+        setVisiblePasswords((p) => ({ ...p, [empKey]: true }));
       }
 
       toast({
         title: "تم حفظ التعديلات بنجاح",
-        description: `اسم المستخدم: ${cleanUsername} ${cleanPass ? `| كلمة المرور: ${cleanPass}` : ""}`,
+        description: `تم تحديث الحساب: ${cleanUsername}`,
       });
 
       setEditingEmployee(null);
@@ -576,16 +606,8 @@ export default function MillDetails() {
     if (!deleteTargetEmployee) return;
     setDeletingEmployee(true);
     try {
-      const empUserId = deleteTargetEmployee.user_id;
-      const empId = deleteTargetEmployee.id;
-
-      if (empUserId) {
-        await supabase.from("mill_memberships").delete().eq("user_id", empUserId);
-        await supabase.from("profiles").delete().eq("user_id", empUserId);
-      } else if (empId) {
-        await supabase.from("mill_memberships").delete().eq("id", empId);
-        await supabase.from("profiles").delete().eq("id", empId);
-      }
+      const empUserId = deleteTargetEmployee.user_id || deleteTargetEmployee.id;
+      await deleteUserAccount(empUserId);
 
       toast({
         title: "تم حذف الحساب",
@@ -618,77 +640,22 @@ export default function MillDetails() {
 
     setCreatingEmployee(true);
     try {
-      const originalUsername = newEmployee.username.trim(); // Preserves exact casing (e.g. Casherraef2)
+      const originalUsername = newEmployee.username.trim();
       const originalPassword = newEmployee.password.trim();
       const originalName = newEmployee.name.trim();
 
-      // Call admin_create_cashier RPC with resolvedOwnerId
-      const { data, error } = await supabase.rpc('admin_create_cashier', {
-        p_parent_mill_id: resolvedOwnerId,
-        p_display_name: originalName,
-        p_username: originalUsername,
-        p_password: originalPassword,
-        p_mill_code: millCode.trim()
+      const targetMillId = millData?.mill?.id || millId || resolvedOwnerId;
+      const { user_id: createdUserId } = await createEmployeeAccount({
+        millId: targetMillId,
+        displayName: originalName,
+        username: originalUsername,
+        password: originalPassword,
+        millCode: millCode.trim()
       });
 
-      let createdUserId = (data as any)?.user_id || (data as any)?.id;
-
-      if (error) {
-        // If the RPC is not yet created in DB, fallback to signUp
-        if (error.message?.includes('admin_create_cashier') || error.message?.includes('function') && error.message?.includes('does not exist')) {
-          const email = normalizeUsernameToEmail(originalUsername, millCode);
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password: originalPassword,
-            options: {
-              data: {
-                display_name: originalName,
-                username: originalUsername,
-                phone: originalUsername,
-                parent_mill_id: resolvedOwnerId,
-                mill_name: millData?.profile?.mill_name,
-                mill_code: millCode.trim(),
-              }
-            }
-          });
-          if (signUpError) throw signUpError;
-          if (signUpData?.user?.id) createdUserId = signUpData.user.id;
-        } else {
-          throw error;
-        }
-      }
-
-      // Immediately ensure profiles has exact case for phone/username and stores employee_pin
-      try {
-        if (createdUserId) {
-          await supabase
-            .from("profiles")
-            .update({
-              phone: originalUsername,
-              employee_pin: originalPassword,
-              display_name: originalName,
-            })
-            .eq("user_id", createdUserId);
-
-          if (currentMillRecord?.id) {
-            await supabase
-              .from("mill_memberships")
-              .update({ display_username: originalUsername })
-              .eq("user_id", createdUserId);
-          }
-        } else {
-          await supabase
-            .from("profiles")
-            .update({
-              phone: originalUsername,
-              employee_pin: originalPassword,
-              display_name: originalName,
-            })
-            .eq("parent_mill_id", resolvedOwnerId)
-            .ilike("phone", originalUsername);
-        }
-      } catch (errSync) {
-        console.warn("Could not sync extra profile fields:", errSync);
+      if (createdUserId) {
+        setDecryptedPasswords((prev) => ({ ...prev, [createdUserId]: originalPassword }));
+        setVisiblePasswords((prev) => ({ ...prev, [createdUserId]: true }));
       }
 
       toast({
@@ -1245,12 +1212,14 @@ export default function MillDetails() {
                 </TableHeader>
                 <TableBody>
                   {employees.map((emp: any) => {
+                    const empKey = emp.user_id || emp.id;
                     const displayUser = safeText(emp.phone || emp.display_username, safeText(getDisplayUsername(emp.display_name, null), 'موظف'));
-                    const isPassVisible = visiblePasswords[emp.id] || false;
-                    const hasPass = Boolean(emp.employee_pin && String(emp.employee_pin).trim());
+                    const isPassVisible = visiblePasswords[empKey] || false;
+                    const plainPass = decryptedPasswords[empKey];
+                    const isDecrypting = decryptingLoading[empKey] || false;
 
                     return (
-                      <TableRow key={emp.id}>
+                      <TableRow key={empKey}>
                         <TableCell className="font-bold text-foreground text-right">{safeText(emp.display_name, 'موظف كاشير')}</TableCell>
                         <TableCell className="font-mono text-xs font-semibold text-primary text-right">
                           <div className="flex items-center gap-1 justify-start">
@@ -1271,50 +1240,43 @@ export default function MillDetails() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center gap-1.5 justify-start">
-                            {hasPass ? (
-                              <>
-                                <code className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-mono font-bold px-2 py-0.5 rounded text-xs select-all">
-                                  {isPassVisible ? emp.employee_pin : "••••••"}
-                                </code>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                  title={isPassVisible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
-                                  onClick={() => togglePasswordVisibility(emp.id)}
-                                >
-                                  {isPassVisible ? <EyeOff className="h-3.5 w-3.5 text-amber-600" /> : <Eye className="h-3.5 w-3.5" />}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                  title="نسخ كلمة المرور"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(emp.employee_pin);
-                                    toast({ title: "تم النسخ", description: "تم نسخ كلمة المرور إلى الحافظة" });
-                                  }}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              </>
-                            ) : (
-                              <div className="flex items-center gap-1">
-                                <code className="bg-muted text-muted-foreground font-mono px-2 py-0.5 rounded text-xs">
-                                  ••••••
-                                </code>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-6 px-2 text-[11px] gap-1 text-primary hover:text-primary"
-                                  title="تعيين كلمة المرور لإظهارها"
-                                  onClick={() => handleOpenEdit(emp)}
-                                >
-                                  <Key className="h-3 w-3" />
-                                  <span>تعيين/إظهار</span>
-                                </Button>
-                              </div>
-                            )}
+                            <code className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 font-mono font-bold px-2 py-0.5 rounded text-xs select-all">
+                              {isPassVisible ? (plainPass || "••••••") : "••••••"}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={isDecrypting}
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                              title={isPassVisible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                              onClick={() => togglePasswordVisibility(emp)}
+                            >
+                              {isDecrypting ? (
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                              ) : isPassVisible ? (
+                                <EyeOff className="h-3.5 w-3.5 text-amber-600" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                              title="نسخ كلمة المرور"
+                              onClick={() => handleCopyPassword(emp)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-primary"
+                              title="تعيين أو تعديل كلمة المرور"
+                              onClick={() => handleOpenEdit(emp)}
+                            >
+                              <Key className="h-3 w-3" />
+                            </Button>
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
@@ -1326,10 +1288,44 @@ export default function MillDetails() {
                           {formatDate(emp.created_at)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Badge className="bg-green-100 text-green-700">مفعّل</Badge>
+                          {emp.is_active === false ? (
+                            <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">معطّل</Badge>
+                          ) : (
+                            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">نشط</Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center gap-1 justify-start">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-amber-600"
+                              title={emp.is_active === false ? "إعادة تفعيل الحساب" : "تعطيل الحساب مؤقتاً"}
+                              onClick={async () => {
+                                try {
+                                  const empUserId = emp.user_id || emp.id;
+                                  const newState = emp.is_active === false;
+                                  await toggleUserAccountActive(empUserId, newState);
+                                  toast({
+                                    title: newState ? "تم تفعيل الحساب" : "تم تعطيل الحساب",
+                                    description: `تم تحديث حالة حساب (${emp.display_name || emp.phone}) بنجاح`,
+                                  });
+                                  fetchData();
+                                } catch (err: any) {
+                                  toast({
+                                    title: "خطأ",
+                                    description: err.message || "تعذر تغيير حالة الحساب",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                            >
+                              {emp.is_active === false ? (
+                                <UserCheck className="h-3.5 w-3.5 text-green-600" />
+                              ) : (
+                                <UserX className="h-3.5 w-3.5 text-amber-600" />
+                              )}
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1343,7 +1339,7 @@ export default function MillDetails() {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              title="حذف حساب الكاشير"
+                              title="حذف / تعطيل حساب الكاشير"
                               onClick={() => setDeleteTargetEmployee(emp)}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
