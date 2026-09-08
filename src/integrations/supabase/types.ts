@@ -326,6 +326,116 @@ export type Database = {
           },
         ]
       }
+      credential_vault: {
+        Row: {
+          encrypted_password: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          encrypted_password: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          encrypted_password?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mill_memberships: {
+        Row: {
+          created_at: string
+          display_username: string | null
+          id: string
+          is_active: boolean
+          mill_id: string
+          role: Database["public"]["Enums"]["app_role"] | string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_username?: string | null
+          id?: string
+          is_active?: boolean
+          mill_id: string
+          role?: Database["public"]["Enums"]["app_role"] | string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_username?: string | null
+          id?: string
+          is_active?: boolean
+          mill_id?: string
+          role?: Database["public"]["Enums"]["app_role"] | string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mill_memberships_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      mills: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: string
+          location: string | null
+          mill_code: string | null
+          monthly_fee: number | null
+          name: string
+          owner_user_id: string | null
+          phone: string | null
+          secondary_phone: string | null
+          subscription_status:
+            | Database["public"]["Enums"]["subscription_status"]
+            | null
+          updated_at: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          location?: string | null
+          mill_code?: string | null
+          monthly_fee?: number | null
+          name: string
+          owner_user_id?: string | null
+          phone?: string | null
+          secondary_phone?: string | null
+          subscription_status?:
+            | Database["public"]["Enums"]["subscription_status"]
+            | null
+          updated_at?: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          location?: string | null
+          mill_code?: string | null
+          monthly_fee?: number | null
+          name?: string
+          owner_user_id?: string | null
+          phone?: string | null
+          secondary_phone?: string | null
+          subscription_status?:
+            | Database["public"]["Enums"]["subscription_status"]
+            | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -333,6 +443,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          is_active: boolean | null
           mill_code: string | null
           mill_location: string | null
           mill_name: string | null
@@ -354,6 +465,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_active?: boolean | null
           mill_code?: string | null
           mill_location?: string | null
           mill_name?: string | null
@@ -375,6 +487,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_active?: boolean | null
           mill_code?: string | null
           mill_location?: string | null
           mill_name?: string | null
@@ -874,6 +987,55 @@ export type Database = {
       verify_employee_pin: {
         Args: { input_pin: string; owner_id: string }
         Returns: boolean
+      }
+      has_role: {
+        Args: { _role: string; _user_id: string }
+        Returns: boolean
+      }
+      is_platform_admin: {
+        Args: { _uid?: string }
+        Returns: boolean
+      }
+      admin_toggle_user_active: {
+        Args: { p_is_active: boolean; p_user_id: string }
+        Returns: Json
+      }
+      admin_reveal_credential: {
+        Args: { p_user_id: string }
+        Returns: string | null
+      }
+      admin_store_credential: {
+        Args: { p_password: string; p_user_id: string }
+        Returns: undefined
+      }
+      admin_get_all_accounts: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          user_id: string
+          display_name: string
+          username: string
+          role: string
+          mill_id: string | null
+          mill_name: string
+          mill_code: string | null
+          status: string
+          is_active: boolean
+          has_vault_credential: boolean
+          created_at: string
+        }[]
+      }
+      admin_update_user_credentials: {
+        Args: {
+          p_display_name: string
+          p_password?: string | null
+          p_user_id: string
+          p_username: string
+        }
+        Returns: Json
+      }
+      admin_delete_user: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
     }
     Enums: {
