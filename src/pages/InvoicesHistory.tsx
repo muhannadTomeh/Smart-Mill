@@ -36,8 +36,7 @@ interface InvoiceRecord {
 }
 
 export default function InvoicesHistory() {
-  const { user, effectiveUserId, profile } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, millId, profile } = useAuth();
   const { activeSeason } = useSeason();
   const { currency } = useCurrency();
   const navigate = useNavigate();
@@ -54,15 +53,21 @@ export default function InvoicesHistory() {
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
 
   const fetchInvoices = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     setLoading(true);
     try {
-      const { data } = await supabase
+      let query = supabase
         .from("invoices")
         .select("*")
-        .eq("user_id", targetUserId)
-        .eq("season_id", activeSeason.id)
-        .order("created_at", { ascending: false });
+        .eq("season_id", activeSeason.id);
+
+      if (millId || activeSeason.mill_id) {
+        query = query.eq("mill_id", millId || activeSeason.mill_id);
+      } else if (user?.id) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data } = await query.order("created_at", { ascending: false });
       setInvoices((data as InvoiceRecord[]) || []);
     } catch (err) {
       console.error("Error fetching invoices:", err);
@@ -72,10 +77,11 @@ export default function InvoicesHistory() {
   };
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (activeSeason) {
       fetchInvoices();
     }
-  }, [targetUserId, activeSeason]);
+  }, [activeSeason?.id, millId, user?.id]);
+
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {

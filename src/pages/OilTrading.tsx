@@ -26,8 +26,7 @@ interface Transaction {
 }
 
 const OilTrading = () => {
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user } = useAuth();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
@@ -38,11 +37,16 @@ const OilTrading = () => {
   });
 
   useEffect(() => {
-    if (targetUserId) fetchTransactions();
-  }, [targetUserId, activeSeason]);
+    if (activeSeason) fetchTransactions();
+  }, [activeSeason?.id]);
 
   const fetchTransactions = async () => {
-    const { data } = await supabase.from("oil_transactions").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    if (!activeSeason) return;
+    const { data } = await supabase
+      .from("oil_transactions")
+      .select("*")
+      .eq("season_id", activeSeason.id)
+      .order("created_at", { ascending: false });
     setTransactions(data as Transaction[] || []);
     setLoading(false);
   };
@@ -67,9 +71,16 @@ const OilTrading = () => {
     }
 
     const { error } = await supabase.from("oil_transactions").insert({
-      user_id: targetUserId!, season_id: activeSeason!.id, type: newTransaction.type, amount, price, total_price: totalPrice,
-      party_name: newTransaction.partyName || null, notes: newTransaction.notes || null
+      user_id: user?.id!,
+      season_id: activeSeason!.id,
+      type: newTransaction.type,
+      amount,
+      price,
+      total_price: totalPrice,
+      party_name: newTransaction.partyName || null,
+      notes: newTransaction.notes || null,
     });
+
 
     if (!error) {
       await updateInventory({

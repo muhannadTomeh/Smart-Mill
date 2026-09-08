@@ -54,11 +54,10 @@ interface DailyClosingRecord {
 }
 
 export default function DailyClosing() {
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, millId, profile } = useAuth();
   const { activeSeason } = useSeason();
   const { isEmployee } = useRole();
   const { currency } = useCurrency();
-  const targetUserId = effectiveUserId || user?.id;
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
   const cashierName = profile?.display_name || user?.email?.split("@")[0] || "مسؤول الصندوق";
 
@@ -102,7 +101,7 @@ export default function DailyClosing() {
   };
 
   const fetchTodayData = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     setLoading(true);
 
     // Get today's start at local midnight
@@ -115,21 +114,18 @@ export default function DailyClosing() {
         supabase
           .from("invoices")
           .select("*")
-          .eq("user_id", targetUserId)
           .eq("season_id", activeSeason.id)
           .gte("created_at", startOfTodayIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("expenses")
           .select("*")
-          .eq("user_id", targetUserId)
           .eq("season_id", activeSeason.id)
           .gte("created_at", startOfTodayIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("oil_transactions")
           .select("*")
-          .eq("user_id", targetUserId)
           .eq("season_id", activeSeason.id)
           .eq("type", "sell")
           .gte("created_at", startOfTodayIso)
@@ -137,7 +133,6 @@ export default function DailyClosing() {
         supabase
           .from("oil_transactions")
           .select("*")
-          .eq("user_id", targetUserId)
           .eq("season_id", activeSeason.id)
           .eq("type", "buy")
           .gte("created_at", startOfTodayIso)
@@ -145,7 +140,6 @@ export default function DailyClosing() {
         supabase
           .from("worker_payments")
           .select("*")
-          .eq("user_id", targetUserId)
           .eq("season_id", activeSeason.id)
           .gte("created_at", startOfTodayIso)
           .order("created_at", { ascending: false }),
@@ -165,11 +159,12 @@ export default function DailyClosing() {
   };
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (activeSeason) {
       loadHistory();
       fetchTodayData();
     }
-  }, [targetUserId, activeSeason]);
+  }, [activeSeason?.id]);
+
 
   // Totals calculations
   const invoicesCash = useMemo(() => {
@@ -245,7 +240,8 @@ export default function DailyClosing() {
     // 2. Attempt saving to Supabase if table exists
     try {
       await supabase.from("daily_closings" as any).insert({
-        user_id: targetUserId,
+        user_id: user?.id,
+        mill_id: millId || activeSeason?.mill_id || null,
         season_id: activeSeason?.id,
         cashier_name: cashierName,
         opening_cash: openingCash,

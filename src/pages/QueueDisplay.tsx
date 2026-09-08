@@ -21,8 +21,7 @@ function useClock() {
 }
 
 export default function QueueDisplay() {
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, millId } = useAuth();
   const { activeSeason } = useSeason();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [prevProcessingId, setPrevProcessingId] = useState<string | null>(null);
@@ -31,16 +30,16 @@ export default function QueueDisplay() {
   const clock = useClock();
 
   const fetchQueue = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     let query = supabase
       .from("queue")
       .select("id, name, position, status, bags")
       .eq("season_id", activeSeason.id);
 
-    if (activeSeason.mill_id) {
-      query = query.eq("mill_id", activeSeason.mill_id);
-    } else {
-      query = query.eq("user_id", targetUserId);
+    if (activeSeason.mill_id || millId) {
+      query = query.eq("mill_id", activeSeason.mill_id || millId);
+    } else if (user?.id) {
+      query = query.eq("user_id", user.id);
     }
 
     const { data } = await query
@@ -48,6 +47,7 @@ export default function QueueDisplay() {
       .order("position", { ascending: true });
     setItems(data || []);
   };
+
 
   useEffect(() => {
     fetchQueue();

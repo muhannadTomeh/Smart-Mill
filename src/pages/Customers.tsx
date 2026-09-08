@@ -49,9 +49,8 @@ const paymentLabel = (type: string) => {
 };
 
 const Customers = () => {
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, millId, profile } = useAuth();
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
-  const targetUserId = effectiveUserId || user?.id;
   const { activeSeason } = useSeason();
   const { toast } = useToast();
 
@@ -86,9 +85,10 @@ const Customers = () => {
 
   // Starred / VIP Customers
   const [starredIds, setStarredIds] = useState<string[]>(() => {
-    if (!targetUserId) return [];
+    const ownerOrMillKey = millId || user?.id;
+    if (!ownerOrMillKey) return [];
     try {
-      const saved = localStorage.getItem(`starred_customers_${targetUserId}`);
+      const saved = localStorage.getItem(`starred_customers_${ownerOrMillKey}`);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -96,22 +96,24 @@ const Customers = () => {
   });
 
   useEffect(() => {
-    if (targetUserId) {
+    const ownerOrMillKey = millId || user?.id;
+    if (ownerOrMillKey) {
       try {
-        const saved = localStorage.getItem(`starred_customers_${targetUserId}`);
+        const saved = localStorage.getItem(`starred_customers_${ownerOrMillKey}`);
         if (saved) setStarredIds(JSON.parse(saved));
       } catch {}
     }
-  }, [targetUserId]);
+  }, [millId, user?.id]);
 
   const toggleStar = (customerId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setStarredIds(prev => {
       const exists = prev.includes(customerId);
       const next = exists ? prev.filter(id => id !== customerId) : [...prev, customerId];
-      if (targetUserId) {
+      const ownerOrMillKey = millId || user?.id;
+      if (ownerOrMillKey) {
         try {
-          localStorage.setItem(`starred_customers_${targetUserId}`, JSON.stringify(next));
+          localStorage.setItem(`starred_customers_${ownerOrMillKey}`, JSON.stringify(next));
         } catch {}
       }
       toast({
@@ -122,32 +124,44 @@ const Customers = () => {
   };
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (activeSeason) {
       fetchCustomers();
       fetchInvoices();
     }
-  }, [targetUserId, activeSeason]);
+  }, [activeSeason?.id, millId, user?.id]);
 
   const fetchCustomers = async () => {
-    if (!targetUserId || !activeSeason) return;
-    const { data } = await supabase
+    if (!activeSeason) return;
+    let query = supabase
       .from("customers")
       .select("*")
-      .eq("user_id", targetUserId)
-      .eq("season_id", activeSeason.id)
-      .order("created_at", { ascending: false });
+      .eq("season_id", activeSeason.id);
+
+    if (millId || activeSeason.mill_id) {
+      query = query.eq("mill_id", millId || activeSeason.mill_id);
+    } else if (user?.id) {
+      query = query.eq("user_id", user.id);
+    }
+
+    const { data } = await query.order("created_at", { ascending: false });
     setCustomers((data as Customer[]) || []);
     setLoading(false);
   };
 
   const fetchInvoices = async () => {
-    if (!targetUserId || !activeSeason) return;
-    const { data } = await supabase
+    if (!activeSeason) return;
+    let query = supabase
       .from("invoices")
       .select("*")
-      .eq("user_id", targetUserId)
-      .eq("season_id", activeSeason.id)
-      .order("created_at", { ascending: false });
+      .eq("season_id", activeSeason.id);
+
+    if (millId || activeSeason.mill_id) {
+      query = query.eq("mill_id", millId || activeSeason.mill_id);
+    } else if (user?.id) {
+      query = query.eq("user_id", user.id);
+    }
+
+    const { data } = await query.order("created_at", { ascending: false });
     setInvoices((data as InvoiceRecord[]) || []);
   };
 
@@ -161,13 +175,15 @@ const Customers = () => {
       const { data, error } = await supabase
         .from("customers")
         .insert({
-          user_id: targetUserId!,
+          user_id: user?.id!,
+          mill_id: millId || activeSeason?.mill_id || null,
           season_id: activeSeason!.id,
           name: newCustName.trim(),
           phone: newCustPhone.trim() || null,
         })
         .select()
         .single();
+
 
       if (error) throw error;
 

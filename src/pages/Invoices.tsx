@@ -55,7 +55,7 @@ const paymentLabel = (type: string) => {
 };
 
 export default function Invoices() {
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, millId, profile } = useAuth();
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
@@ -64,7 +64,6 @@ export default function Invoices() {
   const location = useLocation();
   const { toast } = useToast();
 
-  const targetUserId = effectiveUserId || user?.id;
 
   const [invoiceData, setInvoiceData] = useState({
     customerName: "",
@@ -267,7 +266,6 @@ export default function Invoices() {
           const { data } = await supabase
             .from("customers")
             .select("id")
-            .eq("user_id", targetUserId!)
             .eq("season_id", activeSeason!.id)
             .eq("name", invoiceData.customerName.trim())
             .eq("phone", cleanPhone)
@@ -281,7 +279,8 @@ export default function Invoices() {
           const { data: newCust } = await supabase
             .from("customers")
             .insert({
-              user_id: targetUserId!,
+              user_id: user?.id!,
+              mill_id: millId || activeSeason?.mill_id || null,
               season_id: activeSeason!.id,
               name: invoiceData.customerName.trim(),
               phone: cleanPhone || null,
@@ -290,6 +289,7 @@ export default function Invoices() {
             .single();
           if (newCust) customerId = newCust.id;
         }
+
       }
 
       const containerSummary = getContainerSummary() || "بدون تنكات";

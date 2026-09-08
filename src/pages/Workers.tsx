@@ -45,8 +45,7 @@ interface WorkerPayment {
 }
 
 const Workers = () => {
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, millId } = useAuth();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory } = useInventory();
@@ -92,22 +91,25 @@ const Workers = () => {
   const [payFilterToday, setPayFilterToday] = useState(false);
 
   useEffect(() => {
-    if (targetUserId) { fetchWorkers(); fetchRecords(); fetchPayments(); }
-  }, [targetUserId, activeSeason]);
+    if (activeSeason) { fetchWorkers(); fetchRecords(); fetchPayments(); }
+  }, [activeSeason?.id]);
 
   const fetchWorkers = async () => {
-    const { data } = await supabase.from("workers").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    if (!activeSeason) return;
+    const { data } = await supabase.from("workers").select("*").eq("season_id", activeSeason.id).order("created_at", { ascending: false });
     setWorkers((data as Worker[]) || []);
     setLoading(false);
   };
 
   const fetchRecords = async () => {
-    const { data } = await supabase.from("work_records").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    if (!activeSeason) return;
+    const { data } = await supabase.from("work_records").select("*").eq("season_id", activeSeason.id).order("created_at", { ascending: false });
     setWorkRecords((data as WorkRecord[]) || []);
   };
 
   const fetchPayments = async () => {
-    const { data } = await supabase.from("worker_payments").select("*").eq("user_id", targetUserId!).eq("season_id", activeSeason!.id).order("created_at", { ascending: false });
+    if (!activeSeason) return;
+    const { data } = await supabase.from("worker_payments").select("*").eq("season_id", activeSeason.id).order("created_at", { ascending: false });
     setPayments((data as WorkerPayment[]) || []);
   };
 
@@ -117,7 +119,7 @@ const Workers = () => {
       return;
     }
     const { error } = await supabase.from("workers").insert({
-      user_id: targetUserId!,
+      user_id: user?.id!,
       season_id: activeSeason!.id,
       name: newWorker.name,
       type: newWorker.type,
@@ -157,7 +159,7 @@ const Workers = () => {
     if (amount <= 0) return;
     
     const { error } = await (supabase.rpc as any)("pay_worker_and_settle", {
-      p_user_id: targetUserId!,
+      p_user_id: user?.id!,
       p_season_id: activeSeason!.id,
       p_worker_id: worker.id,
       p_amount: amount,
@@ -184,7 +186,7 @@ const Workers = () => {
     const val = parseFloat(workValue);
 
     const { error } = await (supabase.rpc as any)("register_worker_session", {
-      p_user_id: targetUserId!,
+      p_user_id: user?.id!,
       p_season_id: activeSeason!.id,
       p_worker_id: selectedWorkerId,
       p_val: val,

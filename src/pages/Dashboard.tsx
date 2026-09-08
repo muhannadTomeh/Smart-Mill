@@ -26,8 +26,7 @@ import {
 export default function Dashboard() {
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, millId } = useAuth();
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
   const navigate = useNavigate();
@@ -48,33 +47,31 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (activeSeason) {
       fetchStats();
       fetchQueueData();
     }
-  }, [targetUserId, activeSeason]);
+  }, [activeSeason?.id]);
 
   const fetchStats = async () => {
+    if (!activeSeason) return;
     const today = new Date().toISOString().split("T")[0];
     const [waitingRes, doneRes, expenseRes] = await Promise.all([
       supabase
         .from("queue")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", targetUserId!)
-        .eq("season_id", activeSeason!.id)
+        .eq("season_id", activeSeason.id)
         .eq("status", "waiting"),
       supabase
         .from("queue")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", targetUserId!)
-        .eq("season_id", activeSeason!.id)
+        .eq("season_id", activeSeason.id)
         .eq("status", "completed")
         .gte("created_at", today),
       supabase
         .from("expenses")
         .select("amount")
-        .eq("user_id", targetUserId!)
-        .eq("season_id", activeSeason!.id)
+        .eq("season_id", activeSeason.id)
         .gte("created_at", today),
     ]);
 
@@ -86,12 +83,12 @@ export default function Dashboard() {
   };
 
   const fetchQueueData = async () => {
+    if (!activeSeason) return;
     // 1. Get current active processing customer
     const { data: procData } = await supabase
       .from("queue")
       .select("*")
-      .eq("user_id", targetUserId!)
-      .eq("season_id", activeSeason!.id)
+      .eq("season_id", activeSeason.id)
       .eq("status", "processing")
       .order("position", { ascending: true })
       .limit(1);
@@ -102,14 +99,14 @@ export default function Dashboard() {
     const { data: waitData } = await supabase
       .from("queue")
       .select("*")
-      .eq("user_id", targetUserId!)
-      .eq("season_id", activeSeason!.id)
+      .eq("season_id", activeSeason.id)
       .eq("status", "waiting")
       .order("position", { ascending: true })
       .limit(5);
 
     setQueuePreview((waitData as QueueItem[]) || []);
   };
+
 
   const statCards = [
     { label: "الرصيد", hint: "نقداً", value: `${inventory.total_cash.toFixed(0)} ₪`, icon: DollarSign, tone: "text-primary", bg: "bg-primary/10", sensitive: true },

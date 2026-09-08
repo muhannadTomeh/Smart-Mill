@@ -79,7 +79,7 @@ const Queue = () => {
   // Guard ref to prevent Realtime echoes or concurrent fetches from clobbering an in-progress reorder
   const isReorderingRef = useRef(false);
 
-  const { user, effectiveUserId, profile } = useAuth();
+  const { user, millId, profile } = useAuth();
   const { activeSeason } = useSeason();
 
   useEffect(() => {
@@ -95,7 +95,6 @@ const Queue = () => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  const targetUserId = effectiveUserId || user?.id;
 
   const processing = allItems
     .filter((i) => i.status === "processing")
@@ -108,12 +107,12 @@ const Queue = () => {
     .sort(sortByPosition);
 
   useEffect(() => {
-    if (targetUserId && activeSeason) fetchQueue();
-  }, [targetUserId, activeSeason]);
+    if (activeSeason) fetchQueue();
+  }, [activeSeason?.id]);
 
   // Realtime subscription
   useEffect(() => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     const channel = supabase
       .channel("queue-live")
       .on(
@@ -129,10 +128,10 @@ const Queue = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [targetUserId, activeSeason]);
+  }, [activeSeason?.id]);
 
   const fetchQueue = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     if (isReorderingRef.current) return;
 
     let query = supabase
@@ -140,11 +139,12 @@ const Queue = () => {
       .select("*")
       .eq("season_id", activeSeason.id);
 
-    if (activeSeason.mill_id) {
-      query = query.eq("mill_id", activeSeason.mill_id);
+    if (activeSeason.mill_id || millId) {
+      query = query.eq("mill_id", activeSeason.mill_id || millId);
     } else {
-      query = query.eq("user_id", targetUserId);
+      query = query.eq("user_id", user?.id);
     }
+
 
     const { data, error } = await query.order("position", { ascending: true });
 
@@ -225,7 +225,7 @@ const Queue = () => {
       const { data: newCustRecord, error: custErr } = await supabase
         .from("customers")
         .insert({
-          user_id: targetUserId!,
+          user_id: user?.id!,
           mill_id: currentMillId,
           season_id: activeSeason!.id,
           name: newCustomer.name.trim(),
@@ -254,7 +254,7 @@ const Queue = () => {
     const nextPosition = maxPos + 1;
 
     const basePayload: any = {
-      user_id: targetUserId!,
+      user_id: user?.id!,
       mill_id: currentMillId,
       season_id: activeSeason!.id,
       name: newCustomer.name.trim(),
@@ -495,7 +495,7 @@ const Queue = () => {
       notes: deleteTarget.notes || null,
       status: deleteTarget.status || "completed",
       season_id: activeSeason?.id || null,
-      user_id: targetUserId || null,
+      user_id: user?.id || null,
       deleted_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       source: isWaitingForInvoice ? "queue_completed" : "invoice",

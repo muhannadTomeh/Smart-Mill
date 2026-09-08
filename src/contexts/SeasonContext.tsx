@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export interface Season {
   id: string;
   user_id: string;
+  mill_id?: string | null;
   name: string;
   start_date: string | null;
   end_date: string | null;
@@ -40,46 +41,86 @@ const SeasonContext = createContext<SeasonContextType>({
 export const useSeason = () => useContext(SeasonContext);
 
 export const SeasonProvider = ({ children }: { children: ReactNode }) => {
-  const { user, effectiveUserId } = useAuth();
+  const { user, millId } = useAuth();
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const targetUserId = effectiveUserId || user?.id;
-
   useEffect(() => {
-    if (targetUserId) {
+    if (millId || user?.id) {
       fetchSeasons();
     } else {
       setSeasons([]);
       setLoading(false);
     }
-  }, [targetUserId]);
+  }, [millId, user?.id]);
 
   const fetchSeasons = async () => {
-    if (!targetUserId) return;
-    const { data } = await supabase
-      .from("seasons")
-      .select("*")
-      .eq("user_id", targetUserId)
-      .order("created_at", { ascending: false });
-    setSeasons((data as Season[]) || []);
-    setLoading(false);
+    if (!millId && !user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // 1. Canonical: query seasons by mill_id
+      if (millId) {
+        const { data, error } = await supabase
+          .from("seasons")
+          .select("*")
+          .eq("mill_id", millId)
+          .order("created_at", { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          setSeasons((data as Season[]) || []);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 2. Fallback: query by user_id for unmigrated seasons
+      if (user?.id) {
+        const { data } = await supabase
+          .from("seasons")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        setSeasons((data as Season[]) || []);
+      }
+    } catch (err) {
+      console.error("Error fetching seasons:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const enterSeason = async (seasonId: string) => {
-    if (!targetUserId) return;
-    // Deactivate all seasons for this mill first
-    await supabase
-      .from("seasons")
-      .update({ status: "closed" })
-      .eq("user_id", targetUserId)
-      .eq("status", "active");
-    // Activate selected season
-    await supabase
-      .from("seasons")
-      .update({ status: "active" })
-      .eq("id", seasonId)
-      .eq("user_id", targetUserId);
+    if (!millId && !user?.id) return;
+
+    if (millId) {
+      // Deactivate active season for this mill
+      await supabase
+        .from("seasons")
+        .update({ status: "closed" })
+        .eq("mill_id", millId)
+        .eq("status", "active");
+      // Activate selected season
+      await supabase
+        .from("seasons")
+        .update({ status: "active" })
+        .eq("id", seasonId)
+        .eq("mill_id", millId);
+    } else if (user?.id) {
+      await supabase
+        .from("seasons")
+        .update({ status: "closed" })
+        .eq("user_id", user.id)
+        .eq("status", "active");
+      await supabase
+        .from("seasons")
+        .update({ status: "active" })
+        .eq("id", seasonId)
+        .eq("user_id", user.id);
+    }
+
     await fetchSeasons();
   };
 
@@ -99,3 +140,4 @@ export const SeasonProvider = ({ children }: { children: ReactNode }) => {
     </SeasonContext.Provider>
   );
 };
+

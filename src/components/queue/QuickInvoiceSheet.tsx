@@ -34,8 +34,7 @@ interface QuickInvoiceSheetProps {
 type PaymentType = "oil" | "cash" | "mixed";
 
 export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }: QuickInvoiceSheetProps) {
-  const { user, effectiveUserId, profile } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, millId, profile } = useAuth();
   const { activeSeason } = useSeason();
   const { settings } = useSettings();
   const { refetch: refetchInventory } = useInventory();
@@ -51,7 +50,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
-    if (open && targetUserId && activeSeason) {
+    if (open && activeSeason) {
       fetchContainerTypes();
       // reset
       setOilProduced(0);
@@ -60,14 +59,13 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       setPaymentType(null);
       setCustomMixedOil(null);
     }
-  }, [open, targetUserId, activeSeason]);
+  }, [open, activeSeason?.id]);
 
   const fetchContainerTypes = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     const { data } = await supabase
       .from("container_types")
       .select("*")
-      .eq("user_id", targetUserId)
       .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: true });
     const types = (data as ContainerType[]) || [];
@@ -151,7 +149,6 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
         const { data } = await supabase
           .from("customers")
           .select("id")
-          .eq("user_id", targetUserId!)
           .eq("season_id", activeSeason!.id)
           .eq("name", customer.name.trim())
           .eq("phone", cleanPhone)
@@ -166,8 +163,8 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
         const { data: newCust, error: newCustErr } = await supabase
           .from("customers")
           .insert({
-            user_id: targetUserId!,
-            mill_id: activeSeason?.mill_id,
+            user_id: user?.id!,
+            mill_id: activeSeason?.mill_id || millId || null,
             season_id: activeSeason!.id,
             name: customer.name.trim(),
             phone: cleanPhone || null,

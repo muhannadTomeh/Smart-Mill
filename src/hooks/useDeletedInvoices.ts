@@ -12,8 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export function useDeletedInvoices() {
   const { activeSeason } = useSeason();
-  const { user, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id || "";
+  const { user } = useAuth();
   const { toast } = useToast();
 
   const [deletedInvoices, setDeletedInvoices] = useState<DeletedInvoice[]>([]);
@@ -57,7 +56,7 @@ export function useDeletedInvoices() {
 
   const restoreItem = async (item: DeletedInvoice) => {
     setRestoringId(item.id);
-    const res = await restoreDeletedInvoiceToQueue(item, targetUserId);
+    const res = await restoreDeletedInvoiceToQueue(item, user?.id || "");
     setRestoringId(null);
 
     if (res.success) {
