@@ -55,8 +55,7 @@ const COUNTRIES = [
 ];
 
 export default function Settings() {
-  const { user, profile, refreshProfile, effectiveUserId } = useAuth();
-  const targetUserId = effectiveUserId || user?.id;
+  const { user, millId, profile, refreshProfile } = useAuth();
   const { activeSeason, refetch: refetchSeasons } = useSeason();
   const { settings, loading } = useSettings();
   const { inventory, updateInventory } = useInventory();
@@ -311,15 +310,36 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    if (user) {
-      supabase
-        .from("profiles")
-        .select("id, display_name, phone, created_at")
-        .eq("parent_mill_id", targetUserId)
-        .order("created_at", { ascending: false })
-        .then(({ data }) => setEmployees(data || []));
-    }
-  }, [user, targetUserId]);
+    const loadEmployees = async () => {
+      if (!user) return;
+      const targetMillId = millId;
+      if (targetMillId) {
+        const { data: mems } = await supabase
+          .from("mill_memberships")
+          .select("id, user_id, role, display_username, created_at, is_active, profiles(display_name, phone)")
+          .eq("mill_id", targetMillId)
+          .eq("role", "mill_employee")
+          .order("created_at", { ascending: false });
+
+        if (mems) {
+          setEmployees(
+            mems.map((m: any) => ({
+              id: m.id,
+              user_id: m.user_id,
+              display_name: m.profiles?.display_name || m.display_username,
+              phone: m.profiles?.phone || m.display_username,
+              created_at: m.created_at,
+              is_active: m.is_active !== false,
+            }))
+          );
+          return;
+        }
+      }
+      setEmployees([]);
+    };
+
+    loadEmployees();
+  }, [user, millId]);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -399,27 +419,34 @@ export default function Settings() {
   }, [loading, settings, inventory]);
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (activeSeason) {
       fetchContainerTypes();
       fetchExpenseCategories();
     }
-  }, [targetUserId, activeSeason]);
+  }, [activeSeason?.id]);
 
   const fetchExpenseCategories = async () => {
-    if (!targetUserId || !activeSeason) return;
-    const { data } = await supabase
+    if (!activeSeason) return;
+    let query = supabase
       .from("expense_categories")
       .select("*")
-      .eq("user_id", targetUserId)
-      .eq("season_id", activeSeason.id)
-      .order("name", { ascending: true });
+      .eq("season_id", activeSeason.id);
+
+    if (millId || activeSeason.mill_id) {
+      query = query.eq("mill_id", millId || activeSeason.mill_id);
+    } else if (user?.id) {
+      query = query.eq("user_id", user.id);
+    }
+
+    const { data } = await query.order("name", { ascending: true });
     setExpenseCategories(data || []);
   };
 
   const addExpenseCategory = async () => {
-    if (!targetUserId || !activeSeason || !newExpenseCategoryName.trim()) return;
+    if (!activeSeason || !newExpenseCategoryName.trim()) return;
     const { error } = await supabase.from("expense_categories").insert({
-      user_id: targetUserId,
+      user_id: user?.id!,
+      mill_id: millId || activeSeason.mill_id || null,
       season_id: activeSeason.id,
       name: newExpenseCategoryName.trim()
     });
@@ -439,20 +466,27 @@ export default function Settings() {
   };
 
   const fetchContainerTypes = async () => {
-    if (!targetUserId || !activeSeason) return;
-    const { data } = await supabase.
-    from("container_types").
-    select("*").
-    eq("user_id", targetUserId).
-    eq("season_id", activeSeason.id).
-    order("created_at", { ascending: true });
+    if (!activeSeason) return;
+    let query = supabase
+      .from("container_types")
+      .select("*")
+      .eq("season_id", activeSeason.id);
+
+    if (millId || activeSeason.mill_id) {
+      query = query.eq("mill_id", millId || activeSeason.mill_id);
+    } else if (user?.id) {
+      query = query.eq("user_id", user.id);
+    }
+
+    const { data } = await query.order("created_at", { ascending: true });
     setContainerTypes(data as ContainerType[] || []);
   };
 
   const addContainerType = async () => {
-    if (!targetUserId || !activeSeason || !newContainerName.trim() || !newContainerPrice) return;
+    if (!activeSeason || !newContainerName.trim() || !newContainerPrice) return;
     const { error } = await supabase.from("container_types").insert({
-      user_id: targetUserId,
+      user_id: user?.id!,
+      mill_id: millId || activeSeason.mill_id || null,
       season_id: activeSeason.id,
       name: newContainerName.trim(),
       price: parseFloat(newContainerPrice)
