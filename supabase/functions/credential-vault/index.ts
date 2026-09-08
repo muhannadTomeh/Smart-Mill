@@ -63,11 +63,18 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    // Secret encryption key from Supabase Edge Function Secrets (NEVER hardcoded)
-    const vaultSecretKey = Deno.env.get('CREDENTIAL_VAULT_KEY') || serviceRoleKey;
+    // Secret encryption key from Supabase Edge Function Secrets (NEVER hardcoded, NO fallback key)
+    const vaultSecretKey = Deno.env.get('CREDENTIAL_VAULT_KEY');
 
-    if (!supabaseUrl || !serviceRoleKey || !vaultSecretKey) {
-      throw new Error('Server configuration error: Missing environment secrets');
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Server configuration error: Missing environment configuration');
+    }
+
+    if (!vaultSecretKey) {
+      return new Response(
+        JSON.stringify({ error: 'CREDENTIAL_VAULT_KEY is not configured in Supabase Secrets' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const authHeader = req.headers.get('Authorization');
@@ -108,9 +115,6 @@ serve(async (req) => {
       );
     }
 
-    // Check caller authorization:
-    // Platform Admin can reveal/store for any user.
-    // Mill Owner can reveal/store ONLY for employees belonging to their own mill.
     // Platform Admin user_id safeguard: '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114'
     const isPlatformAdmin = (callerId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') || !!(
       await supabaseAdmin
@@ -121,9 +125,18 @@ serve(async (req) => {
         .maybeSingle()
     ).data;
 
+    // Mill Owner check: ONLY allowed to manage cashiers (mill_employee) of their own mill
     let isAuthorizedOwner = false;
     if (!isPlatformAdmin) {
-      // Find if caller owns the mill where the target user is an employee
+      // Mill Owner can never reveal Platform Admin credentials
+      if (targetUserId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
+        return new Response(
+          JSON.stringify({ error: 'غير مصرح لك بالوصول لبيانات حساب المشرف العام' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check if target is a mill_employee in a mill owned by caller
       const { data: targetMembership } = await supabaseAdmin
         .from('mill_memberships')
         .select('mill_id, role, mills!inner(owner_user_id)')
@@ -138,7 +151,7 @@ serve(async (req) => {
 
     if (!isPlatformAdmin && !isAuthorizedOwner) {
       return new Response(
-        JSON.stringify({ error: 'Forbidden: Insufficient privileges to access credential vault for this account' }),
+        JSON.stringify({ error: 'غير مصرح لك بالوصول إلى خزينة بيانات الاعتماد لهذا الحساب' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -163,6 +176,22 @@ serve(async (req) => {
       }
 
       const decrypted = await decryptPassword(vaultRow.encrypted_password, vaultSecretKey);
+
+      // Log reveal action for security compliance
+      try {
+        await supabaseAdmin.from('admin_audit_log').insert({
+          admin_id: callerId,
+          action: 'credential_vault_reveal',
+          target_user_id: targetUserId,
+          details: {
+            revealed_by: callerId,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (logErr) {
+        console.warn('Could not record to admin_audit_log:', logErr);
+      }
+
       return new Response(
         JSON.stringify({ password: decrypted }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

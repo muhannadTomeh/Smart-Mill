@@ -53,6 +53,7 @@ import {
   updateUserAccount, 
   deleteUserAccount, 
   toggleUserAccountActive,
+  createMillOwnerAccount,
   AdminAccountItem 
 } from "@/lib/credentialVault";
 
@@ -165,20 +166,15 @@ export default function AdminIndex() {
         throw new Error("يرجى إدخال اسم مستخدم صالح (أحرف إنجليزية وأرقام)");
       }
 
-      const { error } = await (supabase as any).rpc('admin_create_mill', {
-        p_mill_name: newAccountData.mill_name.trim(),
-        p_country: newAccountData.country.trim() || 'فلسطين',
-        p_username: cleanUsername,
-        p_password: newAccountData.password,
-        p_owner_name: newAccountData.owner_name.trim(),
-        p_owner_phone: newAccountData.owner_phone.trim(),
-        p_owner_email: newAccountData.owner_email.trim() || null
+      await createMillOwnerAccount({
+        millName: newAccountData.mill_name.trim(),
+        country: newAccountData.country.trim() || 'فلسطين',
+        username: cleanUsername,
+        password: newAccountData.password,
+        ownerName: newAccountData.owner_name.trim(),
+        ownerPhone: newAccountData.owner_phone.trim(),
+        ownerEmail: newAccountData.owner_email.trim() || undefined
       });
-
-      if (error) {
-        console.warn("admin_create_mill RPC error:", error);
-        throw error;
-      }
 
       setCreatedCredentials({
         mill_name: newAccountData.mill_name.trim(),

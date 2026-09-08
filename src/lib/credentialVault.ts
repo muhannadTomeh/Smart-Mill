@@ -195,6 +195,86 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
 }
 
 /**
+ * Creates a Mill and Mill Owner account using the server-side admin-manage-user Edge Function.
+ * Platform Admin only.
+ */
+export async function createMillOwnerAccount(params: {
+  millName: string;
+  ownerName: string;
+  country: string;
+  username: string;
+  password: string;
+  ownerPhone?: string;
+  ownerEmail?: string;
+}): Promise<{ user_id: string; mill_id: string; username: string }> {
+  const { millName, ownerName, country, username, password, ownerPhone, ownerEmail } = params;
+
+  // 1. Primary: Edge Function using Supabase Auth Admin API
+  try {
+    const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
+      body: {
+        action: 'create_owner',
+        mill_name: millName,
+        owner_name: ownerName,
+        country: country || 'فلسطين',
+        username,
+        password,
+        owner_phone: ownerPhone,
+        owner_email: ownerEmail
+      }
+    });
+
+    if (!edgeErr && edgeData?.success) {
+      return {
+        user_id: edgeData.user_id,
+        mill_id: edgeData.mill_id,
+        username: edgeData.username
+      };
+    }
+
+    if (edgeData?.error) {
+      throw new Error(edgeData.error);
+    }
+    if (edgeErr) {
+      throw edgeErr;
+    }
+  } catch (efEx: any) {
+    if (!efEx.message?.includes('Failed to send') && !efEx.message?.includes('NetworkError') && !efEx.message?.includes('not found') && !efEx.message?.includes('404')) {
+      throw efEx;
+    }
+    console.warn("Edge function fallback to admin_create_mill RPC:", efEx.message);
+  }
+
+  // 2. Fallback: Database RPC (if Edge Function not yet deployed on server)
+  const { data: rpcData, error: rpcErr } = await (supabase as any).rpc('admin_create_mill', {
+    p_mill_name: millName,
+    p_country: country || 'فلسطين',
+    p_username: username,
+    p_password: password,
+    p_owner_name: ownerName,
+    p_owner_phone: ownerPhone || null,
+    p_owner_email: ownerEmail || null
+  });
+
+  if (rpcErr) {
+    throw new Error(rpcErr.message || "فشل إنشاء حساب المعصرة");
+  }
+
+  const createdUserId = (rpcData as any)?.user_id || (rpcData as any)?.owner_user_id;
+  const createdMillId = (rpcData as any)?.mill_id || (rpcData as any)?.id;
+
+  if (createdUserId) {
+    await storeCredential(createdUserId, password);
+  }
+
+  return {
+    user_id: createdUserId,
+    mill_id: createdMillId,
+    username
+  };
+}
+
+/**
  * Creates a cashier employee account using the Supabase Auth Admin API
  * with transactional rollback safety to prevent orphan auth records.
  */
@@ -211,7 +291,7 @@ export async function createEmployeeAccount(params: {
   try {
     const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
       body: {
-        action: 'create_employee',
+        action: 'create_cashier',
         mill_id: millId,
         display_name: displayName,
         username,
@@ -230,8 +310,11 @@ export async function createEmployeeAccount(params: {
     if (edgeData?.error) {
       throw new Error(edgeData.error);
     }
+    if (edgeErr) {
+      throw edgeErr;
+    }
   } catch (efEx: any) {
-    if (!efEx.message?.includes('Failed to send') && !efEx.message?.includes('NetworkError') && !efEx.message?.includes('not found')) {
+    if (!efEx.message?.includes('Failed to send') && !efEx.message?.includes('NetworkError') && !efEx.message?.includes('not found') && !efEx.message?.includes('404')) {
       throw efEx;
     }
     console.warn("Edge function fallback to admin_create_cashier RPC:", efEx.message);
@@ -277,7 +360,7 @@ export async function toggleUserAccountActive(userId: string, isActive: boolean)
     // 1. Primary: Edge Function
     const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
       body: {
-        action: 'toggle_active',
+        action: isActive ? 'enable_user' : 'disable_user',
         user_id: userId,
         is_active: isActive
       }
@@ -326,6 +409,30 @@ export async function updateUserAccount(
   const cleanName = displayName.trim();
   const cleanPass = password?.trim() || "";
 
+  // 1. Primary: Edge Function
+  try {
+    const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
+      body: {
+        action: 'update_user',
+        user_id: userId,
+        display_name: cleanName,
+        username: cleanUsername,
+        password: cleanPass || undefined
+      }
+    });
+
+    if (!edgeErr && edgeData?.success) {
+      return;
+    }
+
+    if (edgeData?.error) {
+      throw new Error(edgeData.error);
+    }
+  } catch (efEx: any) {
+    console.warn("Edge function update_user failed, falling back to RPC:", efEx.message);
+  }
+
+  // 2. Fallback: Database RPC
   try {
     const { error } = await supabase.rpc('admin_update_user_credentials', {
       p_user_id: userId,
@@ -335,7 +442,6 @@ export async function updateUserAccount(
     });
 
     if (error) {
-      // Fallback: update profile directly
       if (error.message?.includes('function') && error.message?.includes('does not exist')) {
         await supabase
           .from('profiles')
