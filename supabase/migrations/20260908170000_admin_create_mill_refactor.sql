@@ -101,7 +101,6 @@ SET confirmation_token = COALESCE(confirmation_token, ''),
     is_super_admin = COALESCE(is_super_admin, false),
     is_sso_user = COALESCE(is_sso_user, false),
     is_anonymous = COALESCE(is_anonymous, false),
-    confirmed_at = COALESCE(confirmed_at, email_confirmed_at, now()),
     email_confirmed_at = COALESCE(email_confirmed_at, now())
 WHERE confirmation_token IS NULL
    OR recovery_token IS NULL
@@ -114,7 +113,7 @@ WHERE confirmation_token IS NULL
    OR is_super_admin IS NULL
    OR is_sso_user IS NULL
    OR is_anonymous IS NULL
-   OR confirmed_at IS NULL;
+   OR email_confirmed_at IS NULL;
 
 -- ==============================================================================
 -- 3. ENSURE REQUIRED CONSTRAINTS
@@ -296,7 +295,7 @@ BEGIN
   IF v_owner_user_id IS NULL THEN
     v_owner_user_id := gen_random_uuid();
     INSERT INTO auth.users (
-      id, instance_id, email, encrypted_password, email_confirmed_at, confirmed_at,
+      id, instance_id, email, encrypted_password, email_confirmed_at,
       raw_app_meta_data, raw_user_meta_data, role, aud,
       confirmation_token, recovery_token, email_change_token_new, email_change, email_change_token_current,
       phone_change, phone_change_token, reauthentication_token,
@@ -307,7 +306,6 @@ BEGIN
       '00000000-0000-0000-0000-000000000000',
       v_email,
       extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf', 10)),
-      now(),
       now(),
       '{"provider": "email", "providers": ["email"]}'::jsonb,
       jsonb_build_object(
@@ -349,7 +347,6 @@ BEGIN
     UPDATE auth.users
     SET encrypted_password = extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf', 10)),
         email_confirmed_at = COALESCE(email_confirmed_at, now()),
-        confirmed_at = COALESCE(confirmed_at, now()),
         confirmation_token = COALESCE(confirmation_token, ''),
         recovery_token = COALESCE(recovery_token, ''),
         email_change_token_new = COALESCE(email_change_token_new, ''),
