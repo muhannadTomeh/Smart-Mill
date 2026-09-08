@@ -1215,8 +1215,16 @@ BEGIN
 
   v_clean_username := lower(trim(p_username));
   IF v_clean_username IS NOT NULL AND v_clean_username <> '' THEN
-    -- Check uniqueness across memberships
-    IF EXISTS (SELECT 1 FROM public.mill_memberships WHERE lower(username) = v_clean_username) THEN
+    -- تنظيف أي عضويات يتيمة لمعاصر محذوفة سابقاً لفك حجز أسماء المستخدمين
+    DELETE FROM public.mill_memberships 
+    WHERE mill_id IS NULL OR mill_id NOT IN (SELECT id FROM public.mills);
+
+    -- التحقق من عدم تكرار اسم المستخدم فقط بين المعاصر الحالية الموجودة
+    IF EXISTS (
+      SELECT 1 FROM public.mill_memberships mm
+      JOIN public.mills m ON mm.mill_id = m.id
+      WHERE lower(mm.username) = v_clean_username
+    ) THEN
       RAISE EXCEPTION 'اسم المستخدم "%" مستخدم بالفعل، يرجى اختيار اسم مستخدم آخر', v_clean_username;
     END IF;
     v_email := v_clean_username || '@smartmill.com';
@@ -1265,7 +1273,7 @@ BEGIN
     INSERT INTO auth.identities (
       id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
     ) VALUES (
-      v_owner_user_id::text,
+      gen_random_uuid(),
       v_owner_user_id,
       jsonb_build_object('sub', v_owner_user_id::text, 'email', v_email),
       'email',
@@ -1273,7 +1281,35 @@ BEGIN
       now(),
       now(),
       now()
-    );
+    )
+    ON CONFLICT DO NOTHING;
+  ELSE
+    -- المستخدم موجود مسبقاً (مثلاً من معصرة محذوفة سابقاً): تحديث كلمة المرور وربطه بالمعصرة الجديدة
+    UPDATE auth.users
+    SET encrypted_password = extensions.crypt(COALESCE(p_password, '12345678'), extensions.gen_salt('bf')),
+        raw_user_meta_data = jsonb_build_object(
+          'display_name', p_owner_name,
+          'mill_name', p_mill_name,
+          'username', v_clean_username,
+          'phone', p_owner_phone,
+          'country', p_country
+        ),
+        updated_at = now()
+    WHERE id = v_owner_user_id;
+
+    INSERT INTO auth.identities (
+      id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      gen_random_uuid(),
+      v_owner_user_id,
+      jsonb_build_object('sub', v_owner_user_id::text, 'email', v_email),
+      'email',
+      v_owner_user_id::text,
+      now(),
+      now(),
+      now()
+    )
+    ON CONFLICT DO NOTHING;
   END IF;
 
   -- 3. Create profile
@@ -1284,7 +1320,9 @@ BEGIN
   )
   ON CONFLICT (user_id) DO UPDATE SET
     mill_name = EXCLUDED.mill_name,
-    display_name = EXCLUDED.display_name;
+    display_name = EXCLUDED.display_name,
+    phone = EXCLUDED.phone,
+    country = EXCLUDED.country;
 
   -- 4. Create Mill Membership
   IF EXISTS (SELECT 1 FROM public.mill_memberships WHERE user_id = v_owner_user_id) THEN
@@ -1368,8 +1406,16 @@ BEGIN
     RAISE EXCEPTION 'يرجى إدخال اسم مستخدم صالح';
   END IF;
 
-  -- Enforce Globally Unique Username
-  IF EXISTS (SELECT 1 FROM public.mill_memberships WHERE lower(username) = v_clean_username) THEN
+  -- تنظيف العضويات اليتيمة
+  DELETE FROM public.mill_memberships 
+  WHERE mill_id IS NULL OR mill_id NOT IN (SELECT id FROM public.mills);
+
+  -- Enforce Globally Unique Username across active mills
+  IF EXISTS (
+    SELECT 1 FROM public.mill_memberships mm
+    JOIN public.mills m ON mm.mill_id = m.id
+    WHERE lower(mm.username) = v_clean_username
+  ) THEN
     RAISE EXCEPTION 'اسم المستخدم "%" مستخدم بالفعل في النظام، يرجى اختيار اسم آخر', v_clean_username;
   END IF;
 
@@ -1378,45 +1424,68 @@ BEGIN
   -- Check if auth user exists
   SELECT id INTO v_emp_user_id FROM auth.users WHERE lower(email) = lower(v_email);
 
-  IF v_emp_user_id IS NOT NULL THEN
-    RAISE EXCEPTION 'حساب البريد/المستخدم "%" مسجل مسبقاً', v_email;
+  IF v_emp_user_id IS NULL THEN
+    v_emp_user_id := gen_random_uuid();
+    INSERT INTO auth.users (
+      id, instance_id, email, encrypted_password, email_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data, role, aud, created_at, updated_at
+    ) VALUES (
+      v_emp_user_id,
+      '00000000-0000-0000-0000-000000000000',
+      v_email,
+      extensions.crypt(p_password, extensions.gen_salt('bf')),
+      now(),
+      '{"provider": "email", "providers": ["email"]}'::jsonb,
+      jsonb_build_object(
+        'display_name', p_display_name,
+        'username', v_clean_username,
+        'mill_id', v_target_mill_id
+      ),
+      'authenticated',
+      'authenticated',
+      now(),
+      now()
+    );
+
+    INSERT INTO auth.identities (
+      id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      gen_random_uuid(),
+      v_emp_user_id,
+      jsonb_build_object('sub', v_emp_user_id::text, 'email', v_email),
+      'email',
+      v_emp_user_id::text,
+      now(),
+      now(),
+      now()
+    )
+    ON CONFLICT DO NOTHING;
+  ELSE
+    -- الحساب كان موجوداً من قبل: تحديث كلمة المرور وربطه بالمعصرة
+    UPDATE auth.users
+    SET encrypted_password = extensions.crypt(p_password, extensions.gen_salt('bf')),
+        raw_user_meta_data = jsonb_build_object(
+          'display_name', p_display_name,
+          'username', v_clean_username,
+          'mill_id', v_target_mill_id
+        ),
+        updated_at = now()
+    WHERE id = v_emp_user_id;
+
+    INSERT INTO auth.identities (
+      id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      gen_random_uuid(),
+      v_emp_user_id,
+      jsonb_build_object('sub', v_emp_user_id::text, 'email', v_email),
+      'email',
+      v_emp_user_id::text,
+      now(),
+      now(),
+      now()
+    )
+    ON CONFLICT DO NOTHING;
   END IF;
-
-  -- Create Auth user
-  v_emp_user_id := gen_random_uuid();
-  INSERT INTO auth.users (
-    id, instance_id, email, encrypted_password, email_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data, role, aud, created_at, updated_at
-  ) VALUES (
-    v_emp_user_id,
-    '00000000-0000-0000-0000-000000000000',
-    v_email,
-    extensions.crypt(p_password, extensions.gen_salt('bf')),
-    now(),
-    '{"provider": "email", "providers": ["email"]}'::jsonb,
-    jsonb_build_object(
-      'display_name', p_display_name,
-      'username', v_clean_username,
-      'mill_id', v_target_mill_id
-    ),
-    'authenticated',
-    'authenticated',
-    now(),
-    now()
-  );
-
-  INSERT INTO auth.identities (
-    id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    v_emp_user_id::text,
-    v_emp_user_id,
-    jsonb_build_object('sub', v_emp_user_id::text, 'email', v_email),
-    'email',
-    v_emp_user_id::text,
-    now(),
-    now(),
-    now()
-  );
 
   -- Create Profile
   INSERT INTO public.profiles (
@@ -1516,10 +1585,10 @@ BEGIN
     RAISE EXCEPTION 'المعصرة غير موجودة.';
   END IF;
 
-  -- Delete cashier/employee auth accounts if any
+  -- Delete all mill auth accounts (cashiers and owner) except platform_admin
   FOR v_member IN 
     SELECT user_id FROM public.mill_memberships 
-    WHERE mill_id = p_mill_id AND role = 'mill_employee'
+    WHERE mill_id = p_mill_id
   LOOP
     IF NOT public.is_platform_admin(v_member.user_id) THEN
       DELETE FROM auth.users WHERE id = v_member.user_id;
