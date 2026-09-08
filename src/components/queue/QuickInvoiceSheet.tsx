@@ -163,16 +163,20 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
         customerId = existingCust.id;
       } else {
         // Always create a new distinct customer record
-        const { data: newCust } = await supabase
+        const { data: newCust, error: newCustErr } = await supabase
           .from("customers")
           .insert({
             user_id: targetUserId!,
+            mill_id: activeSeason?.mill_id,
             season_id: activeSeason!.id,
             name: customer.name.trim(),
             phone: cleanPhone || null,
-          })
+          } as any)
           .select("id")
           .single();
+        if (newCustErr) {
+          console.error("QuickInvoiceSheet customer create error:", newCustErr);
+        }
         if (newCust) customerId = newCust.id;
       }
     }

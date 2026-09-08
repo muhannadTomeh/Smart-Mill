@@ -32,11 +32,18 @@ export default function QueueDisplay() {
 
   const fetchQueue = async () => {
     if (!targetUserId || !activeSeason) return;
-    const { data } = await supabase
+    let query = supabase
       .from("queue")
       .select("id, name, position, status, bags")
-      .eq("user_id", targetUserId)
-      .eq("season_id", activeSeason.id)
+      .eq("season_id", activeSeason.id);
+
+    if (activeSeason.mill_id) {
+      query = query.eq("mill_id", activeSeason.mill_id);
+    } else {
+      query = query.eq("user_id", targetUserId);
+    }
+
+    const { data } = await query
       .in("status", ["waiting", "processing"])
       .order("position", { ascending: true });
     setItems(data || []);

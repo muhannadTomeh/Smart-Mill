@@ -135,12 +135,22 @@ const Queue = () => {
     if (!targetUserId || !activeSeason) return;
     if (isReorderingRef.current) return;
 
-    const { data } = await supabase
+    let query = supabase
       .from("queue")
       .select("*")
-      .eq("user_id", targetUserId)
-      .eq("season_id", activeSeason.id)
-      .order("position", { ascending: true });
+      .eq("season_id", activeSeason.id);
+
+    if (activeSeason.mill_id) {
+      query = query.eq("mill_id", activeSeason.mill_id);
+    } else {
+      query = query.eq("user_id", targetUserId);
+    }
+
+    const { data, error } = await query.order("position", { ascending: true });
+
+    if (error) {
+      console.error("fetchQueue error:", error);
+    }
 
     if (isReorderingRef.current) return;
 
@@ -200,27 +210,37 @@ const Queue = () => {
       return;
     }
 
+    const currentMillId = activeSeason?.mill_id;
+    if (!currentMillId) {
+      toast.error("تعذر تحديد المعصرة الحالية");
+      return;
+    }
+
     const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes, 10) : null;
     const bagsCount = newCustomer.bags ? parseInt(newCustomer.bags, 10) : 0;
 
     // Create a distinct customer record for this person in the customers table
     let createdCustId: string | null = null;
     try {
-      const { data: newCustRecord } = await supabase
+      const { data: newCustRecord, error: custErr } = await supabase
         .from("customers")
         .insert({
           user_id: targetUserId!,
+          mill_id: currentMillId,
           season_id: activeSeason!.id,
           name: newCustomer.name.trim(),
           phone: newCustomer.phone?.trim() || null,
         })
         .select("id")
         .single();
+      if (custErr) {
+        console.error("Error creating customer record in customers table:", custErr);
+      }
       if (newCustRecord?.id) {
         createdCustId = newCustRecord.id;
       }
     } catch (cErr) {
-      console.warn("Could not pre-create customer:", cErr);
+      console.error("Could not pre-create customer:", cErr);
     }
 
     const fallbackNotes = [
@@ -235,6 +255,7 @@ const Queue = () => {
 
     const basePayload: any = {
       user_id: targetUserId!,
+      mill_id: currentMillId,
       season_id: activeSeason!.id,
       name: newCustomer.name.trim(),
       phone: newCustomer.phone?.trim() || null,
