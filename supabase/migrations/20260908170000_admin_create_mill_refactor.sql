@@ -235,6 +235,68 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.has_role(uuid, text) TO authenticated, anon, service_role;
 
+-- SECURITY DEFINER helpers to eliminate RLS recursion on mill_memberships and mills
+CREATE OR REPLACE FUNCTION public.get_auth_user_mill_ids()
+RETURNS SETOF uuid
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid()
+  UNION
+  SELECT id FROM public.mills WHERE owner_user_id = auth.uid();
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_auth_user_mill_ids() TO authenticated, anon, service_role;
+
+CREATE OR REPLACE FUNCTION public.get_auth_user_owned_mill_ids()
+RETURNS SETOF uuid
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner'
+  UNION
+  SELECT id FROM public.mills WHERE owner_user_id = auth.uid();
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_auth_user_owned_mill_ids() TO authenticated, anon, service_role;
+
+CREATE OR REPLACE FUNCTION public.get_auth_user_accessible_user_ids()
+RETURNS SETOF uuid
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT user_id FROM public.mill_memberships
+  WHERE mill_id IN (
+    SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner'
+    UNION
+    SELECT id FROM public.mills WHERE owner_user_id = auth.uid()
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_auth_user_accessible_user_ids() TO authenticated, anon, service_role;
+
+CREATE OR REPLACE FUNCTION public.is_mill_owner_of(_mill_id uuid, _uid uuid DEFAULT auth.uid())
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.mills WHERE id = _mill_id AND owner_user_id = _uid
+  ) OR EXISTS (
+    SELECT 1 FROM public.mill_memberships WHERE mill_id = _mill_id AND user_id = _uid AND role = 'mill_owner'
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_mill_owner_of(uuid, uuid) TO authenticated, anon, service_role;
+
 -- ==============================================================================
 -- 5. ATOMIC RPC: admin_create_mill (GoTrue Compatible)
 -- ==============================================================================
@@ -514,20 +576,14 @@ CREATE POLICY "mill_owner_select_mills"
   TO authenticated
   USING (
     owner_user_id = auth.uid() OR
-    id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid())
+    id IN (SELECT public.get_auth_user_mill_ids())
   );
 
 CREATE POLICY "mill_owner_update_mills"
   ON public.mills FOR UPDATE
   TO authenticated
-  USING (
-    owner_user_id = auth.uid() OR
-    id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner')
-  )
-  WITH CHECK (
-    owner_user_id = auth.uid() OR
-    id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid() AND role = 'mill_owner')
-  );
+  USING (public.is_mill_owner_of(id, auth.uid()))
+  WITH CHECK (public.is_mill_owner_of(id, auth.uid()));
 
 -- -------------------------------------------------------------
 -- RLS: public.mill_memberships
@@ -541,18 +597,8 @@ CREATE POLICY "platform_admin_manage_memberships"
 CREATE POLICY "mill_owner_manage_own_mill_memberships"
   ON public.mill_memberships FOR ALL
   TO authenticated
-  USING (
-    mill_id IN (
-      SELECT mill_id FROM public.mill_memberships
-      WHERE user_id = auth.uid() AND role = 'mill_owner'
-    )
-  )
-  WITH CHECK (
-    mill_id IN (
-      SELECT mill_id FROM public.mill_memberships
-      WHERE user_id = auth.uid() AND role = 'mill_owner'
-    )
-  );
+  USING (mill_id IN (SELECT public.get_auth_user_owned_mill_ids()))
+  WITH CHECK (mill_id IN (SELECT public.get_auth_user_owned_mill_ids()));
 
 CREATE POLICY "users_view_own_membership"
   ON public.mill_memberships FOR SELECT
@@ -578,13 +624,8 @@ CREATE POLICY "mill_owner_view_mill_profiles"
   ON public.profiles FOR SELECT
   TO authenticated
   USING (
-    user_id IN (
-      SELECT mm.user_id FROM public.mill_memberships mm
-      WHERE mm.mill_id IN (
-        SELECT my_mm.mill_id FROM public.mill_memberships my_mm
-        WHERE my_mm.user_id = auth.uid() AND my_mm.role = 'mill_owner'
-      )
-    )
+    user_id = auth.uid() OR
+    user_id IN (SELECT public.get_auth_user_accessible_user_ids())
   );
 
 -- -------------------------------------------------------------
@@ -614,10 +655,10 @@ CREATE POLICY "mill_members_manage_settings"
   ON public.settings FOR ALL
   TO authenticated
   USING (
-    mill_id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid()) OR
+    mill_id IN (SELECT public.get_auth_user_mill_ids()) OR
     user_id = auth.uid()
   )
   WITH CHECK (
-    mill_id IN (SELECT mill_id FROM public.mill_memberships WHERE user_id = auth.uid()) OR
+    mill_id IN (SELECT public.get_auth_user_mill_ids()) OR
     user_id = auth.uid()
   );
