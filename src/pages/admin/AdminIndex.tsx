@@ -121,26 +121,7 @@ export default function AdminIndex() {
 
       if (error) {
         console.warn("admin_create_mill RPC error:", error);
-        // Fallback: if RPC does not exist yet, try edge function
-        if (error.message?.includes('admin_create_mill') && error.message?.includes('does not exist')) {
-          const edgeRes = await supabase.functions.invoke('admin-create-mill-account', {
-            body: {
-              mill_name: newAccountData.mill_name.trim(),
-              owner_name: newAccountData.owner_name.trim(),
-              phone: newAccountData.owner_phone.trim(),
-              secondary_phone: newAccountData.owner_email.trim() || null,
-              country: newAccountData.country.trim() || 'فلسطين',
-              username: cleanUsername,
-              email: `${cleanUsername}@smartmill.com`,
-              password: newAccountData.password
-            }
-          });
-          if (edgeRes.error) {
-            throw new Error("يرجى تشغيل استعلام SQL الخاص بإنشاء دالة admin_create_mill في Supabase SQL Editor أولاً، ثم إعادة المحاولة.");
-          }
-        } else {
-          throw error;
-        }
+        throw error;
       }
 
       setCreatedCredentials({
@@ -429,7 +410,6 @@ export default function AdminIndex() {
                       <Input 
                         id="owner_name" 
                         required 
-                        placeholder="مثال: رائف عمار"
                         className="text-right h-9 text-sm"
                         value={newAccountData.owner_name}
                         onChange={e => setNewAccountData(prev => ({...prev, owner_name: e.target.value}))}
@@ -442,7 +422,6 @@ export default function AdminIndex() {
                         id="owner_phone" 
                         required
                         dir="ltr"
-                        placeholder="مثال: 0569945677"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.owner_phone}
                         onChange={e => setNewAccountData(prev => ({...prev, owner_phone: e.target.value}))}
@@ -458,7 +437,6 @@ export default function AdminIndex() {
                         id="owner_email" 
                         type="email" 
                         dir="ltr"
-                        placeholder="example@gmail.com (اختياري للإشعارات والتواصل)"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.owner_email}
                         onChange={e => setNewAccountData(prev => ({...prev, owner_email: e.target.value}))}
@@ -478,7 +456,6 @@ export default function AdminIndex() {
                       <Input 
                         id="mill_name" 
                         required 
-                        placeholder="مثال: معصرة قفين الغربية"
                         className="text-right h-9 text-sm"
                         value={newAccountData.mill_name}
                         onChange={e => setNewAccountData(prev => ({...prev, mill_name: e.target.value}))}
@@ -492,7 +469,6 @@ export default function AdminIndex() {
                         required
                         className="text-right h-9 text-sm"
                         value={newAccountData.country}
-                        placeholder="مثال: قفين - طولكرم"
                         onChange={e => setNewAccountData(prev => ({...prev, country: e.target.value}))}
                       />
                     </div>
@@ -503,7 +479,6 @@ export default function AdminIndex() {
                         id="username" 
                         required 
                         dir="ltr"
-                        placeholder="مثال: raef أو qaffin_mill"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.username}
                         onChange={e => setNewAccountData(prev => ({...prev, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "")}))}
@@ -519,7 +494,6 @@ export default function AdminIndex() {
                           type="text" 
                           required 
                           dir="ltr"
-                          placeholder="أدخل كلمة المرور"
                           className="text-left font-mono h-9 text-sm"
                           value={newAccountData.password}
                           onChange={e => setNewAccountData(prev => ({...prev, password: e.target.value}))}
