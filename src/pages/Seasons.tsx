@@ -24,7 +24,7 @@ interface SeasonStats {
 }
 
 export default function Seasons() {
-  const { seasons, loading, enterSeason, closeSeason, refetch } = useSeason();
+  const { seasons, activeSeason, loading, enterSeason, closeSeason, refetch } = useSeason();
   const { user, signOut, millId } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -54,8 +54,14 @@ export default function Seasons() {
 
 
   const handleEnter = async (season: Season) => {
+    // إذا كان الموسم مفعلاً بالفعل، انتقل مباشرة للوحة التحكم دون إعادة التفعيل أو إظهار إشعار مكرر
+    if (activeSeason?.id === season.id) {
+      navigate("/dashboard");
+      return;
+    }
+
     await enterSeason(season.id);
-    toast({ title: "تم الدخول", description: `تم تفعيل ${season.name}` });
+    toast({ title: "تم التبديل", description: `تم تفعيل موسم ${season.name}` });
     navigate("/dashboard");
   };
 
