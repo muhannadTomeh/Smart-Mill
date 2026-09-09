@@ -29,7 +29,8 @@ export async function revealCredential(userId: string): Promise<string | null> {
 
     if (edgeError) {
       console.warn("credential-vault edge function error:", edgeError);
-      throw new Error(edgeError.message || "تعذر الاتصال بخزنة بيانات الاعتماد المشفرة");
+      const errorMsg = await extractEdgeFunctionError(edgeError, "تعذر الاتصال بخزنة بيانات الاعتماد المشفرة");
+      throw new Error(errorMsg);
     }
 
     if (edgeData?.error) {
