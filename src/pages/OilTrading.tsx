@@ -4,9 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ShoppingCart, TrendingUp, TrendingDown, Package, DollarSign, Calendar, RefreshCw, AlertCircle } from "lucide-react";
+import { 
+  ShoppingCart, TrendingUp, TrendingDown, Package, DollarSign, 
+  Calendar, RefreshCw, Plus, Filter, X
+} from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,9 +37,15 @@ const OilTrading = () => {
   const { toast } = useToast();
   const { selectedCurrency } = useCurrency();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
+  
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  // Filter state
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+
   const [newTransaction, setNewTransaction] = useState({
     type: 'buy' as 'buy' | 'sell',
     amount: "",
@@ -76,6 +87,10 @@ const OilTrading = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setNewTransaction({ type: 'buy', amount: "", price: "", partyName: "", notes: "" });
   };
 
   const addTransaction = async () => {
@@ -169,11 +184,14 @@ const OilTrading = () => {
         total_cash: newTransaction.type === 'buy' ? inventory.total_cash - totalPrice : inventory.total_cash + totalPrice
       });
 
-      setNewTransaction({ type: 'buy', amount: "", price: "", partyName: "", notes: "" });
+      resetForm();
+      setAddDialogOpen(false);
+
       toast({
         title: "تمت العملية بنجاح",
         description: `تم تسجيل عملية ${newTransaction.type === 'buy' ? 'الشراء' : 'البيع'} بنجاح`
       });
+
       await fetchTransactions();
       await refetchInventory();
     } catch (err: any) {
@@ -190,9 +208,14 @@ const OilTrading = () => {
 
   const calculatedTotal = (parseFloat(newTransaction.amount) || 0) * (parseFloat(newTransaction.price) || 0);
 
+  const filteredTransactions = transactions.filter((tx) => {
+    if (typeFilter === "all") return true;
+    return tx.type === typeFilter;
+  });
+
   return (
     <div className="space-y-6 text-right" dir="rtl">
-      {/* Page Header */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -200,27 +223,40 @@ const OilTrading = () => {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">بيع وشراء الزيت</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">تسجيل عمليات شراء وبيع الزيت وتحديث المخزون والصندوق المالي</p>
+            <p className="text-xs text-muted-foreground mt-0.5">تسجيل ومتابعة عمليات بيع وشراء الزيت وتحديث المخزون المالي</p>
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            fetchTransactions();
-            refetchInventory();
-          }}
-          className="gap-2 self-start sm:self-auto text-xs"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          <span>تحديث البيانات</span>
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              fetchTransactions();
+              refetchInventory();
+            }}
+            className="gap-2 rounded-xl text-xs h-9"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>تحديث</span>
+          </Button>
+
+          <Button
+            onClick={() => {
+              resetForm();
+              setAddDialogOpen(true);
+            }}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl gap-2 h-9 px-4 text-xs sm:text-sm shadow-xs"
+          >
+            <Plus className="h-4 w-4" />
+            <span>تسجيل عملية جديدة</span>
+          </Button>
+        </div>
       </div>
 
       {/* Inventory & Cash Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="rounded-2xl border-border/60 shadow-sm bg-gradient-to-br from-card to-muted/20">
+        <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium">الزيت المتوفر بالمعصرة</p>
@@ -234,11 +270,11 @@ const OilTrading = () => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-border/60 shadow-sm bg-gradient-to-br from-card to-muted/20">
+        <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium">الكاش المتوفر بالصندوق</p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">
+              <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                 {inventory.total_cash.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{selectedCurrency}</span>
               </h3>
             </div>
@@ -248,7 +284,7 @@ const OilTrading = () => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-border/60 shadow-sm bg-gradient-to-br from-card to-muted/20">
+        <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium">إجمالي العمليات المسجلة</p>
@@ -263,237 +299,278 @@ const OilTrading = () => {
         </Card>
       </div>
 
-      {/* Main Tabs */}
-      <Tabs defaultValue="add-transaction" className="w-full" dir="rtl">
-        <TabsList className="grid w-full grid-cols-2 rounded-xl h-11 bg-muted/60 p-1">
-          <TabsTrigger value="add-transaction" className="rounded-lg font-bold text-xs sm:text-sm">
-            إضافة عملية جديدة
-          </TabsTrigger>
-          <TabsTrigger value="history" className="rounded-lg font-bold text-xs sm:text-sm">
-            سجل العمليات ({transactions.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Tab 1: Add Transaction Form */}
-        <TabsContent value="add-transaction">
-          <Card className="rounded-2xl border-border/60 shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">إضافة عملية بيع أو شراء زيت</CardTitle>
-              <CardDescription className="text-xs">
-                قم بتسجيل تفاصيل عملية بيع أو شراء الزيت ليتم تحديث المخزون وحسابات الصندوق تلقائياً
+      {/* Main Transactions History Table (Full Width - 100%) */}
+      <Card className="rounded-2xl border-border/60 shadow-xs overflow-hidden">
+        <CardHeader className="border-b border-border/70 bg-card/60 p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4 text-primary" />
+                <span>سجل عمليات البيع والشراء</span>
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                سجل تاريخي كامل لجميع العمليات المنفذة في الموسم الحالي
               </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Type Selection */}
-              <div>
-                <Label className="text-xs font-semibold">نوع العملية</Label>
-                <div className="grid grid-cols-2 gap-3 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewTransaction((p) => ({ ...p, type: 'buy' }))}
-                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-sm transition-all ${
-                      newTransaction.type === 'buy'
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 ring-2 ring-emerald-500/20'
-                        : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
-                    }`}
-                  >
-                    <TrendingDown className="h-4 w-4 text-emerald-600" />
-                    <span>📥 شراء زيت (إضافة للمخزون)</span>
-                  </button>
+            </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setNewTransaction((p) => ({ ...p, type: 'sell' }))}
-                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-sm transition-all ${
-                      newTransaction.type === 'sell'
-                        ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 ring-2 ring-blue-500/20'
-                        : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
-                    }`}
-                  >
-                    <TrendingUp className="h-4 w-4 text-blue-600" />
-                    <span>📤 بيع زيت (خصم من المخزون)</span>
-                  </button>
-                </div>
+            {/* Filter */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-muted/30 border border-border/60 rounded-xl px-2.5 py-1 text-xs">
+                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="h-7 text-xs bg-transparent border-0 text-foreground cursor-pointer"
+                >
+                  <option value="all">جميع العمليات</option>
+                  <option value="buy">عمليات الشراء (📥)</option>
+                  <option value="sell">عمليات البيع (📤)</option>
+                </select>
               </div>
+            </div>
+          </div>
+        </CardHeader>
 
-              {/* Amount and Price */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">الكمية (كغم) *</Label>
-                  <Input
-                    type="number"
-                    value={newTransaction.amount}
-                    onChange={(e) => setNewTransaction((p) => ({ ...p, amount: e.target.value }))}
-                    placeholder="أدخل الكمية بالكيلوغرام..."
-                    min="0"
-                    step="0.1"
-                    className="rounded-xl h-10"
-                  />
-                  {newTransaction.type === 'sell' && (
-                    <p className="text-[11px] text-muted-foreground">
-                      المتوفر للبيع: <strong>{inventory.total_oil.toFixed(1)} كغم</strong>
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">سعر الكيلوغرام ({selectedCurrency}/كغم) *</Label>
-                  <Input
-                    type="number"
-                    value={newTransaction.price}
-                    onChange={(e) => setNewTransaction((p) => ({ ...p, price: e.target.value }))}
-                    placeholder="أدخل السعر..."
-                    min="0"
-                    step="0.1"
-                    className="rounded-xl h-10"
-                  />
-                  {newTransaction.type === 'buy' && (
-                    <p className="text-[11px] text-muted-foreground">
-                      الكاش المتوفر للشراء: <strong>{inventory.total_cash.toLocaleString()} {selectedCurrency}</strong>
-                    </p>
-                  )}
-                </div>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="text-center py-16 text-muted-foreground flex flex-col items-center gap-2">
+              <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+              <p className="text-xs">جارٍ تحميل سجل العمليات...</p>
+            </div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground px-4">
+              <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="text-base font-semibold text-foreground">لا توجد عمليات مسجلة</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                {typeFilter !== "all" 
+                  ? "لا توجد عمليات تطابق نوع الفلترة المحدد."
+                  : "لم يتم تسجيل أي عملية بيع أو شراء في هذا الموسم حتى الآن."}
+              </p>
+              <div className="mt-4">
+                <Button
+                  onClick={() => {
+                    resetForm();
+                    setAddDialogOpen(true);
+                  }}
+                  className="rounded-xl font-bold gap-2 text-xs h-9 bg-primary"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>تسجيل أول عملية الآن</span>
+                </Button>
               </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead className="text-right font-bold text-xs">التاريخ</TableHead>
+                    <TableHead className="text-right font-bold text-xs">نوع العملية</TableHead>
+                    <TableHead className="text-right font-bold text-xs">الكمية</TableHead>
+                    <TableHead className="text-right font-bold text-xs">السعر / كغم</TableHead>
+                    <TableHead className="text-right font-bold text-xs">الإجمالي</TableHead>
+                    <TableHead className="text-right font-bold text-xs">الطرف المعني</TableHead>
+                    <TableHead className="text-right font-bold text-xs">ملاحظات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions.map((tx) => (
+                    <TableRow key={tx.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="text-right text-xs font-mono">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>{formatDate(tx.created_at)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant="outline"
+                          className={`text-xs font-bold gap-1 ${
+                            tx.type === 'buy'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+                              : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
+                          }`}
+                        >
+                          {tx.type === 'buy' ? '📥 شراء زيت' : '📤 بيع زيت'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-sm">
+                        {tx.amount} <span className="text-xs font-normal text-muted-foreground">كغم</span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {tx.price} {selectedCurrency}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-sm text-primary font-mono">
+                        {Number(tx.total_price).toLocaleString()} {selectedCurrency}
+                      </TableCell>
+                      <TableCell className="text-right text-xs">
+                        {tx.party_name || <span className="text-muted-foreground italic">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground max-w-[200px] truncate">
+                        {tx.notes || <span className="text-muted-foreground/50 italic">—</span>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-              {/* Calculated Total Display */}
-              {calculatedTotal > 0 && (
-                <div className="p-4 bg-primary/5 border border-primary/15 rounded-xl flex items-center justify-between">
-                  <div className="text-xs font-semibold text-muted-foreground">
-                    إجمالي قيمة العملية:
-                  </div>
-                  <div className="text-xl font-bold text-primary font-mono">
-                    {calculatedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedCurrency}
-                  </div>
-                </div>
-              )}
+      {/* ─────────────────────────────────────────────────────────────
+          ADD TRANSACTION MODAL (DIALOG) — Like Settings Hub Pattern
+      ───────────────────────────────────────────────────────────── */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] text-right rounded-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader className="text-right sm:text-right pb-2 border-b border-border/60">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5 text-primary" />
+              <span>إضافة عملية بيع أو شراء زيت</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              تسجيل تفاصيل العملية وتحديث أرصدة الزيت والكاش تلقائياً
+            </DialogDescription>
+          </DialogHeader>
 
-              {/* Party Name */}
+          <div className="space-y-4 py-2">
+            {/* Type Selection */}
+            <div>
+              <Label className="text-xs font-semibold">نوع العملية *</Label>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setNewTransaction((p) => ({ ...p, type: 'buy' }))}
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-xs sm:text-sm transition-all ${
+                    newTransaction.type === 'buy'
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                      : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
+                  }`}
+                >
+                  <TrendingDown className="h-4 w-4 text-emerald-600" />
+                  <span>📥 شراء زيت (إضافة)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewTransaction((p) => ({ ...p, type: 'sell' }))}
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-xs sm:text-sm transition-all ${
+                    newTransaction.type === 'sell'
+                      ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 ring-2 ring-blue-500/20'
+                      : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
+                  }`}
+                >
+                  <TrendingUp className="h-4 w-4 text-blue-600" />
+                  <span>📤 بيع زيت (خصم)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Amount and Price */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  {newTransaction.type === 'buy' ? 'اسم المورّد / المزارع' : 'اسم المشتري / الزبون'} (اختياري)
-                </Label>
+                <Label className="text-xs font-semibold">الكمية (كغم) *</Label>
                 <Input
-                  value={newTransaction.partyName}
-                  onChange={(e) => setNewTransaction((p) => ({ ...p, partyName: e.target.value }))}
-                  placeholder={newTransaction.type === 'buy' ? 'أدخل اسم المورّد...' : 'أدخل اسم المشتري...'}
-                  className="rounded-xl h-10"
+                  type="number"
+                  value={newTransaction.amount}
+                  onChange={(e) => setNewTransaction((p) => ({ ...p, amount: e.target.value }))}
+                  placeholder="الكمية بالكيلوغرام..."
+                  min="0"
+                  step="0.1"
+                  className="rounded-xl h-10 font-mono"
                 />
-              </div>
-
-              {/* Notes */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">ملاحظات إضافية (اختياري)</Label>
-                <Input
-                  value={newTransaction.notes}
-                  onChange={(e) => setNewTransaction((p) => ({ ...p, notes: e.target.value }))}
-                  placeholder="ملاحظات توضيحية حول العملية..."
-                  className="rounded-xl h-10"
-                />
-              </div>
-
-              {/* Submit Button */}
-              <Button
-                onClick={addTransaction}
-                disabled={isSubmitting || !activeSeason || !newTransaction.amount || !newTransaction.price}
-                className="w-full h-11 rounded-xl font-bold gap-2 text-sm mt-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    <span>جارٍ تسجيل العملية...</span>
-                  </>
-                ) : (
-                  <>
-                    {newTransaction.type === 'buy' ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
-                    <span>تسجيل عملية {newTransaction.type === 'buy' ? 'الشراء' : 'البيع'}</span>
-                  </>
+                {newTransaction.type === 'sell' && (
+                  <p className="text-[11px] text-muted-foreground">
+                    المتوفر للبيع: <strong>{inventory.total_oil.toFixed(1)} كغم</strong>
+                  </p>
                 )}
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 2: Transactions History */}
-        <TabsContent value="history">
-          <Card className="rounded-2xl border-border/60 shadow-sm">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">سجل عمليات البيع والشراء</CardTitle>
-                <CardDescription className="text-xs">سجل تاريخي كامل لجميع العمليات المنفذة في الموسم الحالي</CardDescription>
               </div>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-center py-12 text-muted-foreground flex flex-col items-center gap-2">
-                  <RefreshCw className="h-6 w-6 animate-spin text-primary" />
-                  <p className="text-sm">جارٍ تحميل سجل العمليات...</p>
-                </div>
-              ) : transactions.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p className="text-base font-semibold">لا توجد عمليات مسجلة حتى الآن</p>
-                  <p className="text-xs mt-1">قم بتسجيل عملية بيع أو شراء من التبويب أعلاه</p>
-                </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">سعر الكيلوغرام ({selectedCurrency}) *</Label>
+                <Input
+                  type="number"
+                  value={newTransaction.price}
+                  onChange={(e) => setNewTransaction((p) => ({ ...p, price: e.target.value }))}
+                  placeholder="سعر الكيلو..."
+                  min="0"
+                  step="0.1"
+                  className="rounded-xl h-10 font-mono"
+                />
+                {newTransaction.type === 'buy' && (
+                  <p className="text-[11px] text-muted-foreground">
+                    الكاش المتوفر: <strong>{inventory.total_cash.toLocaleString()} {selectedCurrency}</strong>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Calculated Total Display */}
+            {calculatedTotal > 0 && (
+              <div className="p-3.5 bg-primary/5 border border-primary/15 rounded-xl flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">إجمالي قيمة العملية:</span>
+                <span className="text-lg font-bold text-primary font-mono">
+                  {calculatedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedCurrency}
+                </span>
+              </div>
+            )}
+
+            {/* Party Name */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">
+                {newTransaction.type === 'buy' ? 'اسم المورّد / المزارع' : 'اسم المشتري / الزبون'} (اختياري)
+              </Label>
+              <Input
+                value={newTransaction.partyName}
+                onChange={(e) => setNewTransaction((p) => ({ ...p, partyName: e.target.value }))}
+                placeholder={newTransaction.type === 'buy' ? 'أدخل اسم المورّد...' : 'أدخل اسم المشتري...'}
+                className="rounded-xl h-10"
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">ملاحظات إضافية (اختياري)</Label>
+              <Input
+                value={newTransaction.notes}
+                onChange={(e) => setNewTransaction((p) => ({ ...p, notes: e.target.value }))}
+                placeholder="ملاحظات توضيحية حول العملية..."
+                className="rounded-xl h-10"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 pt-2 border-t border-border/60">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAddDialogOpen(false)}
+              disabled={isSubmitting}
+              className="rounded-xl text-xs font-semibold"
+            >
+              إلغاء
+            </Button>
+            <Button
+              type="button"
+              onClick={addTransaction}
+              disabled={isSubmitting || !newTransaction.amount || !newTransaction.price}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl gap-2 text-xs"
+            >
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>جارٍ التسجيل...</span>
+                </>
               ) : (
-                <div className="rounded-xl border overflow-hidden">
-                  <Table>
-                    <TableHeader className="bg-muted/40">
-                      <TableRow>
-                        <TableHead className="text-right font-bold text-xs">التاريخ</TableHead>
-                        <TableHead className="text-right font-bold text-xs">نوع العملية</TableHead>
-                        <TableHead className="text-right font-bold text-xs">الكمية</TableHead>
-                        <TableHead className="text-right font-bold text-xs">السعر / كغم</TableHead>
-                        <TableHead className="text-right font-bold text-xs">الإجمالي</TableHead>
-                        <TableHead className="text-right font-bold text-xs">الطرف المعني</TableHead>
-                        <TableHead className="text-right font-bold text-xs">ملاحظات</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {transactions.map((tx) => (
-                        <TableRow key={tx.id} className="hover:bg-muted/30">
-                          <TableCell className="text-right text-xs font-mono">
-                            <div className="flex items-center gap-1.5 text-muted-foreground">
-                              <Calendar className="h-3.5 w-3.5" />
-                              <span>{formatDate(tx.created_at)}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs font-bold gap-1 ${
-                                tx.type === 'buy'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
-                                  : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
-                              }`}
-                            >
-                              {tx.type === 'buy' ? '📥 شراء زيت' : '📤 بيع زيت'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-sm">
-                            {tx.amount} <span className="text-xs font-normal text-muted-foreground">كغم</span>
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-xs">
-                            {tx.price} {selectedCurrency}
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-sm text-primary font-mono">
-                            {Number(tx.total_price).toLocaleString()} {selectedCurrency}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {tx.party_name || <span className="text-muted-foreground italic">—</span>}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground max-w-[200px] truncate">
-                            {tx.notes || '—'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <>
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>تسجيل عملية {newTransaction.type === 'buy' ? 'الشراء' : 'البيع'}</span>
+                </>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

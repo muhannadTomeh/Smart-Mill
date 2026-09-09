@@ -6,7 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Sprout, Plus, Calendar, DollarSign, Trash2, Tag, Edit3 } from "lucide-react";
+import { 
+  Sprout, Plus, Calendar, DollarSign, Trash2, Tag, Edit3, 
+  RefreshCw, X, Receipt, Wallet, Filter
+} from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -47,12 +53,17 @@ const Expenses = () => {
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
-  const { currency } = useCurrency();
+  const { currency, selectedCurrency } = useCurrency();
+  const activeCurrency = selectedCurrency || currency || "₪";
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // New Expense state
+  // Dialog State
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  // New Expense form state
   const [newExpense, setNewExpense] = useState({ category: "", amount: "", description: "" });
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
@@ -66,19 +77,28 @@ const Expenses = () => {
     if (activeSeason) {
       fetchExpenses();
       fetchCategories();
+    } else {
+      setExpenses([]);
+      setCategories([]);
+      setLoading(false);
     }
   }, [activeSeason?.id]);
 
   const fetchCategories = async () => {
     if (!activeSeason) return;
-    const { data } = await supabase
+    const effectiveMillId = millId || activeSeason.mill_id;
+    let query = supabase
       .from("expense_categories")
       .select("*")
-      .eq("season_id", activeSeason.id)
-      .order("name", { ascending: true });
+      .eq("season_id", activeSeason.id);
+
+    if (effectiveMillId) {
+      query = (query as any).eq("mill_id", effectiveMillId);
+    }
+
+    const { data } = await query.order("name", { ascending: true });
     const list = (data as ExpenseCategory[]) || [];
     setCategories(list);
-    // If no categories exist yet, default to custom mode so the user can type freely right away
     if (list.length === 0) {
       setIsCustomMode(true);
     }
@@ -86,23 +106,44 @@ const Expenses = () => {
 
   const fetchExpenses = async () => {
     if (!activeSeason) return;
-    let query = supabase
-      .from("expenses")
-      .select("*")
-      .eq("season_id", activeSeason.id);
+    setLoading(true);
+    try {
+      let query = supabase
+        .from("expenses")
+        .select("*")
+        .eq("season_id", activeSeason.id);
 
-    if (millId || activeSeason.mill_id) {
-      query = query.eq("mill_id", millId || activeSeason.mill_id);
-    } else if (user?.id) {
-      query = query.eq("user_id", user.id);
+      const effectiveMillId = millId || activeSeason.mill_id;
+      if (effectiveMillId) {
+        query = (query as any).eq("mill_id", effectiveMillId);
+      } else if (user?.id) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
+      if (error) {
+        console.error("fetchExpenses error:", error);
+      }
+      setExpenses((data as Expense[]) || []);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const { data } = await query.order("created_at", { ascending: false });
-    setExpenses((data as Expense[]) || []);
-    setLoading(false);
+  const resetForm = () => {
+    setNewExpense({ category: "", amount: "", description: "" });
+    setCustomCategory("");
+    if (categories.length > 0) {
+      setIsCustomMode(false);
+    }
   };
 
   const addExpense = async () => {
+    if (!activeSeason) {
+      toast({ title: "تنبيه", description: "يرجى تحديد وتفعيل موسم أولاً", variant: "destructive" });
+      return;
+    }
+
     const finalCategory = (isCustomMode ? customCategory : newExpense.category).trim();
 
     if (!finalCategory) {
@@ -118,30 +159,32 @@ const Expenses = () => {
     setSavingExpense(true);
 
     try {
+      const effectiveMillId = millId || activeSeason?.mill_id || null;
+
       // 1. Insert into expenses table
       const { error } = await supabase.from("expenses").insert({
         user_id: user?.id!,
-        mill_id: millId || activeSeason?.mill_id || null,
-        season_id: activeSeason!.id,
+        mill_id: effectiveMillId,
+        season_id: activeSeason.id,
         category: finalCategory,
         amount,
         description: newExpense.description.trim() || null,
-      });
+      } as any);
 
       if (error) throw error;
 
-      // 2. If this category isn't already registered in expense_categories, register it now
+      // 2. If category not registered, save to expense_categories
       const alreadyExists = categories.some(
         (c) => c.name.trim().toLowerCase() === finalCategory.toLowerCase()
       );
-      if (!alreadyExists && activeSeason && user?.id) {
+      if (!alreadyExists && user?.id) {
         try {
           await supabase.from("expense_categories").insert({
             user_id: user.id,
-            mill_id: millId || activeSeason.mill_id || null,
+            mill_id: effectiveMillId,
             season_id: activeSeason.id,
             name: finalCategory,
-          });
+          } as any);
           await fetchCategories();
         } catch {}
       }
@@ -151,21 +194,18 @@ const Expenses = () => {
 
       toast({
         title: "تمت إضافة المصروف بنجاح",
-        description: `تم تسجيل مصروف "${finalCategory}" بقيمة ${amount} شيكل`,
+        description: `تم تسجيل مصروف "${finalCategory}" بقيمة ${amount} ${activeCurrency}`,
       });
 
-      // Reset form
-      setNewExpense({ category: "", amount: "", description: "" });
-      setCustomCategory("");
-      if (categories.length > 0) {
-        setIsCustomMode(false);
-      }
+      // Close modal & reset form
+      resetForm();
+      setAddDialogOpen(false);
 
       await fetchExpenses();
       await refetchInventory();
     } catch (err: any) {
       toast({
-        title: "خطأ",
+        title: "خطأ في تسجيل المصروف",
         description: err.message || "تعذر حفظ المصروف",
         variant: "destructive",
       });
@@ -180,10 +220,12 @@ const Expenses = () => {
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (!error) {
       await updateInventory({ total_cash: inventory.total_cash + amount });
-      toast({ title: "تم الحذف", description: "تم حذف المصروف بنجاح" });
+      toast({ title: "تم الحذف", description: "تم حذف المصروف بنجاح واسترجاع قيمته إلى الصندوق" });
       setDeleteTarget(null);
-      fetchExpenses();
-      refetchInventory();
+      await fetchExpenses();
+      await refetchInventory();
+    } else {
+      toast({ title: "خطأ", description: error.message || "تعذر حذف المصروف", variant: "destructive" });
     }
   };
 
@@ -204,7 +246,6 @@ const Expenses = () => {
 
   const getTotalExpenses = () => filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-  // Quick select a suggestion
   const handleSelectQuickTag = (tag: string) => {
     if (isCustomMode) {
       setCustomCategory(tag);
@@ -213,64 +254,268 @@ const Expenses = () => {
     }
   };
 
+  const hasActiveFilters = Boolean(filter.category || filter.dateFrom || filter.dateTo);
+
+  const clearFilters = () => {
+    setFilter({ category: "", dateFrom: "", dateTo: "" });
+  };
+
   return (
-    <div className="space-y-6" dir="rtl">
-      {/* Page Title */}
-      <div className="flex items-center gap-3">
-        <Sprout className="h-8 w-8 text-primary" />
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">إدارة المصاريف</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">تسجيل ومتابعة مصاريف المعصرة اليومية والتشغيلية</p>
+    <div className="space-y-6 text-right" dir="rtl">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <Receipt className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">إدارة المصاريف</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">تسجيل ومتابعة مصاريف المعصرة اليومية والتشغيلية</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              fetchExpenses();
+              fetchCategories();
+              refetchInventory();
+            }}
+            className="gap-2 rounded-xl text-xs h-9"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>تحديث</span>
+          </Button>
+
+          <Button
+            onClick={() => {
+              resetForm();
+              setAddDialogOpen(true);
+            }}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl gap-2 h-9 px-4 text-xs sm:text-sm shadow-xs"
+          >
+            <Plus className="h-4 w-4" />
+            <span>إضافة مصروف جديد</span>
+          </Button>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="border border-border shadow-xs rounded-2xl">
-          <CardContent className="p-4 flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive">
-              <DollarSign className="h-5 w-5" />
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
+          <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <div className="text-2xl font-bold text-destructive font-mono">
-                {formatNumber(getTotalExpenses())} {currency}
-              </div>
-              <p className="text-xs text-muted-foreground">إجمالي المصاريف (حسب الفلترة الحالية)</p>
+              <p className="text-xs text-muted-foreground font-medium">إجمالي المصاريف المعروضة</p>
+              <h3 className="text-2xl font-bold text-destructive font-mono mt-1">
+                {formatNumber(getTotalExpenses())} <span className="text-xs font-normal text-muted-foreground">{activeCurrency}</span>
+              </h3>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive">
+              <DollarSign className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
-        <Card className="border border-border shadow-xs rounded-2xl">
-          <CardContent className="p-4 flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-              <Sprout className="h-5 w-5" />
-            </div>
+
+        <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
+          <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <div className="text-2xl font-bold text-foreground font-mono">
-                {expenses.length}
-              </div>
-              <p className="text-xs text-muted-foreground">إجمالي عدد المصاريف المسجلة بالموسم</p>
+              <p className="text-xs text-muted-foreground font-medium">إجمالي عدد المصاريف</p>
+              <h3 className="text-2xl font-bold text-foreground font-mono mt-1">
+                {expenses.length} <span className="text-xs font-normal text-muted-foreground">مصروف</span>
+              </h3>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <Receipt className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">رصيد الكاش بالصندوق</p>
+              <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+                {inventory.total_cash.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{activeCurrency}</span>
+              </h3>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <Wallet className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Grid: Add Form (1 col) + Expense Records (2 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Add Expense Form Card */}
-        <Card className="lg:col-span-1 border border-border shadow-xs rounded-2xl overflow-hidden">
-          <CardHeader className="border-b border-border/80 bg-card/60 pb-3.5">
-            <CardTitle className="text-base font-bold flex items-center gap-2">
-              <Plus className="h-4 w-4 text-primary" />
-              <span>إضافة مصروف جديد</span>
-            </CardTitle>
-            <CardDescription className="text-xs">تسجيل نفقة جديدة للمعصرة</CardDescription>
-          </CardHeader>
+      {/* Main Expenses Table Card (Full Width - 100%) */}
+      <Card className="border border-border/60 shadow-xs rounded-2xl overflow-hidden">
+        <CardHeader className="border-b border-border/70 bg-card/60 p-4 sm:p-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-primary" />
+                <span>سجل المصاريف</span>
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                عرض ومراجعة كافة المصاريف التشغيلية المسجلة خلال الموسم
+              </CardDescription>
+            </div>
 
-          <CardContent className="space-y-4 pt-4">
-            {/* Category Field: Toggle between Select & Input + Quick Tags */}
+            {/* Filter Controls Bar */}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="flex items-center gap-1.5 bg-muted/30 border border-border/60 rounded-xl px-2.5 py-1">
+                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                <select
+                  value={filter.category}
+                  onChange={(e) => setFilter((p) => ({ ...p, category: e.target.value }))}
+                  className="h-7 text-xs bg-transparent border-0 focus:ring-0 text-foreground cursor-pointer"
+                >
+                  <option value="">جميع الأنواع</option>
+                  {allFilterCategories.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-muted/30 border border-border/60 rounded-xl px-2.5 py-1">
+                <span className="text-[11px] text-muted-foreground">من:</span>
+                <input
+                  type="date"
+                  dir="ltr"
+                  value={filter.dateFrom}
+                  onChange={(e) => setFilter((p) => ({ ...p, dateFrom: e.target.value }))}
+                  className="h-7 text-xs bg-transparent border-0 text-foreground"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-muted/30 border border-border/60 rounded-xl px-2.5 py-1">
+                <span className="text-[11px] text-muted-foreground">إلى:</span>
+                <input
+                  type="date"
+                  dir="ltr"
+                  value={filter.dateTo}
+                  onChange={(e) => setFilter((p) => ({ ...p, dateTo: e.target.value }))}
+                  className="h-7 text-xs bg-transparent border-0 text-foreground"
+                />
+              </div>
+
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span>إلغاء الفلاتر</span>
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="text-center py-16 text-muted-foreground flex flex-col items-center gap-2">
+              <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+              <p className="text-xs">جارٍ تحميل سجل المصاريف...</p>
+            </div>
+          ) : filteredExpenses.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground px-4">
+              <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="text-base font-semibold text-foreground">لا توجد مصاريف مسجلة</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                {hasActiveFilters 
+                  ? "لا توجد نتائج تطابق خيارات الفلترة المحددة. جرب تغيير الفلتر."
+                  : "لم يتم تسجيل أي مصاريف في هذا الموسم حتى الآن."}
+              </p>
+              <div className="mt-4">
+                <Button
+                  onClick={() => {
+                    resetForm();
+                    setAddDialogOpen(true);
+                  }}
+                  className="rounded-xl font-bold gap-2 text-xs h-9 bg-primary"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>إضافة أول مصروف الآن</span>
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead className="text-right font-bold text-xs">التاريخ</TableHead>
+                    <TableHead className="text-right font-bold text-xs">نوع المصروف</TableHead>
+                    <TableHead className="text-right font-bold text-xs">المبلغ</TableHead>
+                    <TableHead className="text-right font-bold text-xs">الوصف والتفاصيل</TableHead>
+                    <TableHead className="text-left font-bold text-xs">الإجراءات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredExpenses.map((exp) => (
+                    <TableRow key={exp.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell className="text-right text-xs font-mono">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>{formatDate(exp.created_at)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="text-xs font-semibold bg-muted/40 border-border/60">
+                          {exp.category}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-sm text-destructive font-mono">
+                        {formatNumber(exp.amount)} {activeCurrency}
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground max-w-md truncate">
+                        {exp.description || <span className="text-muted-foreground/50 italic">—</span>}
+                      </TableCell>
+                      <TableCell className="text-left">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                          onClick={() => setDeleteTarget(exp)}
+                          title="حذف المصروف"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ─────────────────────────────────────────────────────────────
+          ADD EXPENSE MODAL (DIALOG) — Like Settings Hub Pattern
+      ───────────────────────────────────────────────────────────── */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] text-right rounded-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader className="text-right sm:text-right pb-2 border-b border-border/60">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Plus className="h-5 w-5 text-primary" />
+              <span>إضافة مصروف جديد</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              تسجيل نفقة جديدة للمعصرة وخصم قيمتها من رصيد الصندوق النقدي تلقائياً
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Category Field */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">نوع المصروف</Label>
+                <Label className="text-xs font-semibold text-foreground">نوع المصروف *</Label>
                 <button
                   type="button"
                   onClick={() => {
@@ -279,7 +524,7 @@ const Expenses = () => {
                       setCustomCategory(newExpense.category || "");
                     }
                   }}
-                  className="text-xs font-medium text-primary hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
                 >
                   <Edit3 className="h-3 w-3" />
                   <span>{isCustomMode ? "اختر من القائمة" : "+ كتابة نوع مخصص"}</span>
@@ -287,15 +532,13 @@ const Expenses = () => {
               </div>
 
               {isCustomMode ? (
-                <div className="space-y-1">
-                  <Input
-                    value={customCategory}
-                    onChange={(e) => setCustomCategory(e.target.value)}
-                    placeholder="اكتب نوع المصروف (مثل: طعام، ديزل، صيانة...)"
-                    className="h-10 text-sm rounded-lg"
-                    autoFocus
-                  />
-                </div>
+                <Input
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  placeholder="اكتب نوع المصروف (مثل: طعام وضيافة، صيانة، وقود...)"
+                  className="h-10 text-sm rounded-xl"
+                  autoFocus
+                />
               ) : (
                 <select
                   value={newExpense.category}
@@ -307,15 +550,14 @@ const Expenses = () => {
                       setNewExpense((p) => ({ ...p, category: e.target.value }));
                     }
                   }}
-                  className="w-full h-10 px-3 border border-input rounded-lg text-sm bg-background text-foreground focus:ring-1 focus:ring-primary"
+                  className="w-full h-10 px-3 border border-input rounded-xl text-sm bg-background text-foreground focus:ring-1 focus:ring-primary"
                 >
-                  <option value="">اختر نوع المصروف...</option>
+                  <option value="">اختر نوع المصروف من القائمة...</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.name}>
                       {c.name}
                     </option>
                   ))}
-                  {/* Default suggestions that haven't been added yet */}
                   {DEFAULT_SUGGESTIONS.filter(
                     (s) => !categories.some((c) => c.name === s)
                   ).map((s) => (
@@ -328,15 +570,15 @@ const Expenses = () => {
               )}
 
               {/* Quick suggestion tags */}
-              <div className="space-y-1 pt-1">
-                <span className="text-[11px] text-muted-foreground block">اختيار سريع:</span>
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[11px] text-muted-foreground font-medium block">اختيار سريع:</span>
                 <div className="flex flex-wrap gap-1.5">
                   {DEFAULT_SUGGESTIONS.map((tag) => (
                     <button
                       key={tag}
                       type="button"
                       onClick={() => handleSelectQuickTag(tag)}
-                      className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted/60 hover:bg-primary/15 hover:text-primary transition-colors text-muted-foreground border border-border/50"
+                      className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-primary/15 hover:text-primary transition-colors text-muted-foreground border border-border/50"
                     >
                       + {tag}
                     </button>
@@ -347,16 +589,21 @@ const Expenses = () => {
 
             {/* Amount Field */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">المبلغ (شيكل) <span className="text-destructive">*</span></Label>
+              <Label className="text-xs font-semibold text-foreground">
+                المبلغ ({activeCurrency}) <span className="text-destructive">*</span>
+              </Label>
               <Input
                 type="number"
                 value={newExpense.amount}
                 onChange={(e) => setNewExpense((p) => ({ ...p, amount: e.target.value }))}
-                placeholder="أدخل المبلغ بالشيكل"
+                placeholder="أدخل مبلغ المصروف..."
                 min="0"
                 step="0.5"
-                className="h-10 text-sm rounded-lg"
+                className="h-10 text-sm rounded-xl font-mono"
               />
+              <p className="text-[11px] text-muted-foreground">
+                رصيد الصندوق المتوفر: <strong>{inventory.total_cash.toLocaleString()} {activeCurrency}</strong>
+              </p>
             </div>
 
             {/* Description Field */}
@@ -365,134 +612,44 @@ const Expenses = () => {
               <Textarea
                 value={newExpense.description}
                 onChange={(e) => setNewExpense((p) => ({ ...p, description: e.target.value }))}
-                placeholder="تفاصيل إضافية عن هذا المصروف..."
+                placeholder="أي ملاحظات أو تفاصيل إضافية حول المصروف..."
                 rows={3}
-                className="text-sm rounded-lg resize-none"
+                className="text-sm rounded-xl resize-none"
               />
             </div>
+          </div>
 
+          <DialogFooter className="gap-2 pt-2 border-t border-border/60">
             <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAddDialogOpen(false)}
+              disabled={savingExpense}
+              className="rounded-xl text-xs font-semibold"
+            >
+              إلغاء
+            </Button>
+            <Button
+              type="button"
               onClick={addExpense}
               disabled={savingExpense}
-              className="w-full h-10 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs rounded-lg gap-2"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl gap-2 text-xs"
             >
-              <Plus className="h-4 w-4" />
-              <span>{savingExpense ? "جارٍ الإضافة..." : "تسجيل المصروف"}</span>
+              {savingExpense ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>جارٍ الحفظ...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>تسجيل المصروف</span>
+                </>
+              )}
             </Button>
-          </CardContent>
-        </Card>
-
-        {/* Expenses List & Filter Card */}
-        <Card className="lg:col-span-2 border border-border shadow-xs rounded-2xl overflow-hidden">
-          <CardHeader className="border-b border-border/80 bg-card/60 pb-3.5">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <CardTitle className="text-base font-bold">سجل المصاريف</CardTitle>
-                <CardDescription className="text-xs">عرض ومراجعة المصاريف المسجلة</CardDescription>
-              </div>
-            </div>
-
-            {/* Filter Controls */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">فلترة حسب النوع</Label>
-                <select
-                  value={filter.category}
-                  onChange={(e) => setFilter((p) => ({ ...p, category: e.target.value }))}
-                  className="w-full h-9 px-3 border border-input rounded-lg text-xs bg-background text-foreground"
-                >
-                  <option value="">جميع الأنواع</option>
-                  {allFilterCategories.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">من تاريخ</Label>
-                <Input
-                  type="date"
-                  dir="ltr"
-                  value={filter.dateFrom}
-                  onChange={(e) => setFilter((p) => ({ ...p, dateFrom: e.target.value }))}
-                  className="h-9 text-xs rounded-lg text-right"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">إلى تاريخ</Label>
-                <Input
-                  type="date"
-                  dir="ltr"
-                  value={filter.dateTo}
-                  onChange={(e) => setFilter((p) => ({ ...p, dateTo: e.target.value }))}
-                  className="h-9 text-xs rounded-lg text-right"
-                />
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="p-0">
-            {loading ? (
-              <p className="text-center py-12 text-muted-foreground text-sm">جارٍ التحميل...</p>
-            ) : filteredExpenses.length === 0 ? (
-              <div className="text-center py-14 text-muted-foreground">
-                <Sprout className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="text-base font-medium">لا توجد مصاريف مسجلة</p>
-                <p className="text-xs text-muted-foreground mt-1">المصاريف المضافة ستظهر هنا تلقائياً</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader className="bg-muted/30">
-                  <TableRow>
-                    <TableHead className="text-right">التاريخ</TableHead>
-                    <TableHead className="text-right">النوع</TableHead>
-                    <TableHead className="text-right">المبلغ</TableHead>
-                    <TableHead className="text-right">الوصف</TableHead>
-                    <TableHead className="text-left">الإجراء</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredExpenses.map((exp) => (
-                    <TableRow key={exp.id} className="hover:bg-accent/30 transition-colors">
-                      <TableCell className="text-right">
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span>{formatDate(exp.created_at)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="outline" className="text-xs font-medium">
-                          {exp.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-sm text-destructive font-mono">
-                        {formatNumber(exp.amount)} {currency}
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground max-w-xs truncate">
-                        {exp.description || "-"}
-                      </TableCell>
-                      <TableCell className="text-left">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md"
-                          onClick={() => setDeleteTarget(exp)}
-                          title="حذف المصروف"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Alert Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
@@ -500,15 +657,15 @@ const Expenses = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-right text-base font-bold">تأكيد حذف المصروف</AlertDialogTitle>
             <AlertDialogDescription className="text-right text-xs text-muted-foreground mt-2">
-              هل تريد حذف مصروف <strong>"{deleteTarget?.category}"</strong> بقيمة{" "}
-              <strong>{deleteTarget?.amount} شيكل</strong>؟ سيتم إعادة المبلغ إلى رصيد الصندوق تلقائياً.
+              هل تريد بالتأكيد حذف مصروف <strong>"{deleteTarget?.category}"</strong> بقيمة{" "}
+              <strong>{deleteTarget?.amount} {activeCurrency}</strong>؟ سيتم إعادة المبلغ إلى رصيد الصندوق تلقائياً.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 pt-3">
-            <AlertDialogCancel className="text-xs">إلغاء</AlertDialogCancel>
+            <AlertDialogCancel className="text-xs rounded-xl">إلغاء</AlertDialogCancel>
             <AlertDialogAction
               onClick={deleteExpense}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-bold"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-bold rounded-xl"
             >
               تأكيد الحذف
             </AlertDialogAction>
