@@ -21,9 +21,10 @@ export const useRole = () => useContext(RoleContext);
 
 export const RoleProvider = ({ children }: { children: ReactNode }) => {
   const { isAdmin, isEmployee, isOwner, role, loading } = useAuth();
+  const effectiveIsOwner = Boolean(isOwner || (!isAdmin && !isEmployee));
 
   return (
-    <RoleContext.Provider value={{ isAdmin, isEmployee, isOwner, role, loading }}>
+    <RoleContext.Provider value={{ isAdmin, isEmployee, isOwner: effectiveIsOwner, role, loading }}>
       {children}
     </RoleContext.Provider>
   );

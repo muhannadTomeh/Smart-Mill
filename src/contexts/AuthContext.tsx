@@ -170,11 +170,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.warn("Could not query mill record:", millErr);
         }
       }
+      if (!resolvedMillId && !userIsAdmin) {
+        try {
+          const { data: ownerMill } = await supabase
+            .from('mills')
+            .select('id, name, mill_code, location, country, phone, secondary_phone, subscription_status, monthly_fee')
+            .eq('owner_user_id', currentUser.id)
+            .maybeSingle();
+          if (ownerMill) {
+            resolvedMillId = ownerMill.id;
+            resolvedMill = ownerMill;
+            resolvedRole = 'mill_owner';
+          }
+        } catch (e) {
+          console.warn("Could not check owner mill fallback:", e);
+        }
+      }
 
       setMillId(resolvedMillId);
       setMill(resolvedMill);
       setRole(resolvedRole);
-      setIsOwner(resolvedRole === 'mill_owner');
+      const isActualOwner = resolvedRole === 'mill_owner' || (!userIsAdmin && resolvedRole !== 'mill_employee');
+      setIsOwner(isActualOwner);
       setIsEmployee(resolvedRole === 'mill_employee');
 
       // 3. Fetch Personal Profile (display name, phone, etc.)

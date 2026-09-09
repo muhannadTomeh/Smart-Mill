@@ -12,7 +12,8 @@ import { SeasonProvider, useSeason } from "@/contexts/SeasonContext";
 import { AdminWorkspaceProvider, useAdminWorkspace } from "@/contexts/AdminWorkspaceContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Calendar, Plus, Users, Receipt, Wallet, User, ChevronDown, Menu, Lock, Phone, ShieldCheck } from "lucide-react";
+import { LogOut, Calendar, Plus, Users, Receipt, Wallet, User, ChevronDown, Menu, Lock, Phone, ShieldCheck, Undo2 } from "lucide-react";
+import { ReAuthDialog } from "@/components/auth/ReAuthDialog";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -54,13 +55,14 @@ const queryClient = new QueryClient();
 // SeasonGate was modified above to SeasonGateContent and moved inside ProtectedLayout structure
 
 const HeaderBar = () => {
-  const { user, signOut } = useAuth();
-  const { activeSeason } = useSeason();
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const { isAdmin, isOwner, isEmployee } = useRole();
-  const { isAdminWorkspace } = useAdminWorkspace();
+  const { activeSeason } = useSeason();
+  const { isAdminWorkspace, openReAuthModal, exitAdminWorkspace } = useAdminWorkspace();
 
-  const canNavigateToSeasons = isOwner && isAdminWorkspace;
+  const isMillOwner = Boolean(isOwner || (!isAdmin && !isEmployee));
+  const canNavigateToSeasons = !isEmployee && (!isOwner || isAdminWorkspace);
 
   return (
     <header className="h-16 border-b glass-bar flex items-center justify-between px-4 md:px-6 sticky top-0 z-40">
@@ -90,6 +92,34 @@ const HeaderBar = () => {
             <Calendar className="h-3.5 w-3.5 text-primary" />
             <span className="text-primary font-semibold">{activeSeason.name}</span>
           </Badge>
+        )}
+
+        {/* Header Action: Admin Workspace Entry / Exit for Mill Owner */}
+        {!isAdmin && isMillOwner && (
+          <>
+            {!isAdminWorkspace ? (
+              <Button
+                onClick={openReAuthModal}
+                size="sm"
+                className="gap-1.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold shadow-sm h-8 px-3.5 transition-all cursor-pointer"
+                title="الدخول إلى لوحة إدارة المعصرة (يتطلب كلمة المرور)"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                <span>لوحة الإدارة</span>
+              </Button>
+            ) : (
+              <Button
+                onClick={exitAdminWorkspace}
+                size="sm"
+                variant="outline"
+                className="gap-1.5 rounded-full border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold shadow-sm h-8 px-3.5 transition-all cursor-pointer"
+                title="الرجوع إلى الواجهة التشغيلية للكاشير"
+              >
+                <Undo2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span>خروج من الإدارة</span>
+              </Button>
+            )}
+          </>
         )}
 
         {isAdmin && (
@@ -146,7 +176,7 @@ const HeaderBar = () => {
             <div className="px-3 py-2">
               <p className="text-sm font-medium truncate">{user?.email}</p>
               <p className="text-xs text-muted-foreground">
-                {isAdmin ? "مشرف المنصة العام" : isEmployee ? "موظف الكاشير" : "مالك المعصرة"}
+                {isAdmin ? "مشرف المنصة العام" : isEmployee ? "موظف الكاشير" : isMillOwner && isAdminWorkspace ? "مالك المعصرة (لوحة الإدارة)" : "مالك المعصرة"}
               </p>
             </div>
             <DropdownMenuSeparator />
@@ -155,11 +185,26 @@ const HeaderBar = () => {
                 <ShieldCheck className="h-4 w-4 text-primary" />
                 لوحة المشرف العام
               </DropdownMenuItem>
-            ) : isOwner && isAdminWorkspace ? (
-              <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2">
-                <User className="h-4 w-4" />
-                إعدادات المعصرة
-              </DropdownMenuItem>
+            ) : isMillOwner ? (
+              <>
+                {!isAdminWorkspace ? (
+                  <DropdownMenuItem onClick={openReAuthModal} className="gap-2 font-medium text-primary">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    لوحة الإدارة
+                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2">
+                      <User className="h-4 w-4" />
+                      إعدادات المعصرة
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={exitAdminWorkspace} className="gap-2 font-medium text-amber-700 dark:text-amber-400">
+                      <Undo2 className="h-4 w-4" />
+                      الخروج من لوحة الإدارة
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </>
             ) : null}
 
             <DropdownMenuSeparator />
@@ -313,6 +358,7 @@ const ProtectedLayout = () => {
                 </main>
               </div>
             </div>
+            <ReAuthDialog />
           </SidebarProvider>
         </AdminWorkspaceProvider>
       </SeasonProvider>
@@ -322,7 +368,7 @@ const ProtectedLayout = () => {
 
 // Route Guard: Restricts sensitive management pages to Owner in verified Admin Workspace mode
 const AdminRouteGuard = ({ children }: { children: React.ReactNode }) => {
-  const { isOwner, isEmployee, loading } = useRole();
+  const { isOwner, isEmployee, isAdmin, loading } = useRole();
   const { isAdminWorkspace } = useAdminWorkspace();
 
   if (loading) {
@@ -333,13 +379,15 @@ const AdminRouteGuard = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
+  const isMillOwner = Boolean(isOwner || (!isAdmin && !isEmployee));
+
   // 1. Employee is strictly forbidden from accessing admin pages
-  if (isEmployee) {
+  if (isEmployee || !isMillOwner) {
     return <Navigate to="/queue" replace />;
   }
 
   // 2. Owner must have unlocked the Admin Workspace with their password
-  if (isOwner && !isAdminWorkspace) {
+  if (!isAdminWorkspace) {
     return <Navigate to="/queue" replace />;
   }
 
@@ -348,7 +396,7 @@ const AdminRouteGuard = ({ children }: { children: React.ReactNode }) => {
 
 const SeasonGateContent = () => {
   const { activeSeason, loading } = useSeason();
-  const { isOwner } = useRole();
+  const { isOwner, isAdmin, isEmployee } = useRole();
 
   if (loading) {
     return (
@@ -361,9 +409,11 @@ const SeasonGateContent = () => {
     );
   }
 
+  const isMillOwner = Boolean(isOwner || (!isAdmin && !isEmployee));
+
   // If no active season exists yet:
   if (!activeSeason) {
-    if (isOwner) {
+    if (isMillOwner) {
       return (
         <Routes>
           <Route path="/seasons" element={<Seasons />} />

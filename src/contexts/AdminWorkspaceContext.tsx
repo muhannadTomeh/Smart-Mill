@@ -26,8 +26,10 @@ export const useAdminWorkspace = () => useContext(AdminWorkspaceContext);
 export const AdminWorkspaceProvider = ({ children }: { children: ReactNode }) => {
   const [isAdminWorkspace, setIsAdminWorkspace] = useState(false);
   const [isReAuthModalOpen, setIsReAuthModalOpen] = useState(false);
-  const { user, isOwner } = useAuth();
+  const { user, isOwner, isAdmin, isEmployee } = useAuth();
   const navigate = useNavigate();
+
+  const isMillOwner = Boolean(isOwner || (!isAdmin && !isEmployee));
 
   const openReAuthModal = useCallback(() => {
     setIsReAuthModalOpen(true);
@@ -78,7 +80,7 @@ export const AdminWorkspaceProvider = ({ children }: { children: ReactNode }) =>
   return (
     <AdminWorkspaceContext.Provider
       value={{
-        isAdminWorkspace: isOwner ? isAdminWorkspace : false,
+        isAdminWorkspace: isMillOwner ? isAdminWorkspace : false,
         isReAuthModalOpen,
         openReAuthModal,
         closeReAuthModal,

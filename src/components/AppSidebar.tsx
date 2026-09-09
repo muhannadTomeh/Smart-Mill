@@ -116,6 +116,8 @@ export function AppSidebar() {
   const { isAdminWorkspace, openReAuthModal, exitAdminWorkspace } = useAdminWorkspace()
   const isCollapsed = state === "collapsed"
 
+  const isMillOwner = isOwner || (!isAdmin && !isEmployee);
+
   // Dynamic branding titles
   let brandTitle = profile?.mill_name || "المعصرة الذكية"
   let brandSubtitle = isEmployee ? "واجهة الموظف (الكاشير)" : "الواجهة التشغيلية"
@@ -123,7 +125,7 @@ export function AppSidebar() {
   if (isAdmin) {
     brandTitle = "لوحة الأدمن"
     brandSubtitle = "الإدارة العامة والتحكم"
-  } else if (isOwner && isAdminWorkspace) {
+  } else if (isMillOwner && isAdminWorkspace) {
     brandSubtitle = "لوحة الإدارة والتحكم"
   }
 
@@ -141,14 +143,14 @@ export function AppSidebar() {
                 className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-olive ${
                   isAdmin
                     ? "bg-amber-600 text-white"
-                    : isOwner && isAdminWorkspace
+                    : isMillOwner && isAdminWorkspace
                     ? "bg-emerald-700 text-white"
                     : "bg-sidebar-primary text-sidebar-primary-foreground"
                 }`}
               >
                 {isAdmin ? (
                   <ShieldCheck className="h-5 w-5" />
-                ) : isOwner && isAdminWorkspace ? (
+                ) : isMillOwner && isAdminWorkspace ? (
                   <Lock className="h-5 w-5" />
                 ) : (
                   <Sprout className="h-5 w-5" />
@@ -159,7 +161,7 @@ export function AppSidebar() {
                   {brandTitle}
                 </h2>
                 <p className="text-[11px] text-sidebar-foreground/50 truncate flex items-center gap-1 mt-0.5">
-                  {isOwner && isAdminWorkspace && (
+                  {isMillOwner && isAdminWorkspace && (
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                   )}
                   <span>{brandSubtitle}</span>
@@ -171,14 +173,14 @@ export function AppSidebar() {
               className={`w-10 h-10 rounded-2xl flex items-center justify-center mx-auto shadow-olive ${
                 isAdmin
                   ? "bg-amber-600 text-white"
-                  : isOwner && isAdminWorkspace
+                  : isMillOwner && isAdminWorkspace
                   ? "bg-emerald-700 text-white"
                   : "bg-sidebar-primary text-sidebar-primary-foreground"
               }`}
             >
               {isAdmin ? (
                 <ShieldCheck className="h-5 w-5" />
-              ) : isOwner && isAdminWorkspace ? (
+              ) : isMillOwner && isAdminWorkspace ? (
                 <Lock className="h-5 w-5" />
               ) : (
                 <Sprout className="h-5 w-5" />
@@ -194,26 +196,60 @@ export function AppSidebar() {
               items={adminItems} 
               isCollapsed={isCollapsed} 
             />
-          ) : isOwner && isAdminWorkspace ? (
+          ) : isMillOwner && isAdminWorkspace ? (
             /* Mode 1: Owner Admin Workspace */
-            <MenuGroup 
-              label="لوحة الإدارة والتحكم" 
-              items={managementItems} 
-              isCollapsed={isCollapsed} 
-            />
+            <>
+              <MenuGroup 
+                label="لوحة الإدارة والتحكم" 
+                items={managementItems} 
+                isCollapsed={isCollapsed} 
+              />
+              <div className="pt-2 px-1">
+                <Button
+                  variant="outline"
+                  onClick={exitAdminWorkspace}
+                  className="w-full justify-start gap-3 rounded-xl border-2 border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 font-bold text-xs py-3 h-auto transition-colors shadow-sm"
+                  title="الرجوع إلى الواجهة التشغيلية"
+                >
+                  <Undo2 className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  {!isCollapsed && <span>خروج من الإدارة</span>}
+                </Button>
+              </div>
+            </>
           ) : (
             /* Mode 2: Unified Operational Workspace (Owner and Employee) */
-            <MenuGroup 
-              label="الواجهة التشغيلية" 
-              items={operationalItems} 
-              isCollapsed={isCollapsed} 
-            />
+            <>
+              <MenuGroup 
+                label="الواجهة التشغيلية" 
+                items={operationalItems} 
+                isCollapsed={isCollapsed} 
+              />
+              {isMillOwner && (
+                <div className="pt-2 px-1">
+                  <Button
+                    onClick={openReAuthModal}
+                    className="w-full justify-start gap-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm py-3 px-3.5 h-auto transition-all shadow-md cursor-pointer"
+                    title="الدخول إلى لوحة إدارة المعصرة والتقارير الحساسة (يتطلب كلمة المرور)"
+                  >
+                    <ShieldCheck className="h-5 w-5 shrink-0 text-primary-foreground" />
+                    {!isCollapsed && (
+                      <div className="flex items-center justify-between flex-1">
+                        <span>لوحة الإدارة</span>
+                        <span className="text-[10px] bg-white/20 text-primary-foreground px-2 py-0.5 rounded-full font-bold">
+                          للمالك
+                        </span>
+                      </div>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </SidebarContent>
 
         <SidebarFooter className="p-3 border-t border-sidebar-border/60 space-y-2">
           {/* Action Button: Switch between Operational and Admin workspace */}
-          {!isAdmin && isOwner && (
+          {!isAdmin && isMillOwner && (
             <div>
               {isAdminWorkspace ? (
                 /* Exit Admin Workspace button */
@@ -249,7 +285,7 @@ export function AppSidebar() {
       </Sidebar>
 
       {/* Owner Re-Authentication Dialog */}
-      {!isAdmin && isOwner && <ReAuthDialog />}
+      {!isAdmin && isMillOwner && <ReAuthDialog />}
     </>
   )
 }
