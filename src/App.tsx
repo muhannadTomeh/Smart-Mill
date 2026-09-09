@@ -68,11 +68,13 @@ const HeaderBar = () => {
         {!isAdmin && activeSeason && (
           <Badge
             variant="secondary"
-            className="cursor-pointer hover:bg-primary/10 text-xs font-medium px-3 py-1.5 rounded-full border border-primary/20 transition-colors"
+            className="cursor-pointer hover:bg-primary/10 text-xs font-medium px-3 py-1.5 rounded-full border border-primary/20 transition-colors flex items-center gap-1.5"
             onClick={() => navigate("/seasons")}
+            title="الموسم الفعّال حالياً — اضغط لإدارة وتغيير المواسم"
           >
-            <Calendar className="h-3 w-3 me-1.5 text-primary" />
-            <span className="text-primary">{activeSeason.name}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <Calendar className="h-3.5 w-3.5 text-primary" />
+            <span className="text-primary font-semibold">{activeSeason.name}</span>
           </Badge>
         )}
 

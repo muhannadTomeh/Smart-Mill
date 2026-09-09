@@ -111,10 +111,38 @@ const Auth = () => {
         if (memberRow?.role === 'mill_employee') {
           navigate("/queue");
         } else {
-          navigate("/seasons");
+          // Check if an active season already exists for this mill or user
+          let millId = memberRow?.mill_id;
+          if (!millId) {
+            const { data: millRecord } = await supabase
+              .from('mills')
+              .select('id')
+              .eq('owner_user_id', data.user.id)
+              .maybeSingle();
+            millId = millRecord?.id;
+          }
+
+          let activeSeasonQuery = supabase
+            .from('seasons')
+            .select('id')
+            .eq('status', 'active');
+
+          if (millId) {
+            activeSeasonQuery = activeSeasonQuery.eq('mill_id', millId);
+          } else {
+            activeSeasonQuery = activeSeasonQuery.eq('user_id', data.user.id);
+          }
+
+          const { data: activeSeasonRow } = await activeSeasonQuery.maybeSingle();
+
+          if (activeSeasonRow) {
+            navigate("/dashboard");
+          } else {
+            navigate("/seasons");
+          }
         }
       } else {
-        navigate("/seasons");
+        navigate("/dashboard");
       }
     }
   };

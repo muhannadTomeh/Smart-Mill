@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Plus, LogIn, Pencil, Lock, Users, Package, DollarSign, Calendar, Sprout,
-  LogOut, BarChart3, AlertTriangle, Copy, ArrowRight,
+  LogOut, BarChart3, AlertTriangle, Copy, ArrowRight, LayoutDashboard,
 } from "lucide-react";
 import { useSeason, Season } from "@/contexts/SeasonContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -115,7 +115,7 @@ export default function Seasons() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold text-foreground">إدارة المواسم</h2>
-            <p className="text-muted-foreground mt-1 text-sm">اختر موسمًا للدخول أو أنشئ موسمًا جديدًا</p>
+            <p className="text-muted-foreground mt-1 text-sm">استعرض المواسم السابقة أو أدر تفاصيل وتكاليف الموسم الحالي</p>
           </div>
           <Button size="lg" className="text-base px-6 shadow-sm w-full sm:w-auto" onClick={() => navigate("/seasons/new")}>
             <Plus className="h-5 w-5 me-2" />
@@ -169,9 +169,16 @@ export default function Seasons() {
                     </div>
                     <Badge
                       variant={isActive ? "default" : "secondary"}
-                      className={`text-xs px-2.5 py-1 ${isActive ? "" : "bg-muted text-muted-foreground"}`}
+                      className={`text-xs px-2.5 py-1 ${isActive ? "bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex items-center gap-1.5" : "bg-muted text-muted-foreground"}`}
                     >
-                      {isActive ? "🟢 مفتوح" : "🔒 مغلق"}
+                      {isActive ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          الموسم الفعّال حالياً
+                        </>
+                      ) : (
+                        "🔒 مغلق"
+                      )}
                     </Badge>
                   </div>
 
@@ -186,9 +193,9 @@ export default function Seasons() {
                   <div className="flex gap-2 pt-1">
                     {isActive ? (
                       <>
-                        <Button className="flex-1 py-5 text-base" onClick={() => handleEnter(season)}>
-                          <LogIn className="h-4 w-4 me-2" />
-                          دخول الموسم
+                        <Button className="flex-1 py-5 text-base font-medium shadow-sm" onClick={() => handleEnter(season)}>
+                          <LayoutDashboard className="h-4 w-4 me-2" />
+                          الذهاب إلى لوحة التحكم
                         </Button>
                         <Button
                           variant="outline"
