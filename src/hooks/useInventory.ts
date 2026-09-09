@@ -25,30 +25,43 @@ export function useInventory() {
 
   const fetchInventory = async () => {
     if (!activeSeason) return;
-    const { data } = await supabase
+    const effectiveMillId = millId || activeSeason.mill_id;
+    let query = supabase
       .from("inventory")
       .select("*")
-      .eq("season_id", activeSeason.id)
-      .maybeSingle();
+      .eq("season_id", activeSeason.id);
+
+    if (effectiveMillId) {
+      query = (query as any).eq("mill_id", effectiveMillId);
+    }
+
+    const { data } = await query.maybeSingle();
 
     if (data) {
       setInventory({ total_oil: Number(data.total_oil), total_cash: Number(data.total_cash) });
     } else if (user) {
       await supabase.from("inventory").insert({
         user_id: user.id,
-        mill_id: millId || activeSeason.mill_id || null,
+        mill_id: effectiveMillId || null,
         season_id: activeSeason.id,
-      });
+      } as any);
     }
     setLoading(false);
   };
 
   const updateInventory = async (changes: Partial<Inventory>) => {
     if (!activeSeason) return;
-    const { error } = await supabase
+    const effectiveMillId = millId || activeSeason.mill_id;
+    let query = supabase
       .from("inventory")
       .update(changes)
       .eq("season_id", activeSeason.id);
+
+    if (effectiveMillId) {
+      query = (query as any).eq("mill_id", effectiveMillId);
+    }
+
+    const { error } = await query;
     if (!error) {
       setInventory((prev) => ({ ...prev, ...changes }));
     }

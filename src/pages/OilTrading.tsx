@@ -6,12 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ShoppingCart, TrendingUp, TrendingDown, Package, DollarSign, Calendar } from "lucide-react";
+import { ShoppingCart, TrendingUp, TrendingDown, Package, DollarSign, Calendar, RefreshCw, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
+import { useCurrency } from "@/hooks/useCurrency";
 import { formatDate } from "@/lib/formatters";
 
 interface Transaction {
@@ -26,212 +27,475 @@ interface Transaction {
 }
 
 const OilTrading = () => {
-  const { user } = useAuth();
+  const { user, millId } = useAuth();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
+  const { selectedCurrency } = useCurrency();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTransaction, setNewTransaction] = useState({
-    type: 'buy' as 'buy' | 'sell', amount: "", price: "", partyName: "", notes: ""
+    type: 'buy' as 'buy' | 'sell',
+    amount: "",
+    price: "",
+    partyName: "",
+    notes: ""
   });
 
   useEffect(() => {
-    if (activeSeason) fetchTransactions();
+    if (activeSeason) {
+      fetchTransactions();
+    } else {
+      setTransactions([]);
+      setLoading(false);
+    }
   }, [activeSeason?.id]);
 
   const fetchTransactions = async () => {
     if (!activeSeason) return;
-    const { data } = await supabase
-      .from("oil_transactions")
-      .select("*")
-      .eq("season_id", activeSeason.id)
-      .order("created_at", { ascending: false });
-    setTransactions(data as Transaction[] || []);
-    setLoading(false);
+    setLoading(true);
+    try {
+      let query = supabase
+        .from("oil_transactions")
+        .select("*")
+        .eq("season_id", activeSeason.id);
+
+      const effectiveMillId = millId || activeSeason.mill_id;
+      if (effectiveMillId) {
+        query = (query as any).eq("mill_id", effectiveMillId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
+      if (error) {
+        console.error("fetchTransactions error:", error);
+      }
+      setTransactions((data as Transaction[]) || []);
+    } catch (err) {
+      console.error("Error fetching transactions:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addTransaction = async () => {
+    if (!activeSeason) {
+      toast({
+        title: "تنبيه",
+        description: "يرجى اختيار وتفعيل موسم أولاً لإجراء المعاملات",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: "تنبيه",
+        description: "يجب تسجيل الدخول أولاً",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!newTransaction.amount || !newTransaction.price) {
-      toast({ title: "خطأ", description: "يرجى إدخال الكمية والسعر", variant: "destructive" });
+      toast({
+        title: "بيانات غير مكتملة",
+        description: "يرجى إدخال الكمية والسعر بشكل صحيح",
+        variant: "destructive"
+      });
       return;
     }
 
     const amount = parseFloat(newTransaction.amount);
     const price = parseFloat(newTransaction.price);
+
+    if (isNaN(amount) || amount <= 0 || isNaN(price) || price <= 0) {
+      toast({
+        title: "قيم غير صحيحة",
+        description: "يرجى إدخال أرقام صحيحة وموجبة للكمية والسعر",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const totalPrice = amount * price;
 
     if (newTransaction.type === 'sell' && amount > inventory.total_oil) {
-      toast({ title: "خطأ", description: `الكمية المتوفرة: ${inventory.total_oil} كغم فقط`, variant: "destructive" });
+      toast({
+        title: "الكمية غير متوفرة",
+        description: `الكمية المتوفرة في المخزون: ${inventory.total_oil.toFixed(1)} كغم فقط`,
+        variant: "destructive"
+      });
       return;
     }
+
     if (newTransaction.type === 'buy' && totalPrice > inventory.total_cash) {
-      toast({ title: "خطأ", description: `الكاش المتوفر: ${inventory.total_cash} شيكل فقط`, variant: "destructive" });
+      toast({
+        title: "الرصيد النقدي لا يكفي",
+        description: `الكاش المتوفر بالصندوق: ${inventory.total_cash.toLocaleString()} ${selectedCurrency} فقط`,
+        variant: "destructive"
+      });
       return;
     }
 
-    const { error } = await supabase.from("oil_transactions").insert({
-      user_id: user?.id!,
-      season_id: activeSeason!.id,
-      type: newTransaction.type,
-      amount,
-      price,
-      total_price: totalPrice,
-      party_name: newTransaction.partyName || null,
-      notes: newTransaction.notes || null,
-    });
+    setIsSubmitting(true);
+    try {
+      const effectiveMillId = millId || activeSeason.mill_id || null;
 
+      const { error } = await supabase.from("oil_transactions").insert({
+        user_id: user.id,
+        mill_id: effectiveMillId,
+        season_id: activeSeason.id,
+        type: newTransaction.type,
+        amount,
+        price,
+        total_price: totalPrice,
+        party_name: newTransaction.partyName.trim() || null,
+        notes: newTransaction.notes.trim() || null,
+      } as any);
 
-    if (!error) {
+      if (error) {
+        console.error("oil_transactions insert error:", error);
+        toast({
+          title: "خطأ في تسجيل العملية",
+          description: error.message || "تعذر حفظ المعاملة في قاعدة البيانات",
+          variant: "destructive"
+        });
+        return;
+      }
+
       await updateInventory({
         total_oil: newTransaction.type === 'buy' ? inventory.total_oil + amount : inventory.total_oil - amount,
         total_cash: newTransaction.type === 'buy' ? inventory.total_cash - totalPrice : inventory.total_cash + totalPrice
       });
+
       setNewTransaction({ type: 'buy', amount: "", price: "", partyName: "", notes: "" });
-      toast({ title: "تمت العملية", description: `تم تسجيل عملية ${newTransaction.type === 'buy' ? 'الشراء' : 'البيع'} بنجاح` });
-      fetchTransactions();
-      refetchInventory();
+      toast({
+        title: "تمت العملية بنجاح",
+        description: `تم تسجيل عملية ${newTransaction.type === 'buy' ? 'الشراء' : 'البيع'} بنجاح`
+      });
+      await fetchTransactions();
+      await refetchInventory();
+    } catch (err: any) {
+      console.error("addTransaction error:", err);
+      toast({
+        title: "خطأ غير متوقع",
+        description: err.message || "حدث خطأ أثناء تنفيذ العملية",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const calculatedTotal = (parseFloat(newTransaction.amount) || 0) * (parseFloat(newTransaction.price) || 0);
+
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex items-center gap-3">
-        <ShoppingCart className="h-8 w-8 text-primary" />
-        <h1 className="text-3xl font-bold text-foreground">بيع وشراء الزيت</h1>
+    <div className="space-y-6 text-right" dir="rtl">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <ShoppingCart className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">بيع وشراء الزيت</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">تسجيل عمليات شراء وبيع الزيت وتحديث المخزون والصندوق المالي</p>
+          </div>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            fetchTransactions();
+            refetchInventory();
+          }}
+          className="gap-2 self-start sm:self-auto text-xs"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          <span>تحديث البيانات</span>
+        </Button>
       </div>
 
-      
+      {/* Inventory & Cash Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="rounded-2xl border-border/60 shadow-sm bg-gradient-to-br from-card to-muted/20">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">الزيت المتوفر بالمعصرة</p>
+              <h3 className="text-2xl font-bold text-foreground mt-1">
+                {inventory.total_oil.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">كغم</span>
+              </h3>
+            </div>
+            <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <Package className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
 
+        <Card className="rounded-2xl border-border/60 shadow-sm bg-gradient-to-br from-card to-muted/20">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">الكاش المتوفر بالصندوق</p>
+              <h3 className="text-2xl font-bold text-foreground mt-1">
+                {inventory.total_cash.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{selectedCurrency}</span>
+              </h3>
+            </div>
+            <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <DollarSign className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
 
+        <Card className="rounded-2xl border-border/60 shadow-sm bg-gradient-to-br from-card to-muted/20">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">إجمالي العمليات المسجلة</p>
+              <h3 className="text-2xl font-bold text-foreground mt-1">
+                {transactions.length} <span className="text-sm font-normal text-muted-foreground">عملية</span>
+              </h3>
+            </div>
+            <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <ShoppingCart className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-      
-
+      {/* Main Tabs */}
       <Tabs defaultValue="add-transaction" className="w-full" dir="rtl">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="add-transaction">إضافة عملية</TabsTrigger>
-          <TabsTrigger value="history">سجل العمليات</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 rounded-xl h-11 bg-muted/60 p-1">
+          <TabsTrigger value="add-transaction" className="rounded-lg font-bold text-xs sm:text-sm">
+            إضافة عملية جديدة
+          </TabsTrigger>
+          <TabsTrigger value="history" className="rounded-lg font-bold text-xs sm:text-sm">
+            سجل العمليات ({transactions.length})
+          </TabsTrigger>
         </TabsList>
 
+        {/* Tab 1: Add Transaction Form */}
         <TabsContent value="add-transaction">
-          <Card>
-            <CardHeader>
-              <CardTitle>إضافة عملية بيع أو شراء</CardTitle>
-              <CardDescription>سجل عملية شراء أو بيع زيت جديدة</CardDescription>
+          <Card className="rounded-2xl border-border/60 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">إضافة عملية بيع أو شراء زيت</CardTitle>
+              <CardDescription className="text-xs">
+                قم بتسجيل تفاصيل عملية بيع أو شراء الزيت ليتم تحديث المخزون وحسابات الصندوق تلقائياً
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Type Selection */}
               <div>
-                <Label>نوع العملية</Label>
-                <div className="flex gap-4 mt-2">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="txType" value="buy" checked={newTransaction.type === 'buy'} onChange={() => setNewTransaction((p) => ({ ...p, type: 'buy' }))} />
-                    شراء زيت
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="txType" value="sell" checked={newTransaction.type === 'sell'} onChange={() => setNewTransaction((p) => ({ ...p, type: 'sell' }))} />
-                    بيع زيت
-                  </label>
+                <Label className="text-xs font-semibold">نوع العملية</Label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewTransaction((p) => ({ ...p, type: 'buy' }))}
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-sm transition-all ${
+                      newTransaction.type === 'buy'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                        : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
+                    }`}
+                  >
+                    <TrendingDown className="h-4 w-4 text-emerald-600" />
+                    <span>📥 شراء زيت (إضافة للمخزون)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewTransaction((p) => ({ ...p, type: 'sell' }))}
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-sm transition-all ${
+                      newTransaction.type === 'sell'
+                        ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 ring-2 ring-blue-500/20'
+                        : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
+                    }`}
+                  >
+                    <TrendingUp className="h-4 w-4 text-blue-600" />
+                    <span>📤 بيع زيت (خصم من المخزون)</span>
+                  </button>
                 </div>
               </div>
+
+              {/* Amount and Price */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>الكمية (كغم)</Label>
-                  <Input type="number" value={newTransaction.amount} onChange={(e) => setNewTransaction((p) => ({ ...p, amount: e.target.value }))} placeholder="الكمية" min="0" step="0.1" />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">الكمية (كغم) *</Label>
+                  <Input
+                    type="number"
+                    value={newTransaction.amount}
+                    onChange={(e) => setNewTransaction((p) => ({ ...p, amount: e.target.value }))}
+                    placeholder="أدخل الكمية بالكيلوغرام..."
+                    min="0"
+                    step="0.1"
+                    className="rounded-xl h-10"
+                  />
+                  {newTransaction.type === 'sell' && (
+                    <p className="text-[11px] text-muted-foreground">
+                      المتوفر للبيع: <strong>{inventory.total_oil.toFixed(1)} كغم</strong>
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <Label>السعر (شيكل/كغم)</Label>
-                  <Input type="number" value={newTransaction.price} onChange={(e) => setNewTransaction((p) => ({ ...p, price: e.target.value }))} placeholder="السعر" min="0" step="0.1" />
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">سعر الكيلوغرام ({selectedCurrency}/كغم) *</Label>
+                  <Input
+                    type="number"
+                    value={newTransaction.price}
+                    onChange={(e) => setNewTransaction((p) => ({ ...p, price: e.target.value }))}
+                    placeholder="أدخل السعر..."
+                    min="0"
+                    step="0.1"
+                    className="rounded-xl h-10"
+                  />
+                  {newTransaction.type === 'buy' && (
+                    <p className="text-[11px] text-muted-foreground">
+                      الكاش المتوفر للشراء: <strong>{inventory.total_cash.toLocaleString()} {selectedCurrency}</strong>
+                    </p>
+                  )}
                 </div>
               </div>
-              {newTransaction.amount && newTransaction.price &&
-              <div className="p-4 bg-accent/50 rounded-lg">
-                  <p className="text-lg font-semibold">الإجمالي: {(parseFloat(newTransaction.amount) * parseFloat(newTransaction.price)).toFixed(2)} شيكل</p>
+
+              {/* Calculated Total Display */}
+              {calculatedTotal > 0 && (
+                <div className="p-4 bg-primary/5 border border-primary/15 rounded-xl flex items-center justify-between">
+                  <div className="text-xs font-semibold text-muted-foreground">
+                    إجمالي قيمة العملية:
+                  </div>
+                  <div className="text-xl font-bold text-primary font-mono">
+                    {calculatedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedCurrency}
+                  </div>
                 </div>
-              }
-              <div>
-                <Label>{newTransaction.type === 'buy' ? 'اسم المورد' : 'اسم المشتري'} (اختياري)</Label>
-                <Input value={newTransaction.partyName} onChange={(e) => setNewTransaction((p) => ({ ...p, partyName: e.target.value }))} placeholder={newTransaction.type === 'buy' ? 'اسم المورد' : 'اسم المشتري'} />
+              )}
+
+              {/* Party Name */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">
+                  {newTransaction.type === 'buy' ? 'اسم المورّد / المزارع' : 'اسم المشتري / الزبون'} (اختياري)
+                </Label>
+                <Input
+                  value={newTransaction.partyName}
+                  onChange={(e) => setNewTransaction((p) => ({ ...p, partyName: e.target.value }))}
+                  placeholder={newTransaction.type === 'buy' ? 'أدخل اسم المورّد...' : 'أدخل اسم المشتري...'}
+                  className="rounded-xl h-10"
+                />
               </div>
-              <div>
-                <Label>ملاحظات (اختياري)</Label>
-                <Input value={newTransaction.notes} onChange={(e) => setNewTransaction((p) => ({ ...p, notes: e.target.value }))} placeholder="ملاحظات إضافية" />
+
+              {/* Notes */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">ملاحظات إضافية (اختياري)</Label>
+                <Input
+                  value={newTransaction.notes}
+                  onChange={(e) => setNewTransaction((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="ملاحظات توضيحية حول العملية..."
+                  className="rounded-xl h-10"
+                />
               </div>
-              <Button onClick={addTransaction} className="w-full">
-                {newTransaction.type === 'buy' ? <TrendingDown className="h-4 w-4 me-2" /> : <TrendingUp className="h-4 w-4 me-2" />}
-                تسجيل العملية
+
+              {/* Submit Button */}
+              <Button
+                onClick={addTransaction}
+                disabled={isSubmitting || !activeSeason || !newTransaction.amount || !newTransaction.price}
+                className="w-full h-11 rounded-xl font-bold gap-2 text-sm mt-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>جارٍ تسجيل العملية...</span>
+                  </>
+                ) : (
+                  <>
+                    {newTransaction.type === 'buy' ? <TrendingDown className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
+                    <span>تسجيل عملية {newTransaction.type === 'buy' ? 'الشراء' : 'البيع'}</span>
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Tab 2: Transactions History */}
         <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle>سجل عمليات البيع والشراء</CardTitle>
+          <Card className="rounded-2xl border-border/60 shadow-sm">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">سجل عمليات البيع والشراء</CardTitle>
+                <CardDescription className="text-xs">سجل تاريخي كامل لجميع العمليات المنفذة في الموسم الحالي</CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
-              {transactions.length === 0 ?
-              <div className="text-center py-12 text-muted-foreground">
-                  <ShoppingCart className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">لا توجد عمليات مسجلة</p>
-                </div> :
-
-              <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">التاريخ</TableHead>
-                      <TableHead className="text-right">النوع</TableHead>
-                      <TableHead className="text-right">الكمية</TableHead>
-                      <TableHead className="text-right">السعر</TableHead>
-                      <TableHead className="text-right">الإجمالي</TableHead>
-                      <TableHead className="text-right">الطرف</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactions.map((tx) =>
-                  <TableRow key={tx.id}>
-                        <TableCell className="text-right">
-                          <div className="flex items-center gap-1 font-mono text-xs"><Calendar className="h-4 w-4" />{formatDate(tx.created_at)}</div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={tx.type === 'buy' ? 'secondary' : 'default'}>
-                            {tx.type === 'buy' ? '📥 شراء' : '📤 بيع'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">{tx.amount} كغم</TableCell>
-                        <TableCell className="text-right">{tx.price} ش/كغم</TableCell>
-                        <TableCell className="text-right font-semibold">{tx.total_price} ش</TableCell>
-                        <TableCell className="text-right">{tx.party_name || '-'}</TableCell>
+              {loading ? (
+                <div className="text-center py-12 text-muted-foreground flex flex-col items-center gap-2">
+                  <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-sm">جارٍ تحميل سجل العمليات...</p>
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-base font-semibold">لا توجد عمليات مسجلة حتى الآن</p>
+                  <p className="text-xs mt-1">قم بتسجيل عملية بيع أو شراء من التبويب أعلاه</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead className="text-right font-bold text-xs">التاريخ</TableHead>
+                        <TableHead className="text-right font-bold text-xs">نوع العملية</TableHead>
+                        <TableHead className="text-right font-bold text-xs">الكمية</TableHead>
+                        <TableHead className="text-right font-bold text-xs">السعر / كغم</TableHead>
+                        <TableHead className="text-right font-bold text-xs">الإجمالي</TableHead>
+                        <TableHead className="text-right font-bold text-xs">الطرف المعني</TableHead>
+                        <TableHead className="text-right font-bold text-xs">ملاحظات</TableHead>
                       </TableRow>
-                  )}
-                  </TableBody>
-                </Table>
-              }
+                    </TableHeader>
+                    <TableBody>
+                      {transactions.map((tx) => (
+                        <TableRow key={tx.id} className="hover:bg-muted/30">
+                          <TableCell className="text-right text-xs font-mono">
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>{formatDate(tx.created_at)}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Badge
+                              variant="outline"
+                              className={`text-xs font-bold gap-1 ${
+                                tx.type === 'buy'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
+                              }`}
+                            >
+                              {tx.type === 'buy' ? '📥 شراء زيت' : '📤 بيع زيت'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-sm">
+                            {tx.amount} <span className="text-xs font-normal text-muted-foreground">كغم</span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            {tx.price} {selectedCurrency}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-sm text-primary font-mono">
+                            {Number(tx.total_price).toLocaleString()} {selectedCurrency}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {tx.party_name || <span className="text-muted-foreground italic">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground max-w-[200px] truncate">
+                            {tx.notes || '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-    </div>);
-
+    </div>
+  );
 };
 
 export default OilTrading;
