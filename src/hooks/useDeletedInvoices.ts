@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export function useDeletedInvoices() {
   const { activeSeason } = useSeason();
-  const { user } = useAuth();
+  const { user, millId } = useAuth();
   const { toast } = useToast();
 
   const [deletedInvoices, setDeletedInvoices] = useState<DeletedInvoice[]>([]);
@@ -34,6 +34,7 @@ export function useDeletedInvoices() {
     };
     window.addEventListener("deleted_invoices_updated", handleCustom);
 
+    // Cross-tab broadcast channel
     let bc: BroadcastChannel | null = null;
     try {
       bc = new BroadcastChannel("smart_mill_deleted_invoices_channel");
@@ -56,7 +57,8 @@ export function useDeletedInvoices() {
 
   const restoreItem = async (item: DeletedInvoice) => {
     setRestoringId(item.id);
-    const res = await restoreDeletedInvoiceToQueue(item, user?.id || "");
+    const targetMillId = item.mill_id || activeSeason?.mill_id || millId || "";
+    const res = await restoreDeletedInvoiceToQueue(item, targetMillId, user?.id);
     setRestoringId(null);
 
     if (res.success) {

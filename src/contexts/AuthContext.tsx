@@ -12,7 +12,6 @@ export interface Profile {
   country?: string | null;
   mill_name?: string | null;
   mill_location?: string | null;
-  parent_mill_id?: string | null;
   subscription_status?: string | null;
   subscription_notes?: string | null;
   monthly_fee?: number | null;
@@ -38,17 +37,13 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  /** Canonical tenant ID — always mills.id, never owner_user_id */
   millId: string | null;
   mill: MillInfo | null;
   role: UserRole | null;
   isAdmin: boolean;
   isOwner: boolean;
   isEmployee: boolean;
-  /**
-   * @deprecated Do not use to masquerade as the owner.
-   * Returns current user.id. Use `millId` for tenant scoping.
-   */
-  effectiveUserId: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -64,7 +59,6 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   isOwner: false,
   isEmployee: false,
-  effectiveUserId: null,
   loading: true,
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -86,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchUserData = useCallback(async (currentUser: User) => {
     try {
-      // 1. Check if Platform Admin (canonical account 7e29b3ea-ce6e-4dab-b2d7-80fc04af1114 or user_roles)
+      // 1. Check if Platform Admin (canonical: user_roles table)
       let userIsAdmin = currentUser.id === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114';
       if (!userIsAdmin) {
         try {
@@ -107,7 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setIsAdmin(userIsAdmin);
 
-      // 2. Resolve Mill Membership & Account Lifecycle (Canonical Architecture)
+      // 2. Canonical tenant resolution: auth.uid() → mill_memberships → mill_id
       let resolvedMillId: string | null = null;
       let resolvedRole: UserRole | null = userIsAdmin ? 'platform_admin' : null;
       let resolvedMill: MillInfo | null = null;
@@ -160,27 +154,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // Fallback: If not found in mill_memberships, check if user is mill owner in public.mills
-      if (!resolvedMillId && !userIsAdmin) {
-        try {
-          const { data: ownedMill } = await supabase
-            .from('mills')
-            .select('id, name, mill_code, location, country, phone, secondary_phone, subscription_status, monthly_fee')
-            .eq('owner_user_id', currentUser.id)
-            .maybeSingle();
-
-          if (ownedMill?.id) {
-            resolvedMillId = ownedMill.id;
-            resolvedRole = 'mill_owner';
-            resolvedMill = ownedMill;
-          }
-        } catch (ownedErr) {
-          console.warn("Could not query mills by owner:", ownedErr);
-        }
-      }
-
-      // If we have mill_id but haven't fetched mill details yet, fetch them from public.mills
-      if (resolvedMillId && !resolvedMill) {
+      // Fetch mill details from mills table using canonical mill_id
+      if (resolvedMillId) {
         try {
           const { data: millRecord } = await supabase
             .from('mills')
@@ -303,9 +278,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
   };
 
-  // Canonical decoupling: user is user.id, never masquerades as owner_user_id
-  const effectiveUserId = user?.id || null;
-
   return (
     <AuthContext.Provider
       value={{
@@ -318,7 +290,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isAdmin,
         isOwner,
         isEmployee,
-        effectiveUserId,
         loading,
         signOut,
         refreshProfile,

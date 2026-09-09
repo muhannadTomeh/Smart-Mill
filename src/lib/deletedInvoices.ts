@@ -9,6 +9,7 @@ export interface DeletedInvoice {
   notes: string | null;
   status: string;
   season_id?: string | null;
+  mill_id?: string | null;
   user_id?: string | null;
   deleted_at: string; // ISO
   expires_at: string; // ISO (24h after deleted_at)
@@ -117,13 +118,15 @@ export function clearAllDeletedInvoices(seasonId?: string | null): void {
  */
 export async function restoreDeletedInvoiceToQueue(
   item: DeletedInvoice,
-  targetUserId: string
+  millId: string,
+  actorUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // 1. Re-insert or upsert into queue with status "completed"
     const payload: any = {
       id: item.id,
-      user_id: item.user_id || targetUserId,
+      mill_id: item.mill_id || millId || null,
+      user_id: item.user_id || actorUserId || null,
       season_id: item.season_id || null,
       name: item.name,
       phone: item.phone,

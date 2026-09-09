@@ -22,33 +22,21 @@ export async function revealCredential(userId: string): Promise<string | null> {
   if (!userId) return null;
 
   try {
-    // 1. Primary: Server-side Edge Function with secret-based AES-256-GCM
+    // Primary: Server-side Edge Function with secret-based AES-256-GCM
     const { data: edgeData, error: edgeError } = await supabase.functions.invoke('credential-vault', {
       body: { action: 'reveal', user_id: userId }
     });
 
-    if (!edgeError && edgeData) {
-      if (edgeData.error) {
-        throw new Error(edgeData.error);
-      }
-      return edgeData.password ?? null;
-    }
-
-    // 2. Fallback: Secure RPC if Edge Function is in local setup
-    const { data: rpcData, error: rpcError } = await supabase.rpc('admin_reveal_credential' as any, {
-      p_user_id: userId
-    });
-
-    if (!rpcError && rpcData) {
-      return rpcData;
-    }
-
     if (edgeError) {
       console.warn("credential-vault edge function error:", edgeError);
-      throw edgeError;
+      throw new Error(edgeError.message || "تعذر الاتصال بخزنة بيانات الاعتماد المشفرة");
     }
 
-    return null;
+    if (edgeData?.error) {
+      throw new Error(edgeData.error);
+    }
+
+    return edgeData?.password ?? null;
   } catch (err: any) {
     throw new Error(err.message || "تعذر فك تشفير كلمة المرور للحساب");
   }
@@ -195,6 +183,33 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
 }
 
 /**
+ * Safely extracts the descriptive error message from a Supabase Edge Function response (non-2xx).
+ */
+async function extractEdgeFunctionError(edgeErr: any, defaultMsg: string): Promise<string> {
+  if (!edgeErr) return defaultMsg;
+  let msg = edgeErr.message || defaultMsg;
+  if (edgeErr.context && typeof edgeErr.context.json === 'function') {
+    try {
+      const body = await edgeErr.context.json();
+      if (body?.error) return String(body.error);
+    } catch {}
+  }
+  if (edgeErr.context && typeof edgeErr.context.text === 'function') {
+    try {
+      const text = await edgeErr.context.text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.error) return String(parsed.error);
+        } catch {}
+        return text;
+      }
+    } catch {}
+  }
+  return msg;
+}
+
+/**
  * Creates a Mill and Mill Owner account using the server-side admin-manage-user Edge Function.
  * Platform Admin only.
  */
@@ -209,69 +224,41 @@ export async function createMillOwnerAccount(params: {
 }): Promise<{ user_id: string; mill_id: string; username: string }> {
   const { millName, ownerName, country, username, password, ownerPhone, ownerEmail } = params;
 
-  // 1. Primary: Edge Function using Supabase Auth Admin API
-  try {
-    const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
-      body: {
-        action: 'create_owner',
-        mill_name: millName,
-        owner_name: ownerName,
-        country: country || 'فلسطين',
-        username,
-        password,
-        owner_phone: ownerPhone,
-        owner_email: ownerEmail
-      }
-    });
-
-    if (!edgeErr && edgeData?.success) {
-      return {
-        user_id: edgeData.user_id,
-        mill_id: edgeData.mill_id,
-        username: edgeData.username
-      };
+  // Primary: Edge Function using Supabase Auth Admin API
+  const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
+    body: {
+      action: 'create_owner',
+      mill_name: millName,
+      owner_name: ownerName,
+      country: country || 'فلسطين',
+      username,
+      password,
+      owner_phone: ownerPhone,
+      owner_email: ownerEmail
     }
-
-    if (edgeData?.error) {
-      throw new Error(edgeData.error);
-    }
-    if (edgeErr) {
-      throw edgeErr;
-    }
-  } catch (efEx: any) {
-    if (!efEx.message?.includes('Failed to send') && !efEx.message?.includes('NetworkError') && !efEx.message?.includes('not found') && !efEx.message?.includes('404')) {
-      throw efEx;
-    }
-    console.warn("Edge function fallback to admin_create_mill RPC:", efEx.message);
-  }
-
-  // 2. Fallback: Database RPC (if Edge Function not yet deployed on server)
-  const { data: rpcData, error: rpcErr } = await (supabase as any).rpc('admin_create_mill', {
-    p_mill_name: millName,
-    p_country: country || 'فلسطين',
-    p_username: username,
-    p_password: password,
-    p_owner_name: ownerName,
-    p_owner_phone: ownerPhone || null,
-    p_owner_email: ownerEmail || null
   });
 
-  if (rpcErr) {
-    throw new Error(rpcErr.message || "فشل إنشاء حساب المعصرة");
+  if (edgeErr) {
+    const errorMsg = await extractEdgeFunctionError(edgeErr, "فشل إنشاء حساب المعصرة");
+    if (errorMsg?.includes('404') || errorMsg?.includes('not found') || errorMsg?.includes('Failed to send')) {
+      throw new Error("دالة إدارة المستخدمين (admin-manage-user) غير منشورة على Supabase أو تعذر الاتصال بها. يرجى نشر دالة الحافة أولاً.");
+    }
+    throw new Error(errorMsg);
   }
 
-  const createdUserId = (rpcData as any)?.user_id || (rpcData as any)?.owner_user_id;
-  const createdMillId = (rpcData as any)?.mill_id || (rpcData as any)?.id;
-
-  if (createdUserId) {
-    await storeCredential(createdUserId, password);
+  if (edgeData?.error) {
+    throw new Error(edgeData.error);
   }
 
-  return {
-    user_id: createdUserId,
-    mill_id: createdMillId,
-    username
-  };
+  if (edgeData?.success) {
+    return {
+      user_id: edgeData.user_id,
+      mill_id: edgeData.mill_id,
+      username: edgeData.username
+    };
+  }
+
+  throw new Error("استجابة غير متوقعة من خادم إدارة الحسابات");
 }
 
 /**
@@ -287,62 +274,38 @@ export async function createEmployeeAccount(params: {
 }): Promise<{ user_id: string; username: string }> {
   const { millId, displayName, username, password, millCode } = params;
 
-  // 1. Primary: Edge Function using Supabase Auth Admin API
-  try {
-    const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
-      body: {
-        action: 'create_cashier',
-        mill_id: millId,
-        display_name: displayName,
-        username,
-        password,
-        mill_code: millCode
-      }
-    });
-
-    if (!edgeErr && edgeData?.success) {
-      return {
-        user_id: edgeData.user_id,
-        username: edgeData.username
-      };
+  // Primary: Edge Function using Supabase Auth Admin API
+  const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
+    body: {
+      action: 'create_cashier',
+      mill_id: millId,
+      display_name: displayName,
+      username,
+      password,
+      mill_code: millCode
     }
-
-    if (edgeData?.error) {
-      throw new Error(edgeData.error);
-    }
-    if (edgeErr) {
-      throw edgeErr;
-    }
-  } catch (efEx: any) {
-    if (!efEx.message?.includes('Failed to send') && !efEx.message?.includes('NetworkError') && !efEx.message?.includes('not found') && !efEx.message?.includes('404')) {
-      throw efEx;
-    }
-    console.warn("Edge function fallback to admin_create_cashier RPC:", efEx.message);
-  }
-
-  // 2. Fallback: Database RPC
-  const { data: rpcData, error: rpcErr } = await supabase.rpc('admin_create_cashier', {
-    p_parent_mill_id: millId,
-    p_display_name: displayName,
-    p_username: username,
-    p_password: password,
-    p_mill_code: millCode || 'mill'
   });
 
-  if (rpcErr) {
-    throw new Error(rpcErr.message || "فشل إنشاء حساب الموظف");
+  if (edgeErr) {
+    const errorMsg = await extractEdgeFunctionError(edgeErr, "فشل إنشاء حساب الموظف");
+    if (errorMsg?.includes('404') || errorMsg?.includes('not found') || errorMsg?.includes('Failed to send')) {
+      throw new Error("دالة إدارة المستخدمين (admin-manage-user) غير منشورة على Supabase أو تعذر الاتصال بها. يرجى نشر دالة الحافة أولاً.");
+    }
+    throw new Error(errorMsg);
   }
 
-  const createdUserId = (rpcData as any)?.user_id || (rpcData as any)?.id;
-  // Also store in vault if possible
-  if (createdUserId) {
-    await storeCredential(createdUserId, password);
+  if (edgeData?.error) {
+    throw new Error(edgeData.error);
   }
 
-  return {
-    user_id: createdUserId,
-    username
-  };
+  if (edgeData?.success) {
+    return {
+      user_id: edgeData.user_id,
+      username: edgeData.username
+    };
+  }
+
+  throw new Error("استجابة غير متوقعة من خادم إدارة الحسابات");
 }
 
 /**

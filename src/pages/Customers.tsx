@@ -252,13 +252,15 @@ const Customers = () => {
   };
 
   const separateInvoiceToNewCustomer = async (inv: InvoiceRecord) => {
-    if (!activeSeason || !targetUserId) return;
+    const effectiveMillId = activeSeason?.mill_id || millId;
+    if (!activeSeason || !effectiveMillId) return;
     try {
       // 1. Create a distinct customer for this invoice
       const { data: newCust, error: cErr } = await supabase
         .from("customers")
         .insert({
-          user_id: targetUserId,
+          mill_id: effectiveMillId,
+          user_id: user?.id || null,
           season_id: activeSeason.id,
           name: inv.customer_name,
           phone: selectedCustomer?.phone || null,

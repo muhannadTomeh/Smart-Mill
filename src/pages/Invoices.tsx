@@ -110,21 +110,26 @@ export default function Invoices() {
   }, [location.state]);
 
   useEffect(() => {
-    if (targetUserId && activeSeason) {
+    if (activeSeason) {
       fetchQueueCustomers();
       fetchContainerTypes();
     }
-  }, [targetUserId, activeSeason]);
+  }, [activeSeason?.id, millId]);
 
   const fetchContainerTypes = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     try {
-      const { data } = await supabase
+      const effectiveMillId = activeSeason.mill_id || millId;
+      let query = supabase
         .from("container_types")
         .select("*")
-        .eq("user_id", targetUserId)
-        .eq("season_id", activeSeason.id)
-        .order("created_at", { ascending: true });
+        .eq("season_id", activeSeason.id);
+
+      if (effectiveMillId) {
+        query = query.eq("mill_id", effectiveMillId);
+      }
+
+      const { data } = await query.order("created_at", { ascending: true });
       const types = (data as ContainerType[]) || [];
       setContainerTypes(types);
       const counts: Record<string, number> = {};
@@ -140,15 +145,20 @@ export default function Invoices() {
   };
 
   const fetchQueueCustomers = async () => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     try {
-      const { data } = await supabase
+      const effectiveMillId = activeSeason.mill_id || millId;
+      let query = supabase
         .from("queue")
         .select("id, name, phone, position")
-        .eq("user_id", targetUserId)
         .eq("season_id", activeSeason.id)
-        .neq("status", "done")
-        .order("position", { ascending: true });
+        .neq("status", "done");
+
+      if (effectiveMillId) {
+        query = query.eq("mill_id", effectiveMillId);
+      }
+
+      const { data } = await query.order("position", { ascending: true });
       setQueueCustomers(data || []);
     } catch (err) {
       console.error("Error fetching queue customers:", err);

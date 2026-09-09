@@ -31,15 +31,14 @@ export default function QueueDisplay() {
 
   const fetchQueue = async () => {
     if (!activeSeason) return;
+    const effectiveMillId = activeSeason.mill_id || millId;
     let query = supabase
       .from("queue")
       .select("id, name, position, status, bags")
       .eq("season_id", activeSeason.id);
 
-    if (activeSeason.mill_id || millId) {
-      query = query.eq("mill_id", activeSeason.mill_id || millId);
-    } else if (user?.id) {
-      query = query.eq("user_id", user.id);
+    if (effectiveMillId) {
+      query = query.eq("mill_id", effectiveMillId);
     }
 
     const { data } = await query
@@ -48,15 +47,14 @@ export default function QueueDisplay() {
     setItems(data || []);
   };
 
-
   useEffect(() => {
     fetchQueue();
     const interval = setInterval(fetchQueue, 5000);
     return () => clearInterval(interval);
-  }, [targetUserId, activeSeason]);
+  }, [millId, activeSeason?.id]);
 
   useEffect(() => {
-    if (!targetUserId || !activeSeason) return;
+    if (!activeSeason) return;
     const channel = supabase
       .channel("queue-display")
       .on("postgres_changes", { event: "*", schema: "public", table: "queue" }, () => {
@@ -64,7 +62,7 @@ export default function QueueDisplay() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, activeSeason]);
+  }, [millId, activeSeason?.id]);
 
   const currentItem = items.find((i) => i.status === "processing");
   const waitingItems = items.filter((i) => i.status === "waiting");
