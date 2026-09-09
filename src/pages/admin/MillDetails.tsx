@@ -200,23 +200,40 @@ export default function MillDetails() {
       const targetMillId = millObj?.id || millId;
       if (targetMillId) {
         try {
-          const { data: mems } = await supabase
+          const { data: mems, error: memsErr } = await supabase
             .from("mill_memberships")
-            .select("id, user_id, role, display_username, is_active, created_at, profiles(display_name, phone)")
+            .select("id, user_id, role, username, display_username, is_active, created_at")
             .eq("mill_id", targetMillId)
             .eq("role", "mill_employee")
             .order("created_at", { ascending: false });
 
-          if (mems) {
-            combinedEmployees = mems.map((m: any) => ({
-              id: m.id,
-              user_id: m.user_id,
-              display_name: m.profiles?.display_name || m.display_username,
-              phone: m.profiles?.phone || m.display_username,
-              username: m.display_username || m.profiles?.phone,
-              is_active: m.is_active !== false,
-              created_at: m.created_at,
-            }));
+          if (!memsErr && mems && mems.length > 0) {
+            const userIds = mems.map((m: any) => m.user_id).filter(Boolean);
+            const profMap = new Map<string, any>();
+            if (userIds.length > 0) {
+              try {
+                const { data: profs } = await supabase
+                  .from("profiles")
+                  .select("user_id, display_name, phone")
+                  .in("user_id", userIds);
+                (profs || []).forEach((p: any) => profMap.set(p.user_id, p));
+              } catch (pErr) {
+                console.warn("Could not query profiles for employees:", pErr);
+              }
+            }
+
+            combinedEmployees = mems.map((m: any) => {
+              const p = profMap.get(m.user_id);
+              return {
+                id: m.id,
+                user_id: m.user_id,
+                display_name: p?.display_name || m.display_username || m.username,
+                phone: p?.phone || m.username || m.display_username,
+                username: m.display_username || m.username || p?.phone,
+                is_active: m.is_active !== false,
+                created_at: m.created_at,
+              };
+            });
           }
         } catch (e) {
           console.warn("Could not query mill_memberships:", e);

@@ -85,8 +85,13 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
     const [adminRolesRes, millsRes, membershipsRes] = await Promise.all([
       supabase.from('user_roles').select('user_id').eq('role', 'platform_admin'),
       supabase.from('mills').select('id, name, mill_code, owner_user_id, subscription_status, created_at'),
-      supabase.from('mill_memberships').select('id, user_id, mill_id, role, username, display_username, is_active, created_at, mills(name, mill_code)')
+      supabase.from('mill_memberships').select('id, user_id, mill_id, role, username, display_username, is_active, created_at')
     ]);
+
+    const millsMap = new Map<string, any>();
+    (millsRes.data || []).forEach((m: any) => {
+      if (m.id) millsMap.set(m.id, m);
+    });
 
     // Fetch profiles for all unique user IDs
     const userIds = new Set<string>();
@@ -158,6 +163,7 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
     (membershipsRes.data || []).forEach((mem: any) => {
       if (mem.role === 'mill_employee' && !adminIds.has(mem.user_id)) {
         const p = profilesMap.get(mem.user_id);
+        const mill = millsMap.get(mem.mill_id);
         const isActive = mem.is_active !== false && p?.is_active !== false;
         accounts.push({
           user_id: mem.user_id,
@@ -165,8 +171,8 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
           username: mem.display_username || mem.username || p?.phone || "cashier",
           role: 'mill_employee',
           mill_id: mem.mill_id,
-          mill_name: (mem.mills as any)?.name || "معصرة",
-          mill_code: (mem.mills as any)?.mill_code || null,
+          mill_name: mill?.name || "معصرة",
+          mill_code: mill?.mill_code || null,
           status: isActive ? 'active' : 'disabled',
           is_active: isActive,
           has_vault_credential: true,
