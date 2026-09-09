@@ -358,7 +358,7 @@ serve(async (req) => {
             user_id: createdAuthUserId,
             display_name: cleanName,
             phone: cleanUsername,
-            mill_code: millCode,
+            mill_code: null,
             subscription_status: 'active',
             is_active: true,
             updated_at: new Date().toISOString()
