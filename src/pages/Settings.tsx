@@ -13,9 +13,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  Settings as SettingsIcon, Save, Plus, Trash2, Key, Link as LinkIcon, LogOut, 
+  Settings as SettingsIcon, Save, Plus, Trash2, Key, LogOut, 
   ShieldCheck, Building2, MapPin, User, Phone, Globe, UserCheck,
-  Tv, ExternalLink, Copy, HelpCircle, Eye, Sparkles, Clock
+  Tv, ExternalLink, Copy, Sparkles, SlidersHorizontal, Receipt,
+  Users, ChevronLeft, ArrowRight, HardHat, Printer, Coins,
+  Package, DollarSign, Lock, Scale, CheckCircle2, AlertCircle
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
@@ -25,6 +27,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
+import { Link } from "react-router-dom";
 
 import {
   DynamicDisplayItem,
@@ -54,6 +57,33 @@ const COUNTRIES = [
   "دولة أخرى"
 ];
 
+// Navigation Types for the Settings Hub
+type MainSectionId = 
+  | "mill_info"          // 1. معلومات المعصرة
+  | "operations"         // 2. التشغيل
+  | "invoices_receipts"  // 3. الفواتير والإيصالات
+  | "users_roles"        // 4. المستخدمون والصلاحيات
+  | "account";           // 5. الحساب
+
+type SubSettingId = 
+  // Operations sub-settings
+  | "pressing_rates"     // إعدادات العصر والأسعار
+  | "container_types"    // أنواع العبوات
+  | "display_screen"     // شاشة العرض
+  | "inventory_cash"     // المخزون والسيولة
+  // Invoices & Receipts sub-settings
+  | "currency"           // العملة المعتمدة
+  | "expense_categories" // أنواع المصاريف
+  | "report_security"    // أمن التقارير
+  | "receipt_format"     // مواصفات الإيصالات والطباعة
+  // Users & Roles sub-settings
+  | "cashier_accounts"   // حسابات الكاشير
+  | "workers_link"       // العمال والأجور
+  | "roles_overview"     // نظام الصلاحيات
+  // Account sub-settings
+  | "account_profile"    // الملف الشخصي
+  | "change_password";   // تغيير كلمة المرور
+
 export default function Settings() {
   const { user, millId, profile, refreshProfile } = useAuth();
   const { activeSeason, refetch: refetchSeasons } = useSeason();
@@ -61,6 +91,10 @@ export default function Settings() {
   const { inventory, updateInventory } = useInventory();
   const { currency, setCurrency, currencies } = useCurrency();
   const { toast } = useToast();
+
+  // Navigation State: Hub -> Section -> SubSetting -> Edit
+  const [activeSection, setActiveSection] = useState<MainSectionId | null>(null);
+  const [activeSubSetting, setActiveSubSetting] = useState<SubSettingId | null>(null);
 
   const [selectedCurrency, setSelectedCurrency] = useState(currency);
 
@@ -101,7 +135,7 @@ export default function Settings() {
   const [containerDeleteTarget, setContainerDeleteTarget] = useState<ContainerType | null>(null);
   const [expenseDeleteTarget, setExpenseDeleteTarget] = useState<{ id: string, name: string } | null>(null);
   const [reportPin, setReportPin] = useState("");
-  const [isUpdatingPin, setIsUpdatingPin] = useState(false);  // Cashier Sub-Accounts (read-only — management done by Admin panel)
+  const [isUpdatingPin, setIsUpdatingPin] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
 
   // Screen display settings
@@ -114,13 +148,12 @@ export default function Settings() {
 
   const displayUrl = activeSeason ? `${window.location.origin}/display/${activeSeason.id}` : "";
 
-  // Load display settings once per active season without resetting during render
+  // Load display settings once per active season
   useEffect(() => {
     if (!activeSeason?.id) return;
     if (loadedSeasonIdRef.current === activeSeason.id) return;
     loadedSeasonIdRef.current = activeSeason.id;
 
-    // 1. Try local storage cache first
     const savedLocal = localStorage.getItem(`display_settings_${activeSeason.id}`);
     if (savedLocal) {
       try {
@@ -142,7 +175,6 @@ export default function Settings() {
       });
     }
 
-    // 2. Fetch from DB if available
     supabase
       .from("seasons")
       .select("display_settings")
@@ -168,7 +200,6 @@ export default function Settings() {
       });
   }, [activeSeason?.id]);
 
-  // Broadcast to other tabs immediately (0ms)
   const broadcastSettingsChange = (settings: DisplaySettings) => {
     try {
       const bc = new BroadcastChannel("smart_mill_display_channel");
@@ -181,7 +212,6 @@ export default function Settings() {
     } catch {}
   };
 
-  // Instantly persist any setting change so it never reverts and reflects live
   const updateDisplaySetting = <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
     setDisplaySettings((prev) => {
       const updated = { ...prev, [key]: value };
@@ -573,7 +603,6 @@ export default function Settings() {
     }
   };
 
-
   const updatePassword = async () => {
     if (newPassword !== confirmPassword) {
       toast({
@@ -618,343 +647,766 @@ export default function Settings() {
 
   if (loading) return <p className="text-center py-8 text-muted-foreground">جارٍ التحميل...</p>;
 
+  // Metadata for the 5 main sections
+  const SECTIONS_CONFIG: Record<MainSectionId, { title: string; desc: string; icon: any; colorClass: string }> = {
+    mill_info: {
+      title: "معلومات المعصرة",
+      desc: "الاسم، الموقع، الهاتف، الشعار وبيانات المعصرة",
+      icon: Building2,
+      colorClass: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+    },
+    operations: {
+      title: "التشغيل",
+      desc: "إعدادات العصر، أنواع العبوات، وإعدادات التشغيل",
+      icon: SlidersHorizontal,
+      colorClass: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
+    },
+    invoices_receipts: {
+      title: "الفواتير والإيصالات",
+      desc: "إعدادات الفواتير والطباعة والإيصالات وتصنيفات المصاريف",
+      icon: Receipt,
+      colorClass: "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20",
+    },
+    users_roles: {
+      title: "المستخدمون والصلاحيات",
+      desc: "إدارة المستخدمين والعمال وحسابات الكاشير والصلاحيات",
+      icon: Users,
+      colorClass: "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+    },
+    account: {
+      title: "الحساب والأمان",
+      desc: "بيانات الحساب وإعدادات المستخدم وتغيير كلمة المرور",
+      icon: User,
+      colorClass: "text-violet-600 dark:text-violet-400 bg-violet-500/10 border-violet-500/20",
+    },
+  };
+
+  // Helper to handle back navigation
+  const handleBack = () => {
+    if (activeSubSetting) {
+      setActiveSubSetting(null);
+    } else {
+      setActiveSection(null);
+    }
+  };
+
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <SettingsIcon className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">الإعدادات</h1>
-        </div>
+    <div className="space-y-6 max-w-5xl mx-auto pb-12" dir="rtl">
+      
+      {/* ─────────────────────────────────────────────────────────────
+          TOP HEADER & BREADCRUMBS NAVIGATION
+      ───────────────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        {activeSection ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBack}
+                className="gap-2 font-medium hover:bg-primary/10 hover:text-primary transition-all rounded-xl"
+              >
+                <ArrowRight className="h-4 w-4" />
+                <span>
+                  {activeSubSetting 
+                    ? `العودة إلى ${SECTIONS_CONFIG[activeSection].title}`
+                    : "العودة إلى الإعدادات"
+                  }
+                </span>
+              </Button>
+              
+              <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+                <button 
+                  onClick={() => { setActiveSection(null); setActiveSubSetting(null); }}
+                  className="hover:text-primary transition-colors cursor-pointer"
+                >
+                  الإعدادات
+                </button>
+                <span>/</span>
+                <button 
+                  onClick={() => setActiveSubSetting(null)}
+                  className={cn(
+                    "hover:text-primary transition-colors cursor-pointer",
+                    !activeSubSetting && "font-bold text-foreground"
+                  )}
+                >
+                  {SECTIONS_CONFIG[activeSection].title}
+                </button>
+                {activeSubSetting && (
+                  <>
+                    <span>/</span>
+                    <span className="font-bold text-foreground">
+                      {activeSubSetting === "pressing_rates" && "إعدادات العصر والأسعار"}
+                      {activeSubSetting === "container_types" && "أنواع العبوات والتنكات"}
+                      {activeSubSetting === "display_screen" && "شاشة العرض العامة"}
+                      {activeSubSetting === "inventory_cash" && "المخزون والسيولة"}
+                      {activeSubSetting === "currency" && "العملة المعتمدة"}
+                      {activeSubSetting === "expense_categories" && "أنواع المصاريف"}
+                      {activeSubSetting === "report_security" && "أمن التقارير"}
+                      {activeSubSetting === "receipt_format" && "مواصفات الطباعة والإيصالات"}
+                      {activeSubSetting === "cashier_accounts" && "حسابات موظفي الكاشير"}
+                      {activeSubSetting === "workers_link" && "العمال والأجور"}
+                      {activeSubSetting === "roles_overview" && "نظام الصلاحيات"}
+                      {activeSubSetting === "account_profile" && "الملف الشخصي"}
+                      {activeSubSetting === "change_password" && "تغيير كلمة المرور"}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <Badge variant="secondary" className="text-xs px-2.5 py-1 bg-muted/60 font-medium">
+              {profile?.mill_name || "Smart Mill"}
+            </Badge>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/50 pb-4">
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+                <SettingsIcon className="h-7 w-7 text-primary" />
+                الإعدادات
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                إدارة إعدادات المعصرة والنظام والحسابات والتشغيل
+              </p>
+            </div>
+            {activeSeason && (
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <Badge variant="outline" className="text-xs border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5 px-3 py-1">
+                  الموسم النشط: {activeSeason.name}
+                </Badge>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Mill Profile Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" />
-            بيانات وملف المعصرة
-          </CardTitle>
-          <CardDescription>الاسم، الموقع، وأرقام التواصل التي تظهر في الفواتير والنظام</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>اسم المعصرة *</Label>
-              <Input 
-                value={profileForm.mill_name} 
-                onChange={(e) => setProfileForm(p => ({ ...p, mill_name: e.target.value }))} 
-                placeholder="اسم المعصرة..." 
-              />
+      {/* ─────────────────────────────────────────────────────────────
+          LEVEL 0: THE SETTINGS HUB (5 MAIN CLICKABLE CARDS)
+      ───────────────────────────────────────────────────────────── */}
+      {!activeSection && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 pt-2">
+          
+          {/* Card 1: معلومات المعصرة */}
+          <div
+            onClick={() => setActiveSection("mill_info")}
+            className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-emerald-500/50 hover:shadow-md hover:shadow-emerald-500/5 transition-all duration-200 cursor-pointer"
+          >
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0 group-hover:scale-105 transition-transform">
+                <Building2 className="h-6 w-6" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h2 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-2">
+                  معلومات المعصرة
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                  الاسم، الموقع، الهاتف، الشعار وبيانات المعصرة المعتمدة
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>اسم المالك / المدير</Label>
-              <Input 
-                value={profileForm.display_name} 
-                onChange={(e) => setProfileForm(p => ({ ...p, display_name: e.target.value }))} 
-                placeholder="اسم المالك..." 
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>الدولة</Label>
-              <Select value={profileForm.country} onValueChange={(val) => setProfileForm(p => ({ ...p, country: val }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر الدولة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {COUNTRIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>موقع / مدينة المعصرة</Label>
-              <Input 
-                value={profileForm.mill_location} 
-                onChange={(e) => setProfileForm(p => ({ ...p, mill_location: e.target.value }))} 
-                placeholder="مثال: نابلس - حوارة" 
-              />
+            <div className="ms-3 shrink-0 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all">
+              <ChevronLeft className="h-5 w-5" />
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>رقم الهاتف الأساسي</Label>
-              <Input 
-                type="tel"
-                value={profileForm.phone} 
-                onChange={(e) => setProfileForm(p => ({ ...p, phone: e.target.value }))} 
-                placeholder="05XXXXXXXX" 
-              />
+          {/* Card 2: التشغيل */}
+          <div
+            onClick={() => setActiveSection("operations")}
+            className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-md hover:shadow-amber-500/5 transition-all duration-200 cursor-pointer"
+          >
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="p-3 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0 group-hover:scale-105 transition-transform">
+                <SlidersHorizontal className="h-6 w-6" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h2 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-2">
+                  التشغيل
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                  إعدادات العصر، أنواع العبوات، شاشة العرض، والمخزون
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>رقم هاتف إضافي (اختياري)</Label>
-              <Input 
-                type="tel"
-                value={profileForm.secondary_phone} 
-                onChange={(e) => setProfileForm(p => ({ ...p, secondary_phone: e.target.value }))} 
-                placeholder="هاتف أرضي أو رقم آخر" 
-              />
+            <div className="ms-3 shrink-0 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all">
+              <ChevronLeft className="h-5 w-5" />
             </div>
           </div>
 
-          <Button onClick={handleSaveProfile} disabled={savingProfile} className="gap-2">
-            <Save className="h-4 w-4" />
-            {savingProfile ? "جارٍ الحفظ..." : "حفظ بيانات المعصرة"}
-          </Button>
-        </CardContent>
-      </Card>
+          {/* Card 3: الفواتير والإيصالات */}
+          <div
+            onClick={() => setActiveSection("invoices_receipts")}
+            className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-md hover:shadow-blue-500/5 transition-all duration-200 cursor-pointer"
+          >
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0 group-hover:scale-105 transition-transform">
+                <Receipt className="h-6 w-6" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h2 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-2">
+                  الفواتير والإيصالات
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                  إعدادات الفواتير، العملة، تصنيفات المصاريف، وأمن التقارير
+                </p>
+              </div>
+            </div>
+            <div className="ms-3 shrink-0 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all">
+              <ChevronLeft className="h-5 w-5" />
+            </div>
+          </div>
 
-      {userRole === 'mill_owner' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              الأمان — تغيير كلمة المرور
-            </CardTitle>
-            <CardDescription>تحديث كلمة المرور الخاصة بحساب صاحب المعصرة</CardDescription>
+          {/* Card 4: المستخدمون والصلاحيات */}
+          <div
+            onClick={() => setActiveSection("users_roles")}
+            className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-md hover:shadow-indigo-500/5 transition-all duration-200 cursor-pointer"
+          >
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shrink-0 group-hover:scale-105 transition-transform">
+                <Users className="h-6 w-6" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h2 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-2">
+                  المستخدمون والصلاحيات
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                  إدارة حسابات الكاشير، العمال، وصلاحيات النظام
+                </p>
+              </div>
+            </div>
+            <div className="ms-3 shrink-0 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all">
+              <ChevronLeft className="h-5 w-5" />
+            </div>
+          </div>
+
+          {/* Card 5: الحساب */}
+          <div
+            onClick={() => setActiveSection("account")}
+            className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-violet-500/50 hover:shadow-md hover:shadow-violet-500/5 transition-all duration-200 cursor-pointer md:col-span-2 lg:col-span-1"
+          >
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="p-3 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 shrink-0 group-hover:scale-105 transition-transform">
+                <User className="h-6 w-6" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h2 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-2">
+                  الحساب
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                  بيانات الحساب وإعدادات المستخدم وتغيير كلمة المرور
+                </p>
+              </div>
+            </div>
+            <div className="ms-3 shrink-0 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all">
+              <ChevronLeft className="h-5 w-5" />
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          SECTION 1: 🏭 معلومات المعصرة (MILL INFORMATION)
+      ───────────────────────────────────────────────────────────── */}
+      {activeSection === "mill_info" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <Building2 className="h-6 w-6" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">بيانات وملف المعصرة</CardTitle>
+                <CardDescription>الاسم، الموقع، وأرقام التواصل التي تظهر في الفواتير والنظام</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5 pt-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>كلمة المرور الجديدة</Label>
+                <Label className="text-xs font-semibold">اسم المعصرة *</Label>
                 <Input 
-                  type="password" 
-                  value={newPassword} 
-                  onChange={(e) => setNewPassword(e.target.value)} 
-                  placeholder="6 أحرف على الأقل..."
+                  value={profileForm.mill_name} 
+                  onChange={(e) => setProfileForm(p => ({ ...p, mill_name: e.target.value }))} 
+                  placeholder="اسم المعصرة..." 
+                  className="rounded-xl"
                 />
               </div>
               <div className="space-y-2">
-                <Label>تأكيد كلمة المرور</Label>
+                <Label className="text-xs font-semibold">اسم المالك / المدير</Label>
                 <Input 
-                  type="password" 
-                  value={confirmPassword} 
-                  onChange={(e) => setConfirmPassword(e.target.value)} 
-                  placeholder="أعد إدخال كلمة المرور..."
+                  value={profileForm.display_name} 
+                  onChange={(e) => setProfileForm(p => ({ ...p, display_name: e.target.value }))} 
+                  placeholder="اسم المالك..." 
+                  className="rounded-xl"
                 />
               </div>
             </div>
-            <Button onClick={updatePassword} disabled={isUpdatingPassword || !newPassword}>
-              {isUpdatingPassword ? "جارٍ التحديث..." : "تحديث كلمة المرور"}
-            </Button>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">الدولة</Label>
+                <Select value={profileForm.country} onValueChange={(val) => setProfileForm(p => ({ ...p, country: val }))}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="اختر الدولة" />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl">
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">موقع / مدينة المعصرة</Label>
+                <Input 
+                  value={profileForm.mill_location} 
+                  onChange={(e) => setProfileForm(p => ({ ...p, mill_location: e.target.value }))} 
+                  placeholder="مثال: نابلس - حوارة" 
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">رقم الهاتف الأساسي</Label>
+                <Input 
+                  type="tel"
+                  value={profileForm.phone} 
+                  onChange={(e) => setProfileForm(p => ({ ...p, phone: e.target.value }))} 
+                  placeholder="05XXXXXXXX" 
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">رقم هاتف إضافي (اختياري)</Label>
+                <Input 
+                  type="tel"
+                  value={profileForm.secondary_phone} 
+                  onChange={(e) => setProfileForm(p => ({ ...p, secondary_phone: e.target.value }))} 
+                  placeholder="هاتف أرضي أو رقم آخر" 
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 flex items-center justify-between border-t border-border/50">
+              <Button 
+                onClick={handleSaveProfile} 
+                disabled={savingProfile} 
+                className="gap-2 rounded-xl px-6 font-bold"
+              >
+                <Save className="h-4 w-4" />
+                {savingProfile ? "جارٍ الحفظ..." : "حفظ بيانات المعصرة"}
+              </Button>
+              <p className="text-xs text-muted-foreground hidden sm:block">
+                تظهر هذه البيانات مباشرة في ترويسة الفواتير والإيصالات المطبوعة
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>إعدادات المعصرة والثوابت</CardTitle>
-          <CardDescription>العملة والثوابت المستخدمة في حساب الفواتير وطرق الدفع والرد</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>العملة المعتمدة في الحسابات</Label>
-              <Select value={selectedCurrency} onValueChange={(val) => {
-                setSelectedCurrency(val);
-                setCurrency(val);
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر العملة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencies.map((c) => (
-                    <SelectItem key={c.symbol} value={c.symbol}>
-                      {c.name} ({c.symbol})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>نسبة الرد (%)</Label>
-              <Input type="number" value={form.return_percent} onChange={(e) => setForm((p) => ({ ...p, return_percent: e.target.value }))} min="0" step="0.1" />
-            </div>
-            <div className="space-y-2">
-              <Label>تكلفة الرد نقداً ({selectedCurrency}/كغم)</Label>
-              <Input type="number" value={form.cash_return_cost} onChange={(e) => setForm((p) => ({ ...p, cash_return_cost: e.target.value }))} min="0" step="0.1" />
-            </div>
+      {/* ─────────────────────────────────────────────────────────────
+          SECTION 2: ⚙️ التشغيل (OPERATIONS HUB & SUB-CARDS)
+      ───────────────────────────────────────────────────────────── */}
+      {activeSection === "operations" && !activeSubSetting && (
+        <div className="space-y-4">
+          <div className="pb-2">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+              <SlidersHorizontal className="h-5 w-5 text-amber-500" />
+              إعدادات التشغيل
+            </h2>
+            <p className="text-xs text-muted-foreground">اختر الإعداد المطلوب لتعديله وضبطه</p>
           </div>
-          <Separator />
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>سعر بيع الزيت ({selectedCurrency}/كغم)</Label>
-              <Input type="number" value={form.oil_sell_price} onChange={(e) => setForm((p) => ({ ...p, oil_sell_price: e.target.value }))} min="0" step="0.1" />
-            </div>
-            <div className="space-y-2">
-              <Label>سعر شراء الزيت ({selectedCurrency}/كغم)</Label>
-              <Input type="number" value={form.oil_buy_price} onChange={(e) => setForm((p) => ({ ...p, oil_buy_price: e.target.value }))} min="0" step="0.1" />
-            </div>
-          </div>
-          <Button onClick={saveSettings}><Save className="h-4 w-4 me-2" />حفظ الإعدادات</Button>
-        </CardContent>
-      </Card>
 
-      {/* Display Screen Settings Card */}
-      <Card className="border-emerald-500/20 shadow-md">
-        <CardHeader className="bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Tv className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                إعدادات شاشة العرض (شاشة الانتظار والتلفزيون)
-              </CardTitle>
-              <CardDescription className="mt-1">
-                تحكم ديناميكي كامل بالعناصر والمعلومات المعروضة على شاشة صالة الانتظار في المعصرة
-              </CardDescription>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* SubCard: إعدادات العصر */}
+            <div
+              onClick={() => setActiveSubSetting("pressing_rates")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Coins className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    إعدادات العصر والأسعار
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    نسبة الرد %، تكلفة الرد نقداً، وأسعار بيع وشراء الزيت
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
             </div>
-            {activeSeason && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  asChild
-                  className="gap-1.5 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                >
-                  <a
-                    href={`/display/${activeSeason.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center"
+
+            {/* SubCard: أنواع العبوات */}
+            <div
+              onClick={() => setActiveSubSetting("container_types")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Package className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    أنواع العبوات والتنكات
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    إدارة وتحديد أنواع العبوات المستخدمة في المعصرة وأسعارها ({containerTypes.length})
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
+            {/* SubCard: شاشة العرض */}
+            <div
+              onClick={() => setActiveSubSetting("display_screen")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Tv className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    شاشة العرض العامة (التلفزيون)
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    عناصر شاشة الانتظار، الشريط الإخباري وروابط العرض
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
+            {/* SubCard: المخزون والسيولة */}
+            <div
+              onClick={() => setActiveSubSetting("inventory_cash")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Scale className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    المخزون والسيولة
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    تعديل يدوي ومطابقة رصيد الزيت والنقدية في الصندوق
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OPERATIONS SUB-SETTING 1: إعدادات العصر والأسعار */}
+      {activeSection === "operations" && activeSubSetting === "pressing_rates" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Coins className="h-5 w-5 text-amber-500" />
+              إعدادات العصر والأسعار الثابتة
+            </CardTitle>
+            <CardDescription>الثوابت المستخدمة في حساب الفواتير ونسب الرد والأسعار</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">نسبة الرد (%)</Label>
+                <Input 
+                  type="number" 
+                  value={form.return_percent} 
+                  onChange={(e) => setForm((p) => ({ ...p, return_percent: e.target.value }))} 
+                  min="0" 
+                  step="0.1" 
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">تكلفة الرد نقداً ({selectedCurrency}/كغم)</Label>
+                <Input 
+                  type="number" 
+                  value={form.cash_return_cost} 
+                  onChange={(e) => setForm((p) => ({ ...p, cash_return_cost: e.target.value }))} 
+                  min="0" 
+                  step="0.1" 
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+            
+            <Separator />
+            
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">سعر بيع الزيت ({selectedCurrency}/كغم)</Label>
+                <Input 
+                  type="number" 
+                  value={form.oil_sell_price} 
+                  onChange={(e) => setForm((p) => ({ ...p, oil_sell_price: e.target.value }))} 
+                  min="0" 
+                  step="0.1" 
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">سعر شراء الزيت ({selectedCurrency}/كغم)</Label>
+                <Input 
+                  type="number" 
+                  value={form.oil_buy_price} 
+                  onChange={(e) => setForm((p) => ({ ...p, oil_buy_price: e.target.value }))} 
+                  min="0" 
+                  step="0.1" 
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-between border-t border-border/50">
+              <Button onClick={saveSettings} className="gap-2 rounded-xl px-6 font-bold">
+                <Save className="h-4 w-4" />
+                حفظ الإعدادات
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* OPERATIONS SUB-SETTING 2: أنواع العبوات والتنكات */}
+      {activeSection === "operations" && activeSubSetting === "container_types" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50 flex flex-row items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Package className="h-5 w-5 text-amber-500" />
+                أنواع العبوات والتنكات
+              </CardTitle>
+              <CardDescription>الأنواع المتاحة للمزارعين وأسعارها عند إصدار الفواتير</CardDescription>
+            </div>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1.5 rounded-xl font-bold">
+                  <Plus className="h-4 w-4" />
+                  إضافة نوع
+                </Button>
+              </DialogTrigger>
+              <DialogContent dir="rtl" className="rounded-2xl sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>إضافة نوع تنكة جديد</DialogTitle>
+                  <DialogDescription>أدخل اسم العبوة وسعرها بالعملة المعتمدة</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">اسم النوع</Label>
+                    <Input 
+                      value={newContainerName} 
+                      onChange={(e) => setNewContainerName(e.target.value)} 
+                      placeholder="مثال: بلاستيك 16 لتر، حديد..." 
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">السعر ({selectedCurrency})</Label>
+                    <Input 
+                      type="number" 
+                      value={newContainerPrice} 
+                      onChange={(e) => setNewContainerPrice(e.target.value)} 
+                      min="0" 
+                      step="0.1" 
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <Button 
+                    onClick={addContainerType} 
+                    disabled={!newContainerName.trim() || !newContainerPrice} 
+                    className="w-full rounded-xl font-bold gap-2"
                   >
-                    <ExternalLink className="h-4 w-4 me-1" />
-                    معاينة الشاشة
-                  </a>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(displayUrl)}
-                  className="gap-1.5"
-                  title="نسخ الرابط لتشغيله على متصفح التلفزيون الذكي"
-                >
-                  <Copy className="h-4 w-4" />
-                  نسخ الرابط
-                </Button>
+                    <Plus className="h-4 w-4" />
+                    إضافة العبوة
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-5">
+            {containerTypes.length > 0 ? (
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {containerTypes.map((ct) => (
+                  <div 
+                    key={ct.id} 
+                    className="flex items-center justify-between p-3.5 rounded-xl border border-border/70 bg-card hover:bg-muted/20 transition-colors"
+                  >
+                    <div>
+                      <p className="font-bold text-sm text-foreground">{ct.name}</p>
+                      <p className="text-xs text-primary font-semibold mt-0.5">
+                        {ct.price} {selectedCurrency}
+                      </p>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => setContainerDeleteTarget(ct)}
+                      className="text-destructive hover:bg-destructive/10 rounded-lg h-8 w-8"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 border border-dashed rounded-xl space-y-2">
+                <p className="text-sm font-semibold text-foreground">لا توجد أنواع عبوات مضافة حالياً</p>
+                <p className="text-xs text-muted-foreground">اضغط على زر "إضافة نوع" لإضافة تنكات حديد أو بلاستيك</p>
               </div>
             )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-5">
-          {/* Section Header & Description */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
-            <div>
-              <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-                <Tv className="h-5 w-5 text-primary" />
-                عناصر وإعلانات شاشة العرض (ديناميكية)
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                أضف أي عنصر تريده على الشاشة مع زر إظهار وإخفاء مباشر لكل عنصر.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-              <Button
-                onClick={() => setAddItemDialogOpen(true)}
-                className="gap-1.5 bg-primary text-primary-foreground font-bold hover:bg-primary/90 shadow-sm text-xs sm:text-sm"
-                size="sm"
-              >
-                <Plus className="h-4 w-4" />
-                إضافة عنصر للشاشة
-              </Button>
-              {getDynamicItems(displaySettings).length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAllDynamicItems}
-                  className="text-destructive text-xs hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5 me-1" />
-                  حذف الكل
-                </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* OPERATIONS SUB-SETTING 3: شاشة العرض العامة (التلفزيون) */}
+      {activeSection === "operations" && activeSubSetting === "display_screen" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Tv className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  شاشة صالة الانتظار والتلفزيون
+                </CardTitle>
+                <CardDescription>التحكم بالعناصر والإعلانات المعروضة على شاشة صالة المزارعين</CardDescription>
+              </div>
+              {activeSeason && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    asChild
+                    className="gap-1.5 rounded-xl text-xs"
+                  >
+                    <a
+                      href={`/display/${activeSeason.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 me-1" />
+                      معاينة الشاشة
+                    </a>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyToClipboard(displayUrl)}
+                    className="gap-1.5 rounded-xl text-xs"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    نسخ الرابط
+                  </Button>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* Add New Dynamic Item Popup Dialog */}
-          <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>
-            <DialogContent className="sm:max-w-md" dir="rtl">
-              <DialogHeader className="text-right">
-                <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-                  <Plus className="h-5 w-5 text-primary" />
-                  إضافة عنصر جديد لشاشة العرض
-                </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  أدخل العنوان والتفاصيل التي ترغب بعرضها للمنتظرين على شاشة التلفاز
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4 py-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-foreground">العنوان</Label>
-                  <Input
-                    value={newItemTitle}
-                    onChange={(e) => setNewItemTitle(e.target.value)}
-                    placeholder="مثال: سعر الزيت بيع"
-                    className="text-sm font-medium"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") addDynamicItem();
-                    }}
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    العنوان أو التسمية المعروضة بلون بارز (مثال: سعر الزيت بيع، رقم التواصل)
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-foreground">التفاصيل / القيمة</Label>
-                  <Input
-                    value={newItemDetails}
-                    onChange={(e) => setNewItemDetails(e.target.value)}
-                    placeholder="مثال: 25"
-                    className="text-sm font-medium"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") addDynamicItem();
-                    }}
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    القيمة أو التفاصيل التي ستظهر بخط كبير ومقروء
-                  </p>
-                </div>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-5">
+            {/* Dynamic Items Bar */}
+            <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/50">
+              <div>
+                <h3 className="font-bold text-sm text-foreground">العناصر والإعلانات ({getDynamicItems(displaySettings).length})</h3>
+                <p className="text-xs text-muted-foreground">أضف أي معلومة مع زر إظهار وإخفاء مباشر</p>
               </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="outline"
+                  onClick={() => setAddItemDialogOpen(true)}
                   size="sm"
-                  onClick={() => {
-                    setAddItemDialogOpen(false);
-                    setNewItemTitle("");
-                    setNewItemDetails("");
-                  }}
+                  className="gap-1.5 rounded-xl text-xs font-bold"
                 >
-                  إلغاء
+                  <Plus className="h-3.5 w-3.5" />
+                  إضافة عنصر
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={addDynamicItem}
-                  disabled={!newItemTitle.trim() || !newItemDetails.trim()}
-                  className="gap-1.5 bg-primary text-primary-foreground font-bold hover:bg-primary/90"
-                >
-                  <Plus className="h-4 w-4" />
-                  إضافة للشاشة
-                </Button>
+                {getDynamicItems(displaySettings).length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAllDynamicItems}
+                    className="text-destructive text-xs rounded-xl hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 me-1" />
+                    حذف الكل
+                  </Button>
+                )}
               </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Dynamic Items List */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
-                العناصر المضافة على الشاشة ({getDynamicItems(displaySettings).length}):
-              </Label>
             </div>
 
+            {/* Add Dynamic Item Dialog */}
+            <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>
+              <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+                <DialogHeader className="text-right">
+                  <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                    <Plus className="h-5 w-5 text-primary" />
+                    إضافة عنصر لشاشة العرض
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground">
+                    العنوان والقيمة التي ستظهر للمزارعين على شاشة التلفاز
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">العنوان</Label>
+                    <Input
+                      value={newItemTitle}
+                      onChange={(e) => setNewItemTitle(e.target.value)}
+                      placeholder="مثال: سعر الزيت بيع، رقم التواصل"
+                      className="rounded-xl"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">التفاصيل / القيمة</Label>
+                    <Input
+                      value={newItemDetails}
+                      onChange={(e) => setNewItemDetails(e.target.value)}
+                      placeholder="مثال: 25 شيكل / كغم"
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAddItemDialogOpen(false);
+                      setNewItemTitle("");
+                      setNewItemDetails("");
+                    }}
+                    className="rounded-xl"
+                  >
+                    إلغاء
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={addDynamicItem}
+                    disabled={!newItemTitle.trim() || !newItemDetails.trim()}
+                    className="rounded-xl font-bold"
+                  >
+                    إضافة
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Dynamic Items List */}
             <div className="space-y-2.5">
               {getDynamicItems(displaySettings).map((item) => (
                 <div
@@ -963,48 +1415,35 @@ export default function Settings() {
                     "flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-all",
                     item.visible
                       ? "bg-card border-border shadow-sm"
-                      : "bg-muted/30 border-dashed border-border/70 opacity-60"
+                      : "bg-muted/20 border-dashed border-border/70 opacity-60"
                   )}
                 >
-                  {/* Title & Details */}
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
                       <p className="font-bold text-sm text-foreground">{item.title}</p>
-                      {item.visible ? (
-                        <Badge variant="secondary" className="text-[11px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 font-semibold">
-                          ظاهر على الشاشة
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[11px] text-muted-foreground font-normal">
-                          مخفي
-                        </Badge>
-                      )}
+                      <Badge variant={item.visible ? "secondary" : "outline"} className="text-[10px]">
+                        {item.visible ? "ظاهر" : "مخفي"}
+                      </Badge>
                     </div>
-                    <p className="text-sm font-semibold text-primary/90 break-words">{item.details}</p>
+                    <p className="text-xs font-semibold text-primary break-words">{item.details}</p>
                   </div>
 
-                  {/* Actions: Show/Hide Toggle + Delete */}
-                  <div className="flex items-center gap-3 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-border/40">
+                  <div className="flex items-center gap-3 shrink-0 justify-between sm:justify-end">
                     <div className="flex items-center gap-2">
-                      <Label
-                        htmlFor={`toggle-${item.id}`}
-                        className="text-xs font-semibold cursor-pointer text-muted-foreground"
-                      >
+                      <Label htmlFor={`toggle-${item.id}`} className="text-xs cursor-pointer text-muted-foreground">
                         {item.visible ? "إخفاء" : "إظهار"}
                       </Label>
                       <Switch
                         id={`toggle-${item.id}`}
                         checked={item.visible}
                         onCheckedChange={() => toggleItemVisibility(item.id)}
-                        aria-label="إظهار أو إخفاء العنصر على الشاشة"
                       />
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => removeDynamicItem(item.id)}
-                      className="text-destructive hover:bg-destructive/10 h-8 w-8 rounded-lg shrink-0"
-                      title="حذف هذا العنصر"
+                      className="text-destructive hover:bg-destructive/10 h-8 w-8 rounded-lg"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -1013,241 +1452,720 @@ export default function Settings() {
               ))}
 
               {getDynamicItems(displaySettings).length === 0 && (
-                <div className="text-center py-8 px-4 rounded-xl border border-dashed bg-muted/10 space-y-3">
-                  <p className="text-sm font-semibold text-foreground">لا توجد عناصر مضافة للشاشة حالياً</p>
-                  <p className="text-xs text-muted-foreground">
-                    اضغط على الزر أدناه لإضافة أي عنوان وتفاصيل لعرضها على شاشة التلفاز.
-                  </p>
-                  <Button
-                    size="sm"
-                    onClick={() => setAddItemDialogOpen(true)}
-                    className="gap-1.5 bg-primary text-primary-foreground font-bold hover:bg-primary/90"
-                  >
-                    <Plus className="h-4 w-4" />
-                    إضافة عنصر للشاشة
-                  </Button>
+                <div className="text-center py-6 border border-dashed rounded-xl">
+                  <p className="text-xs text-muted-foreground">لا توجد عناصر مضافة للشاشة حتى الآن</p>
                 </div>
               )}
             </div>
+
+            <Separator />
+
+            {/* Ticker Text */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-amber-500" />
+                شريط إخباري متحرك أسفل الشاشة (اختياري)
+              </Label>
+              <Input
+                value={displaySettings.ticker_text || ""}
+                onChange={(e) => updateDisplaySetting("ticker_text", e.target.value)}
+                placeholder="أهلاً وسهلاً بكم في معصرتنا... نبارك لكم موسم الخير"
+                className="rounded-xl text-sm"
+              />
+            </div>
+
+            <div className="pt-2 flex items-center justify-between border-t border-border/50">
+              <Button
+                onClick={handleSaveDisplaySettings}
+                disabled={savingDisplay || !activeSeason}
+                className="rounded-xl px-6 font-bold gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {savingDisplay ? "جارٍ الحفظ..." : "حفظ إعدادات الشاشة"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* OPERATIONS SUB-SETTING 4: المخزون والسيولة */}
+      {activeSection === "operations" && activeSubSetting === "inventory_cash" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Scale className="h-5 w-5 text-amber-500" />
+              المخزون والسيولة
+            </CardTitle>
+            <CardDescription>تعديل يدوي ومطابقة رصيد الزيت والنقدية في المعصرة</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5 pt-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">إجمالي الزيت (كغم)</Label>
+                <Input 
+                  type="number" 
+                  value={inventoryForm.total_oil} 
+                  onChange={(e) => setInventoryForm((p) => ({ ...p, total_oil: e.target.value }))} 
+                  min="0" 
+                  step="0.1" 
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">إجمالي النقدية ({selectedCurrency})</Label>
+                <Input 
+                  type="number" 
+                  value={inventoryForm.total_cash} 
+                  onChange={(e) => setInventoryForm((p) => ({ ...p, total_cash: e.target.value }))} 
+                  min="0" 
+                  step="0.1" 
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+            <div className="pt-2 border-t border-border/50">
+              <Button onClick={saveInventory} className="gap-2 rounded-xl font-bold">
+                <Save className="h-4 w-4" />
+                تحديث المخزون
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          SECTION 3: 🧾 الفواتير والإيصالات (INVOICES & RECEIPTS HUB & SUB-CARDS)
+      ───────────────────────────────────────────────────────────── */}
+      {activeSection === "invoices_receipts" && !activeSubSetting && (
+        <div className="space-y-4">
+          <div className="pb-2">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-blue-500" />
+              إعدادات الفواتير والإيصالات
+            </h2>
+            <p className="text-xs text-muted-foreground">تخصيص العملة، تصنيفات المصاريف، وأمن التقارير والطباعة</p>
           </div>
 
-          <Separator />
-
-          {/* Ticker text */}
-          <div className="space-y-2">
-            <Label className="font-semibold text-sm flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-amber-500" />
-              شريط إخباري متحرك أسفل الشاشة (Ticker Text - اختياري)
-            </Label>
-            <Input
-              value={displaySettings.ticker_text || ""}
-              onChange={(e) => updateDisplaySetting("ticker_text", e.target.value)}
-              placeholder="مثال: أهلاً وسهلاً بكم في معصرة قفين... موسم مبارك على الجميع"
-              className="bg-muted/20"
-            />
-            <p className="text-xs text-muted-foreground">
-              إذا تم كتابة نص هنا، سيتحرك بسلاسة أسفل شاشة التلفاز كشريط عاجل وإعلانات للمعصرة.
-            </p>
-          </div>
-
-          <div className="pt-2 flex items-center justify-between flex-wrap gap-3">
-            <Button
-              onClick={handleSaveDisplaySettings}
-              disabled={savingDisplay || !activeSeason}
-              className="px-6 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* SubCard: العملة */}
+            <div
+              onClick={() => setActiveSubSetting("currency")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
-              <Save className="h-4 w-4" />
-              {savingDisplay ? "جارٍ الحفظ..." : "حفظ إعدادات الشاشة"}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              يتم حفظ وتطبيق الإعدادات فوراً على شاشة العرض
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>أنواع التنكات</CardTitle>
-          <CardDescription>أضف أنواع التنكات المتوفرة في معصرتك مع أسعارها</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {containerTypes.length > 0 &&
-          <div className="space-y-2">
-              {containerTypes.map((ct) =>
-            <div key={ct.id} className="flex items-center justify-between border rounded-lg p-3">
-                  <div>
-                    <span className="font-medium">{ct.name}</span>
-                    <span className="text-muted-foreground me-2"> — {ct.price} {selectedCurrency}</span>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => setContainerDeleteTarget(ct)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  <DollarSign className="h-5 w-5" />
                 </div>
-            )}
-            </div>
-          }
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 me-1" />إضافة نوع تنكة</Button>
-            </DialogTrigger>
-            <DialogContent dir="rtl">
-              <DialogHeader>
-                <DialogTitle>إضافة نوع تنكة جديد</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <Label>اسم النوع</Label>
-                  <Input value={newContainerName} onChange={(e) => setNewContainerName(e.target.value)} placeholder="مثال: بلاستيك، حديد..." />
-                </div>
-                <div className="space-y-2">
-                  <Label>السعر ({selectedCurrency})</Label>
-                  <Input type="number" value={newContainerPrice} onChange={(e) => setNewContainerPrice(e.target.value)} min="0" step="0.1" />
-                </div>
-                <Button onClick={addContainerType} disabled={!newContainerName.trim() || !newContainerPrice} className="w-full">
-                  <Plus className="h-4 w-4 me-1" />إضافة
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>أنواع المصاريف</CardTitle>
-          <CardDescription>أضف أو عدل أنواع المصاريف التي تستخدمها في المعصرة</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {expenseCategories.length > 0 &&
-          <div className="space-y-2">
-              {expenseCategories.map((ec) =>
-            <div key={ec.id} className="flex items-center justify-between border rounded-lg p-3">
-                  <div>
-                    <span className="font-medium">{ec.name}</span>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => setExpenseDeleteTarget(ec)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-            )}
-            </div>
-          }
-          <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
-            <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 me-1" />إضافة نوع مصروف</Button>
-            </DialogTrigger>
-            <DialogContent dir="rtl">
-              <DialogHeader>
-                <DialogTitle>إضافة نوع مصروف جديد</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <Label>اسم المصروف</Label>
-                  <Input value={newExpenseCategoryName} onChange={(e) => setNewExpenseCategoryName(e.target.value)} placeholder="مثال: فطور، قطع غيار..." />
-                </div>
-                <Button onClick={addExpenseCategory} disabled={!newExpenseCategoryName.trim()} className="w-full">
-                  <Plus className="h-4 w-4 me-1" />إضافة
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>المخزون والسيولة</CardTitle>
-          <CardDescription>تعديل يدوي لرصيد الزيت والنقدية في المعصرة</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>إجمالي الزيت (كغم)</Label>
-              <Input type="number" value={inventoryForm.total_oil} onChange={(e) => setInventoryForm((p) => ({ ...p, total_oil: e.target.value }))} min="0" step="0.1" />
-            </div>
-            <div className="space-y-2">
-              <Label>إجمالي النقدية (شيكل)</Label>
-              <Input type="number" value={inventoryForm.total_cash} onChange={(e) => setInventoryForm((p) => ({ ...p, total_cash: e.target.value }))} min="0" step="0.1" />
-            </div>
-          </div>
-          <Button onClick={saveInventory} variant="outline"><Save className="h-4 w-4 me-2" />تحديث المخزون</Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>أمن التقارير</CardTitle>
-          <CardDescription>تعيين رمز حماية (PIN) لصفحة التقارير المالية</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>رمز الحماية الجديد (4 أرقام)</Label>
-            <Input 
-              type="password" 
-              maxLength={4} 
-              value={reportPin} 
-              onChange={(e) => setReportPin(e.target.value.replace(/\D/g, ""))} 
-              placeholder="أدخل 4 أرقام..."
-              className="max-w-[200px]"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              إذا تُرك الحقل فارغاً، ستبقى صفحة التقارير مفتوحة بدون حماية.
-            </p>
-          </div>
-          <Button onClick={updateReportPin} disabled={isUpdatingPin}>
-            {isUpdatingPin ? "جارٍ التحديث..." : "حفظ رمز الحماية"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <UserCheck className="h-5 w-5 text-primary" />
-            حسابات موظفي الكاشير (Cashier Sub-Accounts)
-          </CardTitle>
-          <CardDescription>
-            إنشاء وإدارة حسابات الكاشير يتم من خلال مسؤول النظام (Admin) لضمان أمان وتفرد أسماء المستخدمين عبر جميع المعاصر.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {employees.map((emp: any) => (
-              <div key={emp.id} className="flex items-center justify-between p-3 border rounded-xl bg-muted/20">
-                <div className="space-y-0.5">
-                  <p className="font-bold text-sm text-foreground">{emp.display_name || "موظف كاشير"}</p>
-                  <p className="text-xs text-primary font-mono font-medium">
-                    {emp.phone || emp.display_name}
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    العملة المعتمدة
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    العملة الأساسية المستخدمة في الحسابات والفواتير ({selectedCurrency})
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium">
-                    طابور + فواتير فقط
-                  </span>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
+            {/* SubCard: أنواع المصاريف */}
+            <div
+              onClick={() => setActiveSubSetting("expense_categories")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  <Coins className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    أنواع المصاريف
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    إدارة وتخصيص بنود المصاريف المعتمدة بالمعصرة ({expenseCategories.length})
+                  </p>
                 </div>
               </div>
-            ))}
-            {employees.length === 0 && (
-              <p className="text-xs text-center text-muted-foreground py-4">
-                لا توجد حسابات كاشير حتى الآن. تواصل مع مسؤول النظام لإنشاء حسابات الكاشير الخاصة بمعصرتك.
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
+            {/* SubCard: أمن التقارير */}
+            <div
+              onClick={() => setActiveSubSetting("report_security")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    أمن التقارير المالية (PIN)
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    تعيين رمز حماية سري مكون من 4 أرقام لصفحة التقارير
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
+            {/* SubCard: مواصفات الإيصالات والطباعة */}
+            <div
+              onClick={() => setActiveSubSetting("receipt_format")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  <Printer className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    مواصفات الطباعة والإيصالات
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    مقاس الطابعة الحرارية (80mm) وبيانات ترويسة وتذييل الفاتورة
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INVOICES SUB-SETTING 1: العملة */}
+      {activeSection === "invoices_receipts" && activeSubSetting === "currency" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-blue-500" />
+              العملة المعتمدة
+            </CardTitle>
+            <CardDescription>العملة المستخدمة في تسعير الفواتير والمقبوضات والمصاريف</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6 max-w-md">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">اختر العملة</Label>
+              <Select 
+                value={selectedCurrency} 
+                onValueChange={(val) => {
+                  setSelectedCurrency(val);
+                  setCurrency(val);
+                }}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="اختر العملة" />
+                </SelectTrigger>
+                <SelectContent dir="rtl">
+                  {currencies.map((c) => (
+                    <SelectItem key={c.symbol} value={c.symbol}>
+                      {c.name} ({c.symbol})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="pt-2">
+              <Button onClick={saveSettings} className="rounded-xl font-bold gap-2">
+                <Save className="h-4 w-4" />
+                تأكيد وحفظ العملة
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* INVOICES SUB-SETTING 2: أنواع المصاريف */}
+      {activeSection === "invoices_receipts" && activeSubSetting === "expense_categories" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50 flex flex-row items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Coins className="h-5 w-5 text-blue-500" />
+                أنواع المصاريف
+              </CardTitle>
+              <CardDescription>أضف أو عدل تصنيفات المصاريف التي تسجل في المعصرة</CardDescription>
+            </div>
+            <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1.5 rounded-xl font-bold">
+                  <Plus className="h-4 w-4" />
+                  إضافة نوع
+                </Button>
+              </DialogTrigger>
+              <DialogContent dir="rtl" className="rounded-2xl sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>إضافة نوع مصروف جديد</DialogTitle>
+                  <DialogDescription>أدخل اسم التصنيف الجديد للمصاريف اليومية</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">اسم المصروف</Label>
+                    <Input 
+                      value={newExpenseCategoryName} 
+                      onChange={(e) => setNewExpenseCategoryName(e.target.value)} 
+                      placeholder="مثال: فطور عمال، صيانة، كهرباء، وقود..." 
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <Button 
+                    onClick={addExpenseCategory} 
+                    disabled={!newExpenseCategoryName.trim()} 
+                    className="w-full rounded-xl font-bold gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة النوع
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-5">
+            {expenseCategories.length > 0 ? (
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {expenseCategories.map((ec) => (
+                  <div 
+                    key={ec.id} 
+                    className="flex items-center justify-between p-3.5 rounded-xl border border-border/70 bg-card hover:bg-muted/20 transition-colors"
+                  >
+                    <span className="font-bold text-sm text-foreground">{ec.name}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => setExpenseDeleteTarget(ec)}
+                      className="text-destructive hover:bg-destructive/10 rounded-lg h-8 w-8"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 border border-dashed rounded-xl space-y-2">
+                <p className="text-sm font-semibold text-foreground">لا توجد أنواع مصاريف مضافة حالياً</p>
+                <p className="text-xs text-muted-foreground">اضغط على زر "إضافة نوع" لإضافة بنود المصاريف</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* INVOICES SUB-SETTING 3: أمن التقارير PIN */}
+      {activeSection === "invoices_receipts" && activeSubSetting === "report_security" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Lock className="h-5 w-5 text-blue-500" />
+              أمن التقارير المالية
+            </CardTitle>
+            <CardDescription>تعيين رمز حماية (PIN) لقفل صفحة التقارير المالية والأرباح</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6 max-w-md">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">رمز الحماية الجديد (4 أرقام)</Label>
+              <Input 
+                type="password" 
+                maxLength={4} 
+                value={reportPin} 
+                onChange={(e) => setReportPin(e.target.value.replace(/\D/g, ""))} 
+                placeholder="أدخل 4 أرقام..."
+                className="max-w-[200px] text-center tracking-widest font-mono text-base rounded-xl"
+              />
+              <p className="text-xs text-muted-foreground">
+                إذا تُرك الحقل فارغاً وحُفظ، ستكون صفحة التقارير مفتوحة بدون قفل.
               </p>
+            </div>
+            <div className="pt-2">
+              <Button onClick={updateReportPin} disabled={isUpdatingPin} className="rounded-xl font-bold gap-2">
+                <Save className="h-4 w-4" />
+                {isUpdatingPin ? "جارٍ التحديث..." : "حفظ رمز الحماية"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* INVOICES SUB-SETTING 4: مواصفات الطباعة */}
+      {activeSection === "invoices_receipts" && activeSubSetting === "receipt_format" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Printer className="h-5 w-5 text-blue-500" />
+              مواصفات الطباعة والإيصالات
+            </CardTitle>
+            <CardDescription>معلومات وإعدادات مخرجات الطباعة في شاشة الفواتير</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1.5">
+                <p className="text-xs font-bold text-muted-foreground">مقاس ورق الفاتورة</p>
+                <p className="text-sm font-bold text-foreground">80mm حراري (Thermal 80mm POS)</p>
+                <p className="text-xs text-muted-foreground">متوافق مع جميع طابعات الكاشير الحرارية القياسية عبر المتصفح</p>
+              </div>
+              <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1.5">
+                <p className="text-xs font-bold text-muted-foreground">الترويسة المعتمدة</p>
+                <p className="text-sm font-bold text-foreground">{profileForm.mill_name || "اسم المعصرة"}</p>
+                <p className="text-xs text-muted-foreground">{profileForm.phone ? `هاتف: ${profileForm.phone}` : "الهاتف غير محدد"}</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-foreground">طباعة إيصالات تلقائية سريعة</p>
+                <p className="text-muted-foreground">
+                  عند إصدار فاتورة في شاشة الفواتير والضغط على "تأكيد وطباعة الإيصال (80mm)" يتم إرسال أمر الطباعة المنسقة مباشرة مع بيانات الموسم والزبون والدفع.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          SECTION 4: 👥 المستخدمون والصلاحيات (USERS & ROLES HUB & SUB-CARDS)
+      ───────────────────────────────────────────────────────────── */}
+      {activeSection === "users_roles" && !activeSubSetting && (
+        <div className="space-y-4">
+          <div className="pb-2">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+              <Users className="h-5 w-5 text-indigo-500" />
+              المستخدمون والصلاحيات
+            </h2>
+            <p className="text-xs text-muted-foreground">إدارة وتفقد حسابات الكاشير وعمال المعصرة والصلاحيات</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* SubCard: حسابات الكاشير */}
+            <div
+              onClick={() => setActiveSubSetting("cashier_accounts")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  <UserCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    حسابات موظفي الكاشير
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    استعراض حسابات موظفي الكاشير التابعة للمعصرة ({employees.length})
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
+            {/* SubCard: عمال المعصرة */}
+            <div
+              onClick={() => setActiveSubSetting("workers_link")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  <HardHat className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    عمال المعصرة والأجور
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    إدارة عمال المعصرة، المستحقات، والدفعات المالية المباشرة
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
+            {/* SubCard: نظام الصلاحيات */}
+            <div
+              onClick={() => setActiveSubSetting("roles_overview")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-sm transition-all cursor-pointer md:col-span-2"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    نظام الصلاحيات والأدوار
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    دورك الحالي في النظام ومستويات الوصول الممنوحة
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* USERS SUB-SETTING 1: حسابات موظفي الكاشير */}
+      {activeSection === "users_roles" && activeSubSetting === "cashier_accounts" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-indigo-500" />
+              حسابات موظفي الكاشير (Cashier Sub-Accounts)
+            </CardTitle>
+            <CardDescription>
+              إنشاء وإدارة حسابات الكاشير يتم من خلال مسؤول النظام (Admin) لضمان أمان وتفرد الحسابات
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            <div className="space-y-3">
+              {employees.map((emp: any) => (
+                <div key={emp.id} className="flex items-center justify-between p-3.5 border border-border/70 rounded-xl bg-card hover:bg-muted/20 transition-colors">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-sm text-foreground">{emp.display_name || "موظف كاشير"}</p>
+                    <p className="text-xs text-primary font-mono font-medium">
+                      {emp.phone || emp.display_name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 font-medium">
+                      طابور + فواتير فقط
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+              {employees.length === 0 && (
+                <div className="text-center py-8 border border-dashed rounded-xl space-y-2">
+                  <p className="text-sm font-semibold text-foreground">لا توجد حسابات كاشير نشطة حتى الآن</p>
+                  <p className="text-xs text-muted-foreground">
+                    تواصل مع مسؤول النظام لإنشاء وتفعيل حسابات الكاشير الخاصة بمعصرتك.
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* USERS SUB-SETTING 2: عمال المعصرة */}
+      {activeSection === "users_roles" && activeSubSetting === "workers_link" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <HardHat className="h-5 w-5 text-indigo-500" />
+              عمال المعصرة وسجلات الأجور
+            </CardTitle>
+            <CardDescription>إدارة عمال المعصرة وتفاصيل ساعات العمل والمستحقات المالية</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5 pt-6">
+            <div className="p-5 rounded-xl border border-indigo-500/20 bg-indigo-500/5 space-y-3">
+              <h4 className="font-bold text-sm text-foreground">قسم مخصص لإدارة العمال</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                يحتوي النظام على صفحة متكاملة لإضافة عمال المعصرة، تعيين الأجور بالساعة أو باليوم، تسجيل الدفعات النقدية، ومتابعة الأرصدة المتبقية لكل عامل.
+              </p>
+              <Button asChild className="rounded-xl font-bold gap-2">
+                <Link to="/workers">
+                  <HardHat className="h-4 w-4" />
+                  الانتقال إلى صفحة العمال والأجور
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* USERS SUB-SETTING 3: نظام الصلاحيات */}
+      {activeSection === "users_roles" && activeSubSetting === "roles_overview" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-indigo-500" />
+              نظام الصلاحيات والأدوار
+            </CardTitle>
+            <CardDescription>معلومات الدور الممنوح وصلاحيات الوصول للنظام</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                <p className="text-xs font-bold text-muted-foreground">نوع الحساب / الدور</p>
+                <p className="text-sm font-bold text-foreground">
+                  {userRole === "platform_admin" && "مسؤول النظام العام (Platform Admin)"}
+                  {userRole === "mill_owner" && "مالك المعصرة (Mill Owner)"}
+                  {userRole === "mill_employee" && "موظف كاشير (Cashier Employee)"}
+                  {!userRole && "مستخدم النظام"}
+                </p>
+              </div>
+              <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                <p className="text-xs font-bold text-muted-foreground">نطاق الوصول</p>
+                <p className="text-sm font-bold text-foreground">
+                  {userRole === "mill_owner" ? "إدارة كاملة للمعصرة ومواسمها" : "الصلاحيات المحددة للدور"}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          SECTION 5: 👤 الحساب والأمان (ACCOUNT & SECURITY HUB & SUB-CARDS)
+      ───────────────────────────────────────────────────────────── */}
+      {activeSection === "account" && !activeSubSetting && (
+        <div className="space-y-4">
+          <div className="pb-2">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+              <User className="h-5 w-5 text-violet-500" />
+              إعدادات الحساب والأمان
+            </h2>
+            <p className="text-xs text-muted-foreground">بيانات الحساب الشخصي وتغيير كلمة المرور</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* SubCard: الملف الشخصي */}
+            <div
+              onClick={() => setActiveSubSetting("account_profile")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-violet-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
+                  <User className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                    الملف الشخصي للحساب
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    البريد الإلكتروني، الاسم الظاهر، والمعصرة المرتبطة
+                  </p>
+                </div>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
+            {/* SubCard: تغيير كلمة المرور */}
+            {userRole === 'mill_owner' && (
+              <div
+                onClick={() => setActiveSubSetting("change_password")}
+                className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-violet-500/50 hover:shadow-sm transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                      الأمان وتغيير كلمة المرور
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      تحديث كلمة المرور لحساب صاحب المعصرة
+                    </p>
+                  </div>
+                </div>
+                <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+              </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
+      {/* ACCOUNT SUB-SETTING 1: الملف الشخصي */}
+      {activeSection === "account" && activeSubSetting === "account_profile" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <User className="h-5 w-5 text-violet-500" />
+              بيانات الحساب الحالي
+            </CardTitle>
+            <CardDescription>معلومات تسجيل الدخول والحساب الموثق</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6 max-w-lg">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">البريد الإلكتروني المسجل</Label>
+              <Input 
+                value={user?.email || ""} 
+                disabled 
+                className="bg-muted/30 font-mono text-sm rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">الاسم الظاهر</Label>
+              <Input 
+                value={profile?.display_name || ""} 
+                disabled 
+                className="bg-muted/30 text-sm rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">المعصرة التابع لها</Label>
+              <Input 
+                value={profile?.mill_name || ""} 
+                disabled 
+                className="bg-muted/30 text-sm rounded-xl"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ACCOUNT SUB-SETTING 2: تغيير كلمة المرور */}
+      {activeSection === "account" && activeSubSetting === "change_password" && userRole === 'mill_owner' && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-violet-500" />
+              تغيير كلمة المرور
+            </CardTitle>
+            <CardDescription>تحديث كلمة المرور الخاصة بحساب صاحب المعصرة بأمان</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6 max-w-md">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">كلمة المرور الجديدة</Label>
+              <Input 
+                type="password" 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                placeholder="6 أحرف على الأقل..."
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">تأكيد كلمة المرور</Label>
+              <Input 
+                type="password" 
+                value={confirmPassword} 
+                onChange={(e) => setConfirmPassword(e.target.value)} 
+                placeholder="أعد إدخال كلمة المرور..."
+                className="rounded-xl"
+              />
+            </div>
+            <div className="pt-2">
+              <Button 
+                onClick={updatePassword} 
+                disabled={isUpdatingPassword || !newPassword}
+                className="rounded-xl font-bold gap-2"
+              >
+                <Key className="h-4 w-4" />
+                {isUpdatingPassword ? "جارٍ التحديث..." : "تحديث كلمة المرور"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          GLOBAL CONFIRMATION ALERT DIALOGS
+      ───────────────────────────────────────────────────────────── */}
       <AlertDialog open={!!containerDeleteTarget} onOpenChange={(o) => !o && setContainerDeleteTarget(null)}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir="rtl" className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد حذف نوع التنكة</AlertDialogTitle>
+            <AlertDialogTitle>تأكيد حذف نوع العبوة</AlertDialogTitle>
             <AlertDialogDescription>
-              هل تريد حذف نوع التنكة <strong>{containerDeleteTarget?.name}</strong>؟ لا يمكن التراجع عن هذا الإجراء وقد يؤثر على الفواتير المستقبلية.
+              هل تريد بالتأكيد حذف نوع <strong>{containerDeleteTarget?.name}</strong>؟ لا يمكن التراجع عن هذا الإجراء.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteContainerType} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogCancel className="rounded-xl">إلغاء</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={deleteContainerType} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
+            >
               حذف النوع
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1255,20 +2173,25 @@ export default function Settings() {
       </AlertDialog>
 
       <AlertDialog open={!!expenseDeleteTarget} onOpenChange={(o) => !o && setExpenseDeleteTarget(null)}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir="rtl" className="rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد حذف نوع المصروف</AlertDialogTitle>
             <AlertDialogDescription>
-              هل تريد حذف نوع المصروف <strong>{expenseDeleteTarget?.name}</strong>؟ لا يمكن التراجع عن هذا الإجراء.
+              هل تريد بالتأكيد حذف نوع المصروف <strong>{expenseDeleteTarget?.name}</strong>؟ لا يمكن التراجع عن هذا الإجراء.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteExpenseCategory} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogCancel className="rounded-xl">إلغاء</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={deleteExpenseCategory} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
+            >
               حذف النوع
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>);
+
+    </div>
+  );
 }
