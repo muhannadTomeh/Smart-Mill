@@ -28,6 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { Link } from "react-router-dom";
+import { storeCredential } from "@/lib/credentialVault";
 
 import {
   DynamicDisplayItem,
@@ -480,7 +481,7 @@ export default function Settings() {
       .eq("season_id", activeSeason.id);
 
     if (millId || activeSeason.mill_id) {
-      query = query.eq("mill_id", millId || activeSeason.mill_id);
+      query = (query as any).eq("mill_id", millId || activeSeason.mill_id);
     } else if (user?.id) {
       query = query.eq("user_id", user.id);
     }
@@ -496,7 +497,7 @@ export default function Settings() {
       mill_id: millId || activeSeason.mill_id || null,
       season_id: activeSeason.id,
       name: newExpenseCategoryName.trim()
-    });
+    } as any);
     if (!error) {
       toast({ title: "تمت الإضافة", description: `تم إضافة نوع المصروف "${newExpenseCategoryName}"` });
       setNewExpenseCategoryName("");
@@ -520,7 +521,7 @@ export default function Settings() {
       .eq("season_id", activeSeason.id);
 
     if (millId || activeSeason.mill_id) {
-      query = query.eq("mill_id", millId || activeSeason.mill_id);
+      query = (query as any).eq("mill_id", millId || activeSeason.mill_id);
     } else if (user?.id) {
       query = query.eq("user_id", user.id);
     }
@@ -537,7 +538,7 @@ export default function Settings() {
       season_id: activeSeason.id,
       name: newContainerName.trim(),
       price: parseFloat(newContainerPrice)
-    });
+    } as any);
     if (!error) {
       toast({ title: "تمت الإضافة", description: `تم إضافة نوع "${newContainerName}"` });
       setNewContainerName("");
@@ -624,9 +625,32 @@ export default function Settings() {
 
     setIsUpdatingPassword(true);
     try {
+      if (!user) {
+        throw new Error("يجب تسجيل الدخول أولاً");
+      }
+
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      toast({ title: "تم التحديث", description: "تم تغيير كلمة المرور بنجاح" });
+
+      // Sync updated password with server Credential Vault
+      let vaultSynced = true;
+      try {
+        await storeCredential(user.id, newPassword);
+      } catch (vaultErr: any) {
+        vaultSynced = false;
+        console.warn("Failed to sync credential with vault");
+      }
+
+      if (vaultSynced) {
+        toast({ title: "تم التحديث", description: "تم تغيير كلمة المرور وتحديث بيانات الحساب بنجاح" });
+      } else {
+        toast({
+          title: "تم تغيير كلمة المرور بنجاح",
+          description: "تم تغيير كلمة المرور بنجاح، ولكن تعذر مزامنة نسخة الإدارة في الخزنة المشفرة مؤقتاً.",
+          variant: "default"
+        });
+      }
+
       setNewPassword("");
       setConfirmPassword("");
     } catch (error: any) {

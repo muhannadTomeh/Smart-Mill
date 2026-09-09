@@ -140,7 +140,7 @@ const Queue = () => {
       .eq("season_id", activeSeason.id);
 
     if (activeSeason.mill_id || millId) {
-      query = query.eq("mill_id", activeSeason.mill_id || millId);
+      query = (query as any).eq("mill_id", activeSeason.mill_id || millId);
     } else {
       query = query.eq("user_id", user?.id);
     }
@@ -230,7 +230,7 @@ const Queue = () => {
           season_id: activeSeason!.id,
           name: newCustomer.name.trim(),
           phone: newCustomer.phone?.trim() || null,
-        })
+        } as any)
         .select("id")
         .single();
       if (custErr) {
@@ -611,7 +611,7 @@ const Queue = () => {
         status: "waiting",
         started_at: null,
         notes: cleanNotes || null,
-      })
+      } as any)
       .eq("id", id);
 
     if (error) {
@@ -982,10 +982,11 @@ const Queue = () => {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
                           <div className="flex items-center gap-0.5 shrink-0">
-                            <GripVertical
-                              className="h-4 w-4 text-muted-foreground/40 hover:text-foreground cursor-grab active:cursor-grabbing shrink-0 transition-colors"
-                              title="اسحب لتبديل الدور لأعلى أو لأسفل"
-                            />
+                            <span title="اسحب لتبديل الدور لأعلى أو لأسفل">
+                              <GripVertical
+                                className="h-4 w-4 text-muted-foreground/40 hover:text-foreground cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                              />
+                            </span>
                             <div className="flex flex-col">
                               <button
                                 type="button"

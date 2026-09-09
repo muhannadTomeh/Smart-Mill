@@ -56,9 +56,11 @@ export async function storeCredential(userId: string, password: string): Promise
 
     if (error || data?.error) {
       console.warn("Could not store credential via Edge Function:", error || data?.error);
+      throw new Error(data?.error || error?.message || "تعذر مزامنة كلمة المرور في الخزنة المشفرة");
     }
   } catch (err) {
     console.warn("storeCredential exception:", err);
+    throw err;
   }
 }
 

@@ -125,10 +125,14 @@ serve(async (req) => {
         .maybeSingle()
     ).data;
 
-    // Mill Owner check: ONLY allowed to manage cashiers (mill_employee) of their own mill
-    let isAuthorizedOwner = false;
-    if (!isPlatformAdmin) {
-      // Mill Owner can never reveal Platform Admin credentials
+    const isSelf = (callerId === targetUserId);
+
+    // Authorization check
+    let isAuthorized = false;
+    if (isPlatformAdmin) {
+      isAuthorized = true;
+    } else {
+      // Non-admins can NEVER access Platform Admin credentials
       if (targetUserId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
         return new Response(
           JSON.stringify({ error: 'غير مصرح لك بالوصول لبيانات حساب المشرف العام' }),
@@ -136,20 +140,25 @@ serve(async (req) => {
         );
       }
 
-      // Check if target is a mill_employee in a mill owned by caller
-      const { data: targetMembership } = await supabaseAdmin
-        .from('mill_memberships')
-        .select('mill_id, role, mills!inner(owner_user_id)')
-        .eq('user_id', targetUserId)
-        .eq('role', 'mill_employee')
-        .maybeSingle();
+      // An authenticated user is authorized to store/update their own credential
+      if (isSelf && action === 'store') {
+        isAuthorized = true;
+      } else {
+        // Mill Owner check: allowed to store or reveal cashiers (mill_employee) of their own mill
+        const { data: targetMembership } = await supabaseAdmin
+          .from('mill_memberships')
+          .select('mill_id, role, mills!inner(owner_user_id)')
+          .eq('user_id', targetUserId)
+          .eq('role', 'mill_employee')
+          .maybeSingle();
 
-      if (targetMembership && (targetMembership.mills as any)?.owner_user_id === callerId) {
-        isAuthorizedOwner = true;
+        if (targetMembership && (targetMembership.mills as any)?.owner_user_id === callerId) {
+          isAuthorized = true;
+        }
       }
     }
 
-    if (!isPlatformAdmin && !isAuthorizedOwner) {
+    if (!isAuthorized) {
       return new Response(
         JSON.stringify({ error: 'غير مصرح لك بالوصول إلى خزينة بيانات الاعتماد لهذا الحساب' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
