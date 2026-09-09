@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCheck, Plus, DollarSign, Pencil, ClipboardList, Search, Filter } from "lucide-react";
+import { UserCheck, Plus, DollarSign, Pencil, ClipboardList, Search, Filter, Trash2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -53,6 +53,7 @@ const Workers = () => {
   const [workRecords, setWorkRecords] = useState<WorkRecord[]>([]);
   const [payments, setPayments] = useState<WorkerPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Add worker dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -91,66 +92,128 @@ const Workers = () => {
   const [payFilterToday, setPayFilterToday] = useState(false);
 
   useEffect(() => {
-    if (activeSeason) { fetchWorkers(); fetchRecords(); fetchPayments(); }
-  }, [activeSeason?.id]);
+    if (activeSeason) {
+      fetchWorkers();
+      fetchRecords();
+      fetchPayments();
+    } else {
+      setLoading(false);
+    }
+  }, [activeSeason?.id, millId]);
 
   const fetchWorkers = async () => {
-    if (!activeSeason) return;
-    const { data } = await supabase.from("workers").select("*").eq("season_id", activeSeason.id).order("created_at", { ascending: false });
-    setWorkers((data as Worker[]) || []);
+    if (!activeSeason) {
+      setLoading(false);
+      return;
+    }
+    const query = supabase.from("workers").select("*").eq("season_id", activeSeason.id);
+    if (millId) query.eq("mill_id", millId);
+    const { data, error } = await query.order("created_at", { ascending: false });
+    if (!error && data) {
+      setWorkers((data as Worker[]) || []);
+    } else if (error) {
+      console.error("fetchWorkers error:", error);
+    }
     setLoading(false);
   };
 
   const fetchRecords = async () => {
     if (!activeSeason) return;
-    const { data } = await supabase.from("work_records").select("*").eq("season_id", activeSeason.id).order("created_at", { ascending: false });
-    setWorkRecords((data as WorkRecord[]) || []);
+    const query = supabase.from("work_records").select("*").eq("season_id", activeSeason.id);
+    if (millId) query.eq("mill_id", millId);
+    const { data, error } = await query.order("created_at", { ascending: false });
+    if (!error && data) {
+      setWorkRecords((data as WorkRecord[]) || []);
+    }
   };
 
   const fetchPayments = async () => {
     if (!activeSeason) return;
-    const { data } = await supabase.from("worker_payments").select("*").eq("season_id", activeSeason.id).order("created_at", { ascending: false });
-    setPayments((data as WorkerPayment[]) || []);
+    const query = supabase.from("worker_payments").select("*").eq("season_id", activeSeason.id);
+    if (millId) query.eq("mill_id", millId);
+    const { data, error } = await query.order("created_at", { ascending: false });
+    if (!error && data) {
+      setPayments((data as WorkerPayment[]) || []);
+    }
   };
 
   const addWorker = async () => {
-    if (!newWorker.name || !newWorker.rate) {
-      toast({ title: "خطأ", description: "يرجى إدخال الاسم والسعر", variant: "destructive" });
+    if (!newWorker.name.trim() || !newWorker.rate) {
+      toast({ title: "خطأ", description: "يرجى إدخال اسم العامل والسعر", variant: "destructive" });
       return;
     }
-    const { error } = await supabase.from("workers").insert({
-      user_id: user?.id!,
-      season_id: activeSeason!.id,
-      name: newWorker.name,
-      type: newWorker.type,
-      phone: newWorker.phone || null,
-      hourly_rate: newWorker.type === 'hourly' ? parseFloat(newWorker.rate) : null,
-      shift_rate: newWorker.type === 'shift' ? parseFloat(newWorker.rate) : null,
-    });
-    if (!error) {
+    if (!activeSeason) {
+      toast({ title: "تنبيه", description: "يرجى فتح أو تفعيل موسم أولاً لإضافة العمال", variant: "destructive" });
+      return;
+    }
+    if (!millId) {
+      toast({ title: "خطأ", description: "تعذر تحديد المعصرة الحالية", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.from("workers").insert({
+        user_id: user?.id!,
+        mill_id: millId,
+        season_id: activeSeason.id,
+        name: newWorker.name.trim(),
+        type: newWorker.type,
+        phone: newWorker.phone?.trim() || null,
+        hourly_rate: newWorker.type === 'hourly' ? parseFloat(newWorker.rate) : null,
+        shift_rate: newWorker.type === 'shift' ? parseFloat(newWorker.rate) : null,
+      });
+
+      if (error) {
+        console.error("Error inserting worker:", error);
+        toast({ title: "خطأ في إضافة العامل", description: error.message, variant: "destructive" });
+        return;
+      }
+
       setNewWorker({ name: "", type: 'hourly', rate: "", phone: "" });
       setAddDialogOpen(false);
-      toast({ title: "تمت الإضافة", description: `تم إضافة العامل ${newWorker.name}` });
+      toast({ title: "تمت الإضافة", description: `تم إضافة العامل ${newWorker.name.trim()}` });
       fetchWorkers();
+    } catch (err: any) {
+      console.error("Exception adding worker:", err);
+      toast({ title: "خطأ", description: err.message || "تعذر إضافة العامل", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const updateWorkerDetails = async () => {
-    if (!editingWorker || !editWorker.name || !editWorker.rate) {
+    if (!editingWorker || !editWorker.name.trim() || !editWorker.rate) {
       toast({ title: "خطأ", description: "يرجى إدخال جميع البيانات", variant: "destructive" });
       return;
     }
     const { error } = await supabase.from("workers").update({
-      name: editWorker.name,
+      name: editWorker.name.trim(),
       type: editWorker.type,
-      phone: editWorker.phone || null,
+      phone: editWorker.phone?.trim() || null,
       hourly_rate: editWorker.type === 'hourly' ? parseFloat(editWorker.rate) : null,
       shift_rate: editWorker.type === 'shift' ? parseFloat(editWorker.rate) : null,
     }).eq("id", editingWorker.id);
-    if (!error) {
-      setEditDialogOpen(false);
-      setEditingWorker(null);
-      toast({ title: "تم التحديث", description: "تم تحديث بيانات العامل" });
+
+    if (error) {
+      console.error("Error updating worker:", error);
+      toast({ title: "خطأ في التحديث", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    setEditDialogOpen(false);
+    setEditingWorker(null);
+    toast({ title: "تم التحديث", description: "تم تحديث بيانات العامل" });
+    fetchWorkers();
+  };
+
+  const deleteWorker = async (worker: Worker) => {
+    if (!confirm(`هل أنت متأكد من حذف العامل ${worker.name}؟`)) return;
+    const { error } = await supabase.from("workers").delete().eq("id", worker.id);
+    if (error) {
+      toast({ title: "خطأ في الحذف", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "تم الحذف", description: `تم حذف العامل ${worker.name}` });
       fetchWorkers();
     }
   };
@@ -303,11 +366,21 @@ const Workers = () => {
                 <Label>{newWorker.type === 'hourly' ? 'سعر الساعة (شيكل)' : 'سعر الشفت (شيكل)'}</Label>
                 <Input type="number" value={newWorker.rate} onChange={e => setNewWorker(p => ({ ...p, rate: e.target.value }))} placeholder="السعر" min="0" />
               </div>
-              <Button onClick={addWorker} className="w-full"><Plus className="h-4 w-4 me-2" />إضافة</Button>
+              <Button onClick={addWorker} disabled={isSubmitting} className="w-full">
+                <Plus className="h-4 w-4 me-2" />
+                {isSubmitting ? "جارٍ الإضافة..." : "إضافة"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
+      {!activeSeason && (
+        <div className="flex items-center gap-2 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-900 dark:text-amber-200 text-xs font-medium">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+          <span>لا يوجد موسم مفتوح أو نشط حالياً. يرجى فتح موسم جديد من صفحة المواسم لإدارة العمال وتسجيل ساعات عملهم.</span>
+        </div>
+      )}
 
       <Tabs defaultValue="list" dir="rtl">
         <TabsList className="w-full justify-start">
@@ -372,6 +445,9 @@ const Workers = () => {
                                 </Button>
                                 <Button size="sm" variant="outline" onClick={() => startPay(worker)} disabled={balance <= 0}>
                                   <DollarSign className="h-3 w-3 me-1" />دفع
+                                </Button>
+                                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => deleteWorker(worker)} title="حذف العامل">
+                                  <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
                             </TableCell>
