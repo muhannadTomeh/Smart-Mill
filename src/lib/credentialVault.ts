@@ -70,25 +70,16 @@ export async function storeCredential(userId: string, password: string): Promise
  */
 export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
   try {
-    // 1. Primary: Call the secure RPC
-    const { data, error } = await supabase.rpc('admin_get_all_accounts' as any);
-    if (!error && data && Array.isArray(data)) {
-      return (data as any[]).map(acc => ({
-        ...acc,
-        is_active: acc.is_active ?? (acc.status !== 'disabled'),
-        status: acc.status || (acc.is_active ? 'active' : 'disabled')
-      })) as AdminAccountItem[];
-    }
-
-    if (error) {
-      console.warn("admin_get_all_accounts RPC returned error, using fallback queries:", error);
-    }
-
-    // 2. Fallback: Query tables directly
+    // Query canonical account/tenant tables directly.
+    // admin_get_all_accounts RPC is obsolete and no longer exists.
     const [adminRolesRes, millsRes, membershipsRes] = await Promise.all([
       supabase.from('user_roles').select('user_id').eq('role', 'platform_admin'),
-      supabase.from('mills').select('id, name, mill_code, owner_user_id, subscription_status, created_at'),
-      supabase.from('mill_memberships').select('id, user_id, mill_id, role, username, display_username, is_active, created_at')
+      supabase.from('mills').select(
+        'id, name, mill_code, owner_user_id, subscription_status, created_at'
+      ),
+      supabase.from('mill_memberships').select(
+        'id, user_id, mill_id, role, username, display_username, is_active, created_at'
+      )
     ]);
 
     const millsMap = new Map<string, any>();
@@ -201,7 +192,7 @@ async function extractEdgeFunctionError(edgeErr: any, defaultMsg: string): Promi
     try {
       const body = await edgeErr.context.json();
       if (body?.error) return String(body.error);
-    } catch {}
+    } catch { }
   }
   if (edgeErr.context && typeof edgeErr.context.text === 'function') {
     try {
@@ -210,10 +201,10 @@ async function extractEdgeFunctionError(edgeErr: any, defaultMsg: string): Promi
         try {
           const parsed = JSON.parse(text);
           if (parsed?.error) return String(parsed.error);
-        } catch {}
+        } catch { }
         return text;
       }
-    } catch {}
+    } catch { }
   }
   return msg;
 }
