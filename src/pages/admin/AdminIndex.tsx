@@ -43,7 +43,7 @@ import { Label } from "@/components/ui/label";
 import { 
   Users, User, Building2, Receipt, Droplets, CalendarCheck, Filter, 
   UserPlus, Copy, RefreshCw, CheckCircle2, Phone, Eye, EyeOff, Key, 
-  Edit, Trash2, ShieldCheck, Shield, Search, UserX
+  Edit, Trash2, ShieldCheck, Shield, Search, UserX, UserCheck
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
