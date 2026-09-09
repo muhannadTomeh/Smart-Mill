@@ -50,6 +50,7 @@ import { toast } from "sonner";
 import { 
   fetchAllAdminAccounts, 
   revealCredential, 
+  storeCredential,
   updateUserAccount, 
   deleteUserAccount, 
   toggleUserAccountActive,
@@ -215,6 +216,9 @@ export default function AdminIndex() {
   // Load Accounts list (without passwords)
   const loadAccounts = async () => {
     setAccountsLoading(true);
+    // Reset revealed passwords cache on reload so stale passwords are never retained
+    setDecryptedAccountPasswords({});
+    setVisibleAccountPasswords({});
     try {
       const data = await fetchAllAdminAccounts();
       setAccounts(data);
@@ -226,16 +230,11 @@ export default function AdminIndex() {
     }
   };
 
-  // On-demand Password Reveal via Credential Vault
+  // On-demand Password Reveal via Credential Vault (Always fetches fresh on reveal)
   const toggleAccountPasswordVisibility = async (acc: AdminAccountItem) => {
     const key = acc.user_id;
     if (visibleAccountPasswords[key]) {
       setVisibleAccountPasswords((p) => ({ ...p, [key]: false }));
-      return;
-    }
-
-    if (decryptedAccountPasswords[key]) {
-      setVisibleAccountPasswords((p) => ({ ...p, [key]: true }));
       return;
     }
 
@@ -275,12 +274,21 @@ export default function AdminIndex() {
   };
 
   // Open Edit Account Modal
-  const handleOpenAccountEdit = (acc: AdminAccountItem) => {
+  const handleOpenAccountEdit = async (acc: AdminAccountItem) => {
     setEditingAccount(acc);
+    let pass = decryptedAccountPasswords[acc.user_id] || "";
+    if (!pass) {
+      try {
+        pass = (await revealCredential(acc.user_id)) || "";
+        if (pass) {
+          setDecryptedAccountPasswords((p) => ({ ...p, [acc.user_id]: pass }));
+        }
+      } catch {}
+    }
     setEditAccountForm({
       name: acc.display_name,
       username: acc.username,
-      password: decryptedAccountPasswords[acc.user_id] || "",
+      password: pass,
     });
     setShowEditAccountPassword(false);
   };
@@ -302,13 +310,18 @@ export default function AdminIndex() {
       );
 
       if (editAccountForm.password.trim()) {
+        try {
+          await storeCredential(editingAccount.user_id, editAccountForm.password.trim());
+        } catch (vaultErr) {
+          console.warn("Direct vault store on admin edit:", vaultErr);
+        }
         setDecryptedAccountPasswords((p) => ({ ...p, [editingAccount.user_id]: editAccountForm.password.trim() }));
         setVisibleAccountPasswords((p) => ({ ...p, [editingAccount.user_id]: true }));
       }
 
       toast.success(`تم تحديث الحساب: ${editAccountForm.username}`);
       setEditingAccount(null);
-      loadAccounts();
+      await loadAccounts();
       fetchData();
     } catch (err: any) {
       toast.error(err.message || "تعذر حفظ التعديلات");

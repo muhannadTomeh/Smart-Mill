@@ -8,6 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { KeyRound } from "lucide-react";
 
+import { storeCredential } from "@/lib/credentialVault";
+
 const ResetPassword = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -35,7 +37,7 @@ const ResetPassword = () => {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    const { data: updateData, error } = await supabase.auth.updateUser({ password });
     setLoading(false);
 
     if (error) {
@@ -45,6 +47,13 @@ const ResetPassword = () => {
         variant: "destructive",
       });
     } else {
+      if (updateData?.user?.id) {
+        try {
+          await storeCredential(updateData.user.id, password);
+        } catch (vaultErr) {
+          console.warn("Vault sync on reset password failed:", vaultErr);
+        }
+      }
       toast({ title: "تم تحديث كلمة المرور بنجاح" });
       navigate("/");
     }

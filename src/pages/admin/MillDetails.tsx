@@ -472,11 +472,6 @@ export default function MillDetails() {
       return;
     }
 
-    if (decryptedPasswords[key]) {
-      setVisiblePasswords((p) => ({ ...p, [key]: true }));
-      return;
-    }
-
     setDecryptingLoading((p) => ({ ...p, [key]: true }));
     try {
       const plain = await revealCredential(emp.user_id || emp.id);
