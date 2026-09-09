@@ -10,18 +10,21 @@ import {
   Clock,
   Calendar,
   BarChart3,
-  TrendingUp,
   Wallet,
   Cog,
   Warehouse,
   ShieldCheck,
-  MessageSquare,
   Building2,
   Calculator,
+  Undo2,
+  Lock,
 } from "lucide-react"
-import { NavLink, useLocation } from "react-router-dom"
+import { NavLink } from "react-router-dom"
 import { useRole } from "@/contexts/RoleContext"
 import { useAuth } from "@/contexts/AuthContext"
+import { useAdminWorkspace } from "@/contexts/AdminWorkspaceContext"
+import { Button } from "@/components/ui/button"
+import { ReAuthDialog } from "@/components/auth/ReAuthDialog"
 
 import {
   Sidebar,
@@ -37,36 +40,33 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
+// Platform Admin navigation item
 const adminItems = [
   { title: "إدارة المعاصر والاشتراكات", url: "/admin", icon: Building2 },
 ]
 
-const mainItems = [
-  { title: "الرئيسية", url: "/dashboard", icon: LayoutDashboard },
+// Operational workspace navigation items (Shared by Owner and Employee)
+const operationalItems = [
   { title: "الطابور", url: "/queue", icon: Clock },
   { title: "حساب الرد", url: "/invoices", icon: Calculator },
-  { title: "الفواتير", url: "/invoices-history", icon: FileText },
-  { title: "إغلاق الصندوق", url: "/daily-closing", icon: Receipt },
-  { title: "الزبائن", url: "/customers", icon: Users },
-  { title: "العمال", url: "/workers", icon: UserCheck },
-]
-
-const operationsItems = [
-  { title: "المخزن", url: "/inventory", icon: Warehouse },
+  { title: "الفواتير السابقة", url: "/invoices-history", icon: FileText },
   { title: "بيع/شراء الزيت", url: "/oil-trading", icon: ShoppingCart },
+  { title: "إغلاق الصندوق", url: "/daily-closing", icon: Receipt },
   { title: "المصاريف", url: "/expenses", icon: Wallet },
 ]
 
-const analyticsItems = [
-  { title: "التقارير", url: "/reports", icon: BarChart3 },
-]
-
-const systemItems = [
+// Management & Admin workspace navigation items (Owner only, after re-authentication)
+const managementItems = [
+  { title: "الرئيسية والإحصاءات", url: "/dashboard", icon: LayoutDashboard },
+  { title: "التقارير المفصلة", url: "/reports", icon: BarChart3 },
+  { title: "العمال والرواتب", url: "/workers", icon: UserCheck },
+  { title: "الزبائن والموردين", url: "/customers", icon: Users },
+  { title: "المخزن", url: "/inventory", icon: Warehouse },
   { title: "المواسم", url: "/seasons", icon: Calendar },
-  { title: "الإعدادات", url: "/settings", icon: Cog },
+  { title: "الإعدادات والأسعار", url: "/settings", icon: Cog },
 ]
 
-function MenuGroup({ label, items, isCollapsed }: { label: string; items: typeof mainItems; isCollapsed: boolean }) {
+function MenuGroup({ label, items, isCollapsed }: { label: string; items: typeof operationalItems; isCollapsed: boolean }) {
   return (
     <SidebarGroup>
       <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/40 px-3 mb-1">
@@ -111,80 +111,145 @@ function MenuGroup({ label, items, isCollapsed }: { label: string; items: typeof
 
 export function AppSidebar() {
   const { state } = useSidebar()
-  const { isAdmin, isEmployee } = useRole()
+  const { isAdmin, isOwner, isEmployee } = useRole()
   const { profile } = useAuth()
+  const { isAdminWorkspace, openReAuthModal, exitAdminWorkspace } = useAdminWorkspace()
   const isCollapsed = state === "collapsed"
 
-  const brandTitle = isAdmin 
-    ? "لوحة الأدمن" 
-    : (profile?.mill_name || "المعصرة الذكية")
-    
-  const brandSubtitle = isAdmin 
-    ? "الإدارة العامة والتحكم" 
-    : (isEmployee ? "وضع الموظف" : (profile?.mill_location || "إدارة المعصرة"))
+  // Dynamic branding titles
+  let brandTitle = profile?.mill_name || "المعصرة الذكية"
+  let brandSubtitle = isEmployee ? "واجهة الموظف (الكاشير)" : "الواجهة التشغيلية"
+
+  if (isAdmin) {
+    brandTitle = "لوحة الأدمن"
+    brandSubtitle = "الإدارة العامة والتحكم"
+  } else if (isOwner && isAdminWorkspace) {
+    brandSubtitle = "لوحة الإدارة والتحكم"
+  }
 
   return (
-    <Sidebar
-      side="right"
-      className={isCollapsed ? "w-16" : "w-64"}
-      collapsible="icon"
-    >
-      <SidebarHeader className="p-5 border-b border-sidebar-border/60">
-        {!isCollapsed ? (
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-olive ${isAdmin ? "bg-amber-600 text-white" : "bg-sidebar-primary text-sidebar-primary-foreground"}`}>
-              {isAdmin ? <ShieldCheck className="h-5 w-5" /> : <Sprout className="h-5 w-5" />}
+    <>
+      <Sidebar
+        side="right"
+        className={isCollapsed ? "w-16" : "w-64"}
+        collapsible="icon"
+      >
+        <SidebarHeader className="p-5 border-b border-sidebar-border/60">
+          {!isCollapsed ? (
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-olive ${
+                  isAdmin
+                    ? "bg-amber-600 text-white"
+                    : isOwner && isAdminWorkspace
+                    ? "bg-emerald-700 text-white"
+                    : "bg-sidebar-primary text-sidebar-primary-foreground"
+                }`}
+              >
+                {isAdmin ? (
+                  <ShieldCheck className="h-5 w-5" />
+                ) : isOwner && isAdminWorkspace ? (
+                  <Lock className="h-5 w-5" />
+                ) : (
+                  <Sprout className="h-5 w-5" />
+                )}
+              </div>
+              <div className="overflow-hidden">
+                <h2 className="text-base font-bold text-sidebar-foreground tracking-tight leading-tight truncate" title={brandTitle}>
+                  {brandTitle}
+                </h2>
+                <p className="text-[11px] text-sidebar-foreground/50 truncate flex items-center gap-1 mt-0.5">
+                  {isOwner && isAdminWorkspace && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                  )}
+                  <span>{brandSubtitle}</span>
+                </p>
+              </div>
             </div>
-            <div className="overflow-hidden">
-              <h2 className="text-base font-bold text-sidebar-foreground tracking-tight leading-tight truncate" title={brandTitle}>
-                {brandTitle}
-              </h2>
-              <p className="text-[11px] text-sidebar-foreground/50 truncate">
-                {brandSubtitle}
-              </p>
+          ) : (
+            <div
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center mx-auto shadow-olive ${
+                isAdmin
+                  ? "bg-amber-600 text-white"
+                  : isOwner && isAdminWorkspace
+                  ? "bg-emerald-700 text-white"
+                  : "bg-sidebar-primary text-sidebar-primary-foreground"
+              }`}
+            >
+              {isAdmin ? (
+                <ShieldCheck className="h-5 w-5" />
+              ) : isOwner && isAdminWorkspace ? (
+                <Lock className="h-5 w-5" />
+              ) : (
+                <Sprout className="h-5 w-5" />
+              )}
             </div>
-          </div>
-        ) : (
-          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mx-auto shadow-olive ${isAdmin ? "bg-amber-600 text-white" : "bg-sidebar-primary text-sidebar-primary-foreground"}`}>
-            {isAdmin ? <ShieldCheck className="h-5 w-5" /> : <Sprout className="h-5 w-5" />}
-          </div>
-        )}
-      </SidebarHeader>
+          )}
+        </SidebarHeader>
 
-      <SidebarContent className="px-3 py-4 space-y-3">
-        {isAdmin ? (
-          <MenuGroup 
-            label="لوحة التحكم والإشراف" 
-            items={adminItems} 
-            isCollapsed={isCollapsed} 
-          />
-        ) : (
-          <>
+        <SidebarContent className="px-3 py-4 space-y-3">
+          {isAdmin ? (
             <MenuGroup 
-              label="الرئيسية" 
-              items={isEmployee ? mainItems.filter(i => ['الطابور', 'حساب الرد', 'الفواتير', 'إغلاق الصندوق'].includes(i.title)) : mainItems} 
+              label="لوحة التحكم والإشراف" 
+              items={adminItems} 
               isCollapsed={isCollapsed} 
             />
-            {!isEmployee && (
-              <>
-                <MenuGroup label="العمليات" items={operationsItems} isCollapsed={isCollapsed} />
-                <MenuGroup label="التحليلات" items={analyticsItems} isCollapsed={isCollapsed} />
-                <MenuGroup label="النظام" items={systemItems} isCollapsed={isCollapsed} />
-              </>
-            )}
-          </>
-        )}
-      </SidebarContent>
+          ) : isOwner && isAdminWorkspace ? (
+            /* Mode 1: Owner Admin Workspace */
+            <MenuGroup 
+              label="لوحة الإدارة والتحكم" 
+              items={managementItems} 
+              isCollapsed={isCollapsed} 
+            />
+          ) : (
+            /* Mode 2: Unified Operational Workspace (Owner and Employee) */
+            <MenuGroup 
+              label="الواجهة التشغيلية" 
+              items={operationalItems} 
+              isCollapsed={isCollapsed} 
+            />
+          )}
+        </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-sidebar-border/60">
-        {!isCollapsed && (
-          <div className="rounded-2xl bg-sidebar-primary/10 px-4 py-3">
-            <p className="text-[11px] font-semibold text-sidebar-primary">المعصرة الذكية v2.0</p>
-            <p className="text-[10px] text-sidebar-foreground/40 mt-0.5">نظام إدارة المعصرة</p>
-          </div>
-        )}
-      </SidebarFooter>
-    </Sidebar>
+        <SidebarFooter className="p-3 border-t border-sidebar-border/60 space-y-2">
+          {/* Action Button: Switch between Operational and Admin workspace */}
+          {!isAdmin && isOwner && (
+            <div>
+              {isAdminWorkspace ? (
+                /* Exit Admin Workspace button */
+                <Button
+                  variant="outline"
+                  onClick={exitAdminWorkspace}
+                  className="w-full justify-center gap-2 rounded-xl text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 font-semibold text-xs py-2.5 h-auto transition-colors"
+                  title="الرجوع إلى الواجهة التشغيلية الأساسية"
+                >
+                  <Undo2 className="h-4 w-4 shrink-0" />
+                  {!isCollapsed && <span>خروج من الإدارة</span>}
+                </Button>
+              ) : (
+                /* Enter Admin Workspace button */
+                <Button
+                  onClick={openReAuthModal}
+                  className="w-full justify-center gap-2 rounded-xl bg-primary/15 text-primary hover:bg-primary hover:text-primary-foreground font-bold text-xs py-2.5 h-auto transition-all shadow-none border border-primary/20"
+                  title="الدخول إلى لوحة إدارة المعصرة والتقارير الحساسة (يتطلب كلمة المرور)"
+                >
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                  {!isCollapsed && <span>لوحة الإدارة</span>}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {!isCollapsed && (
+            <div className="rounded-xl bg-sidebar-primary/5 px-3 py-2 text-center">
+              <p className="text-[10px] text-sidebar-foreground/40">المعصرة الذكية — نظام الإدارة والتشغيل</p>
+            </div>
+          )}
+        </SidebarFooter>
+      </Sidebar>
+
+      {/* Owner Re-Authentication Dialog */}
+      {!isAdmin && isOwner && <ReAuthDialog />}
+    </>
   )
 }
-

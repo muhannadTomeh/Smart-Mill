@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/contexts/RoleContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -50,6 +51,7 @@ const DEFAULT_SUGGESTIONS = [
 
 const Expenses = () => {
   const { user, millId } = useAuth();
+  const { isEmployee } = useRole();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
@@ -215,6 +217,10 @@ const Expenses = () => {
   };
 
   const deleteExpense = async () => {
+    if (isEmployee) {
+      toast({ title: "غير مصرح", description: "ليس لديك صلاحية حذف المصاريف", variant: "destructive" });
+      return;
+    }
     if (!deleteTarget) return;
     const { id, amount } = deleteTarget;
     const { error } = await supabase.from("expenses").delete().eq("id", id);
@@ -453,7 +459,7 @@ const Expenses = () => {
                     <TableHead className="text-right font-bold text-xs">نوع المصروف</TableHead>
                     <TableHead className="text-right font-bold text-xs">المبلغ</TableHead>
                     <TableHead className="text-right font-bold text-xs">الوصف والتفاصيل</TableHead>
-                    <TableHead className="text-left font-bold text-xs">الإجراءات</TableHead>
+                    {!isEmployee && <TableHead className="text-left font-bold text-xs">الإجراءات</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -476,17 +482,19 @@ const Expenses = () => {
                       <TableCell className="text-right text-xs text-muted-foreground max-w-md truncate">
                         {exp.description || <span className="text-muted-foreground/50 italic">—</span>}
                       </TableCell>
-                      <TableCell className="text-left">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                          onClick={() => setDeleteTarget(exp)}
-                          title="حذف المصروف"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TableCell>
+                      {!isEmployee && (
+                        <TableCell className="text-left">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                            onClick={() => setDeleteTarget(exp)}
+                            title="حذف المصروف"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

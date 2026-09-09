@@ -136,13 +136,13 @@ const Auth = () => {
           const { data: activeSeasonRow } = await activeSeasonQuery.maybeSingle();
 
           if (activeSeasonRow) {
-            navigate("/dashboard");
+            navigate("/queue");
           } else {
             navigate("/seasons");
           }
         }
       } else {
-        navigate("/dashboard");
+        navigate("/queue");
       }
     }
   };

@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { RoleProvider, useRole } from "@/contexts/RoleContext";
 import { SubscriptionProvider, useSubscription } from "@/contexts/SubscriptionContext";
 import { SeasonProvider, useSeason } from "@/contexts/SeasonContext";
+import { AdminWorkspaceProvider, useAdminWorkspace } from "@/contexts/AdminWorkspaceContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, Calendar, Plus, Users, Receipt, Wallet, User, ChevronDown, Menu, Lock, Phone, ShieldCheck } from "lucide-react";
@@ -56,7 +57,10 @@ const HeaderBar = () => {
   const { user, signOut } = useAuth();
   const { activeSeason } = useSeason();
   const navigate = useNavigate();
-  const { isAdmin } = useRole();
+  const { isAdmin, isOwner, isEmployee } = useRole();
+  const { isAdminWorkspace } = useAdminWorkspace();
+
+  const canNavigateToSeasons = isOwner && isAdminWorkspace;
 
   return (
     <header className="h-16 border-b glass-bar flex items-center justify-between px-4 md:px-6 sticky top-0 z-40">
@@ -68,9 +72,19 @@ const HeaderBar = () => {
         {!isAdmin && activeSeason && (
           <Badge
             variant="secondary"
-            className="cursor-pointer hover:bg-primary/10 text-xs font-medium px-3 py-1.5 rounded-full border border-primary/20 transition-colors flex items-center gap-1.5"
-            onClick={() => navigate("/seasons")}
-            title="الموسم الفعّال حالياً — اضغط لإدارة وتغيير المواسم"
+            className={`text-xs font-medium px-3 py-1.5 rounded-full border border-primary/20 transition-colors flex items-center gap-1.5 ${
+              canNavigateToSeasons ? "cursor-pointer hover:bg-primary/10" : "cursor-default"
+            }`}
+            onClick={() => {
+              if (canNavigateToSeasons) {
+                navigate("/seasons");
+              }
+            }}
+            title={
+              canNavigateToSeasons
+                ? "الموسم الفعّال حالياً — اضغط لإدارة وتغيير المواسم"
+                : `الموسم الفعّال حالياً: ${activeSeason.name}`
+            }
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <Calendar className="h-3.5 w-3.5 text-primary" />
@@ -100,10 +114,12 @@ const HeaderBar = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => navigate("/customers")} className="gap-2 py-2.5">
-                <Users className="h-4 w-4 text-primary" />
-                إضافة زبون
-              </DropdownMenuItem>
+              {!isEmployee && (
+                <DropdownMenuItem onClick={() => navigate("/customers")} className="gap-2 py-2.5">
+                  <Users className="h-4 w-4 text-primary" />
+                  إضافة زبون
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => navigate("/invoices")} className="gap-2 py-2.5">
                 <Receipt className="h-4 w-4 text-primary" />
                 إنشاء فاتورة
@@ -130,21 +146,21 @@ const HeaderBar = () => {
             <div className="px-3 py-2">
               <p className="text-sm font-medium truncate">{user?.email}</p>
               <p className="text-xs text-muted-foreground">
-                {isAdmin ? "مشرف المنصة العام" : "مالك المعصرة"}
+                {isAdmin ? "مشرف المنصة العام" : isEmployee ? "موظف الكاشير" : "مالك المعصرة"}
               </p>
             </div>
             <DropdownMenuSeparator />
-            {!isAdmin ? (
-              <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2">
-                <User className="h-4 w-4" />
-                الإعدادات
-              </DropdownMenuItem>
-            ) : (
+            {isAdmin ? (
               <DropdownMenuItem onClick={() => navigate("/admin")} className="gap-2">
                 <ShieldCheck className="h-4 w-4 text-primary" />
-                لوحة المشرف
+                لوحة المشرف العام
               </DropdownMenuItem>
-            )}
+            ) : isOwner && isAdminWorkspace ? (
+              <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2">
+                <User className="h-4 w-4" />
+                إعدادات المعصرة
+              </DropdownMenuItem>
+            ) : null}
 
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="gap-2 text-destructive focus:text-destructive">
@@ -284,38 +300,55 @@ const ProtectedLayout = () => {
   return (
     <SubscriptionGate>
       <SeasonProvider>
-        <SidebarProvider>
-          <div className="min-h-screen flex w-full bg-background" dir="rtl">
-            <AppSidebar />
-            <div className="flex-1 flex flex-col min-w-0">
-              <HeaderBar />
-              <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
-                <AppErrorBoundary>
-                  <Routes>
-                    {!isEmployee ? (
-                      <>
-                        <Route path="/seasons" element={<Seasons />} />
-                        <Route path="/seasons/new" element={<SeasonSetup />} />
-                        <Route path="/seasons/edit/:id" element={<SeasonSetup />} />
-                        <Route path="/queue-display" element={<QueueDisplay />} />
-                        <Route path="/*" element={<SeasonGateContent />} />
-                      </>
-                    ) : (
-                      <Route path="/*" element={<EmployeeLayout />} />
-                    )}
-                  </Routes>
-                </AppErrorBoundary>
-              </main>
+        <AdminWorkspaceProvider>
+          <SidebarProvider>
+            <div className="min-h-screen flex w-full bg-background" dir="rtl">
+              <AppSidebar />
+              <div className="flex-1 flex flex-col min-w-0">
+                <HeaderBar />
+                <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+                  <AppErrorBoundary>
+                    <SeasonGateContent />
+                  </AppErrorBoundary>
+                </main>
+              </div>
             </div>
-          </div>
-        </SidebarProvider>
+          </SidebarProvider>
+        </AdminWorkspaceProvider>
       </SeasonProvider>
     </SubscriptionGate>
   );
 };
 
-const EmployeeLayout = () => {
+// Route Guard: Restricts sensitive management pages to Owner in verified Admin Workspace mode
+const AdminRouteGuard = ({ children }: { children: React.ReactNode }) => {
+  const { isOwner, isEmployee, loading } = useRole();
+  const { isAdminWorkspace } = useAdminWorkspace();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // 1. Employee is strictly forbidden from accessing admin pages
+  if (isEmployee) {
+    return <Navigate to="/queue" replace />;
+  }
+
+  // 2. Owner must have unlocked the Admin Workspace with their password
+  if (isOwner && !isAdminWorkspace) {
+    return <Navigate to="/queue" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const SeasonGateContent = () => {
   const { activeSeason, loading } = useSeason();
+  const { isOwner } = useRole();
 
   if (loading) {
     return (
@@ -328,7 +361,18 @@ const EmployeeLayout = () => {
     );
   }
 
+  // If no active season exists yet:
   if (!activeSeason) {
+    if (isOwner) {
+      return (
+        <Routes>
+          <Route path="/seasons" element={<Seasons />} />
+          <Route path="/seasons/new" element={<SeasonSetup />} />
+          <Route path="/seasons/edit/:id" element={<SeasonSetup />} />
+          <Route path="*" element={<Navigate to="/seasons" replace />} />
+        </Routes>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center">
         <h2 className="text-xl font-bold mb-2">لا يوجد موسم نشط</h2>
@@ -338,55 +382,31 @@ const EmployeeLayout = () => {
   }
 
   return (
-    <AppErrorBoundary fallbackTitle="حدث خطأ في شاشة الموظف">
-      <Routes>
-        <Route path="/queue" element={<Queue />} />
-        <Route path="/invoices" element={<Invoices />} />
-        <Route path="/invoices-history" element={<InvoicesHistory />} />
-        <Route path="/daily-closing" element={<DailyClosing />} />
-        <Route path="*" element={<Navigate to="/queue" replace />} />
-      </Routes>
-    </AppErrorBoundary>
-  );
-};
+    <Routes>
+      {/* 1. Operational Workspace Routes (Shared by Owner and Employee) */}
+      <Route path="/queue" element={<Queue />} />
+      <Route path="/invoices" element={<Invoices />} />
+      <Route path="/invoices-history" element={<InvoicesHistory />} />
+      <Route path="/oil-trading" element={<OilTrading />} />
+      <Route path="/daily-closing" element={<DailyClosing />} />
+      <Route path="/expenses" element={<Expenses />} />
+      <Route path="/queue-display" element={<QueueDisplay />} />
 
-const SeasonGateContent = () => {
-  const { activeSeason, loading } = useSeason();
+      {/* 2. Admin Workspace Routes (Owner Only + Re-authenticated) */}
+      <Route path="/dashboard" element={<AdminRouteGuard><Dashboard /></AdminRouteGuard>} />
+      <Route path="/reports" element={<AdminRouteGuard><Reports /></AdminRouteGuard>} />
+      <Route path="/workers" element={<AdminRouteGuard><Workers /></AdminRouteGuard>} />
+      <Route path="/customers" element={<AdminRouteGuard><Customers /></AdminRouteGuard>} />
+      <Route path="/inventory" element={<AdminRouteGuard><Inventory /></AdminRouteGuard>} />
+      <Route path="/seasons" element={<AdminRouteGuard><Seasons /></AdminRouteGuard>} />
+      <Route path="/seasons/new" element={<AdminRouteGuard><SeasonSetup /></AdminRouteGuard>} />
+      <Route path="/seasons/edit/:id" element={<AdminRouteGuard><SeasonSetup /></AdminRouteGuard>} />
+      <Route path="/settings" element={<AdminRouteGuard><Settings /></AdminRouteGuard>} />
+      <Route path="/notifications" element={<AdminRouteGuard><Notifications /></AdminRouteGuard>} />
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-muted-foreground text-sm">جارٍ التحميل...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!activeSeason) {
-    return <Navigate to="/seasons" replace />;
-  }
-
-  return (
-    <AppErrorBoundary fallbackTitle="حدث خطأ في عرض الصفحة">
-      <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/queue" element={<Queue />} />
-        <Route path="/invoices" element={<Invoices />} />
-        <Route path="/invoices-history" element={<InvoicesHistory />} />
-        <Route path="/daily-closing" element={<DailyClosing />} />
-        <Route path="/customers" element={<Customers />} />
-        <Route path="/workers" element={<Workers />} />
-        <Route path="/oil-trading" element={<OilTrading />} />
-        <Route path="/expenses" element={<Expenses />} />
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/notifications" element={<Notifications />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </AppErrorBoundary>
+      {/* Default Catch-all: Redirect to Queue */}
+      <Route path="*" element={<Navigate to="/queue" replace />} />
+    </Routes>
   );
 };
 

@@ -83,7 +83,7 @@ const LandingPage = () => {
       if (isAdmin) {
         navigate("/admin", { replace: true });
       } else {
-        navigate("/dashboard", { replace: true });
+        navigate("/queue", { replace: true });
       }
     }
   }, [user, loading, isAdmin, navigate]);

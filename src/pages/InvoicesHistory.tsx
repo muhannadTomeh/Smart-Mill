@@ -91,19 +91,6 @@ export default function InvoicesHistory() {
     });
   }, [invoices, searchTerm, paymentFilter]);
 
-  const totals = useMemo(() => {
-    return filteredInvoices.reduce(
-      (acc, inv) => {
-        acc.count += 1;
-        acc.totalOil += inv.oil_produced || 0;
-        acc.oilFees += inv.oil_amount || 0;
-        acc.cashFees += inv.cash_amount || 0;
-        return acc;
-      },
-      { count: 0, totalOil: 0, oilFees: 0, cashFees: 0 }
-    );
-  }, [filteredInvoices]);
-
   const paymentLabel = (type: string) => {
     switch (type) {
       case "oil": return "زيت فقط";
@@ -159,57 +146,17 @@ export default function InvoicesHistory() {
         </Button>
       </div>
 
-      {/* Summary Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="p-4 bg-card border-muted">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground font-medium">عدد الفواتير</p>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-foreground">{totals.count}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">فاتورة صادرة</p>
-        </Card>
-
-        <Card className="p-4 bg-card border-muted">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground font-medium">إجمالي الزيت المعصور</p>
-            <Droplets className="h-4 w-4 text-emerald-600" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-emerald-600">
-            {totals.totalOil.toLocaleString("en-US", { maximumFractionDigits: 1 })}
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">كغم زيت صافي</p>
-        </Card>
-
-        <Card className="p-4 bg-card border-muted">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground font-medium">زيت الرد المحصل</p>
-            <Droplets className="h-4 w-4 text-amber-600" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-amber-600">
-            {totals.oilFees.toLocaleString("en-US", { maximumFractionDigits: 1 })}
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">كغم للمخزن</p>
-        </Card>
-
-        <Card className="p-4 bg-card border-muted">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground font-medium">النقد المحصل</p>
-            <Wallet className="h-4 w-4 text-blue-600" />
-          </div>
-          <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400">
-            {totals.cashFees.toLocaleString("en-US", { maximumFractionDigits: 1 })} {currency}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">شيكل بالصندوق</p>
-        </Card>
-      </div>
-
       {/* Main Table Card */}
       <Card className="border-border">
         <CardHeader className="pb-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-lg">قائمة الفواتير الصادرة</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg">قائمة الفواتير الصادرة</CardTitle>
+                <Badge variant="secondary" className="text-xs font-mono">
+                  {filteredInvoices.length} فاتورة
+                </Badge>
+              </div>
               <CardDescription className="text-xs">
                 انقر على معاينة لعرض تفاصيل الفاتورة أو طباعة لإصدار إيصال حراري 80mm
               </CardDescription>
