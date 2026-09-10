@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -432,10 +433,33 @@ const SeasonGateContent = () => {
   );
 };
 
+// Global safeguard: prevents Radix UI / Sheet / Dialog from leaking pointer-events: none on body during rapid clicks or route changes
+const RadixPointerEventsWatchdog = () => {
+  useEffect(() => {
+    const cleanup = () => {
+      if (document.body.style.pointerEvents === "none") {
+        const hasOpenDialog =
+          document.querySelector('[data-state="open"][role="dialog"]') ||
+          document.querySelector('[data-state="open"][role="alertdialog"]');
+        if (!hasOpenDialog) {
+          document.body.style.pointerEvents = "";
+        }
+      }
+    };
+
+    const observer = new MutationObserver(cleanup);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["style"] });
+    return () => observer.disconnect();
+  }, []);
+
+  return null;
+};
+
 const App = () => (
   <AppErrorBoundary fallbackTitle="تعذر تشغيل التطبيق">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <RadixPointerEventsWatchdog />
         <Toaster />
         <Sonner />
         <BrowserRouter>

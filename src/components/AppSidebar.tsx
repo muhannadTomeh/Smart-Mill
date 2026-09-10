@@ -23,7 +23,6 @@ import { NavLink, useLocation } from "react-router-dom"
 import { useRole } from "@/contexts/RoleContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { useAdminWorkspace } from "@/contexts/AdminWorkspaceContext"
-import { ReAuthDialog } from "@/components/auth/ReAuthDialog"
 
 import {
   Sidebar,
@@ -78,6 +77,7 @@ function MenuGroup({
   isCollapsed: boolean;
 }) {
   const location = useLocation();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   return (
     <SidebarGroup>
@@ -102,6 +102,9 @@ function MenuGroup({
                   <NavLink
                     to={item.url}
                     end
+                    onClick={() => {
+                      if (isMobile) setOpenMobile(false);
+                    }}
                     className={() =>
                       `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${
                         isMatch
@@ -300,9 +303,6 @@ export function AppSidebar() {
           )}
         </SidebarFooter>
       </Sidebar>
-
-      {/* Owner Re-Authentication Dialog */}
-      {!isAdmin && isMillOwner && <ReAuthDialog />}
     </>
   )
 }
