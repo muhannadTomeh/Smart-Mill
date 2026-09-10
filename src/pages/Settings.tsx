@@ -27,7 +27,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { storeCredential } from "@/lib/credentialVault";
 
 import {
@@ -96,6 +96,15 @@ export default function Settings() {
   // Navigation State: Hub -> Section -> SubSetting -> Edit
   const [activeSection, setActiveSection] = useState<MainSectionId | null>(null);
   const [activeSubSetting, setActiveSubSetting] = useState<SubSettingId | null>(null);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const section = searchParams.get("section") as MainSectionId | null;
+    if (section && ["mill_info", "operations", "invoices_receipts", "users_roles", "account"].includes(section)) {
+      setActiveSection(section);
+      setActiveSubSetting(null);
+    }
+  }, [searchParams]);
 
   const [selectedCurrency, setSelectedCurrency] = useState(currency);
 

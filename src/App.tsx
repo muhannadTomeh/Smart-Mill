@@ -94,34 +94,6 @@ const HeaderBar = () => {
           </Badge>
         )}
 
-        {/* Header Action: Admin Workspace Entry / Exit for Mill Owner */}
-        {!isAdmin && isMillOwner && (
-          <>
-            {!isAdminWorkspace ? (
-              <Button
-                onClick={openReAuthModal}
-                size="sm"
-                className="gap-1.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold shadow-sm h-8 px-3.5 transition-all cursor-pointer"
-                title="الدخول إلى لوحة إدارة المعصرة (يتطلب كلمة المرور)"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                <span>لوحة الإدارة</span>
-              </Button>
-            ) : (
-              <Button
-                onClick={exitAdminWorkspace}
-                size="sm"
-                variant="outline"
-                className="gap-1.5 rounded-full border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold shadow-sm h-8 px-3.5 transition-all cursor-pointer"
-                title="الرجوع إلى الواجهة التشغيلية للكاشير"
-              >
-                <Undo2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <span>خروج من الإدارة</span>
-              </Button>
-            )}
-          </>
-        )}
-
         {isAdmin && (
           <Badge
             variant="secondary"
