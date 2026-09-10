@@ -65,6 +65,9 @@ const adminManagementItems = [
   { title: "إدارة حسابات المستخدمين", url: "/settings?section=users_roles", icon: UserCog },
 ]
 
+let lastNavTimestamp = 0;
+const NAV_THROTTLE_MS = 300;
+
 function MenuGroup({
   label,
   badge,
@@ -102,7 +105,22 @@ function MenuGroup({
                   <NavLink
                     to={item.url}
                     end
-                    onClick={() => {
+                    onClick={(e) => {
+                      // 1. If already on this exact page, do not re-trigger navigation
+                      if (isMatch) {
+                        e.preventDefault();
+                        if (isMobile) setOpenMobile(false);
+                        return;
+                      }
+
+                      // 2. Throttle rapid consecutive clicks (must be at least 300ms apart)
+                      const now = Date.now();
+                      if (now - lastNavTimestamp < NAV_THROTTLE_MS) {
+                        e.preventDefault();
+                        return;
+                      }
+                      lastNavTimestamp = now;
+
                       if (isMobile) setOpenMobile(false);
                     }}
                     className={() =>
@@ -230,7 +248,12 @@ export function AppSidebar() {
                       <SidebarMenu>
                         <SidebarMenuItem>
                           <SidebarMenuButton
-                            onClick={openReAuthModal}
+                            onClick={() => {
+                              const now = Date.now();
+                              if (now - lastNavTimestamp < NAV_THROTTLE_MS) return;
+                              lastNavTimestamp = now;
+                              openReAuthModal();
+                            }}
                             tooltip="لوحة الإدارة"
                             className="group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-sidebar-foreground/80 hover:text-primary hover:bg-primary/10 border border-sidebar-border/60 transition-all duration-200 cursor-pointer"
                           >
@@ -270,7 +293,12 @@ export function AppSidebar() {
                         <SidebarMenu>
                           <SidebarMenuItem>
                             <SidebarMenuButton
-                              onClick={exitAdminWorkspace}
+                              onClick={() => {
+                                const now = Date.now();
+                                if (now - lastNavTimestamp < NAV_THROTTLE_MS) return;
+                                lastNavTimestamp = now;
+                                exitAdminWorkspace();
+                              }}
                               tooltip="خروج من الإدارة"
                               className="group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all duration-200 cursor-pointer"
                             >
