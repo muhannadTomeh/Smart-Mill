@@ -825,7 +825,6 @@ export default function Settings() {
                       {activeSubSetting === "inventory_cash" && "المخزون والسيولة"}
                       {activeSubSetting === "currency" && "العملة المعتمدة"}
                       {activeSubSetting === "expense_categories" && "أنواع المصاريف"}
-                      {activeSubSetting === "report_security" && "أمن التقارير"}
                       {activeSubSetting === "receipt_format" && "مواصفات الطباعة"}
                       {activeSubSetting === "cashier_accounts" && "حسابات الكاشير"}
                       {activeSubSetting === "workers_link" && "العمال والرواتب"}
@@ -1673,26 +1672,6 @@ export default function Settings() {
               <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
             </div>
 
-            {/* SubCard: أمن التقارير */}
-            <div
-              onClick={() => setActiveSubSetting("report_security")}
-              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-sm transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                  <Lock className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
-                    أمن التقارير المالية (PIN)
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    تعيين رمز حماية سري مكون من 4 أرقام لصفحة التقارير
-                  </p>
-                </div>
-              </div>
-              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
-            </div>
 
             {/* SubCard: مواصفات الإيصالات والطباعة */}
             <div
