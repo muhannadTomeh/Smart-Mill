@@ -1,14 +1,10 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { FileText, DollarSign, Users, Package, TrendingUp, Droplets, Banknote, Lock, Eye, EyeOff } from "lucide-react";
+import { FileText, DollarSign, Users, Package, TrendingUp, Droplets, Banknote } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
-import { useInventory } from "@/hooks/useInventory";
 import { useRole } from "@/contexts/RoleContext";
 import { Navigate } from "react-router-dom";
 
@@ -53,10 +49,6 @@ export default function Reports() {
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
   const [period, setPeriod] = useState<Period>("daily");
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const [stats, setStats] = useState({
     totalOilProduced: 0,
@@ -72,8 +64,8 @@ export default function Reports() {
   });
 
   useEffect(() => {
-    if (activeSeason && isUnlocked) fetchReports();
-  }, [activeSeason?.id, period, isUnlocked]);
+    if (activeSeason) fetchReports();
+  }, [activeSeason?.id, period]);
 
   const fetchReports = async () => {
     if (!activeSeason) return;
@@ -86,7 +78,6 @@ export default function Reports() {
       supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),
       supabase.from("worker_payments").select("amount").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
     ]);
-
 
     const invoices = invoicesRes.data || [];
     const totalOilProduced = invoices.reduce((s, i: any) => s + Number(i.oil_produced), 0);
@@ -117,63 +108,6 @@ export default function Reports() {
   const totalOutgoing = stats.totalExpenses + stats.totalWorkerPayments + stats.totalOilPurchases;
   const totalIncoming = stats.totalCashEarned + stats.totalOilSales;
   const netProfit = totalIncoming - totalOutgoing;
-
-  const handleUnlock = async () => {
-    try {
-      const { data, error } = await supabase.rpc("verify_report_pin", {
-        input_pin: password,
-      });
-
-      if (error) throw error;
-
-      if (data === true) {
-        setIsUnlocked(true);
-        setPasswordError(false);
-      } else {
-        setPasswordError(true);
-      }
-    } catch (error) {
-      console.error("Error verifying PIN:", error);
-      setPasswordError(true);
-    }
-  };
-
-  if (!isUnlocked) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]" dir="rtl">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-3 h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
-              <Lock className="h-7 w-7 text-primary" />
-            </div>
-            <CardTitle className="text-xl">صفحة التقارير محمية</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">أدخل كلمة السر للوصول</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
-                placeholder="كلمة السر"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setPasswordError(false); }}
-                onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
-                className={passwordError ? "border-destructive" : ""}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            {passwordError && <p className="text-sm text-destructive">كلمة السر غير صحيحة</p>}
-            <Button onClick={handleUnlock} className="w-full">دخول</Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6" dir="rtl">

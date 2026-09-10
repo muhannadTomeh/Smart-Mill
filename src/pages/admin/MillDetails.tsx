@@ -85,6 +85,7 @@ export default function MillDetails() {
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const [decryptedPasswords, setDecryptedPasswords] = useState<Record<string, string>>({});
   const [decryptingLoading, setDecryptingLoading] = useState<Record<string, boolean>>({});
+  const passwordHideTimersRef = useRef<Record<string, any>>({});
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: "", username: "", password: "" });
   const [showEditPassword, setShowEditPassword] = useState(false);
@@ -464,20 +465,31 @@ export default function MillDetails() {
     }
   };
 
-  // Toggle Password Visibility in Table (On-Demand Decryption from Credential Vault)
+  // Toggle Password Visibility in Table (On-Demand Decryption from Credential Vault, 15s auto-hide)
   const togglePasswordVisibility = async (emp: any) => {
     const key = emp.user_id || emp.id;
     if (visiblePasswords[key]) {
+      if (passwordHideTimersRef.current[key]) {
+        clearTimeout(passwordHideTimersRef.current[key]);
+      }
       setVisiblePasswords((p) => ({ ...p, [key]: false }));
       return;
     }
 
     setDecryptingLoading((p) => ({ ...p, [key]: true }));
     try {
-      const plain = await revealCredential(emp.user_id || emp.id);
+      const plain = await revealCredential(emp.user_id || emp.id, 'account_password');
       if (plain) {
         setDecryptedPasswords((p) => ({ ...p, [key]: plain }));
         setVisiblePasswords((p) => ({ ...p, [key]: true }));
+
+        // Auto-hide after 15 seconds
+        if (passwordHideTimersRef.current[key]) {
+          clearTimeout(passwordHideTimersRef.current[key]);
+        }
+        passwordHideTimersRef.current[key] = setTimeout(() => {
+          setVisiblePasswords((p) => ({ ...p, [key]: false }));
+        }, 15000);
       } else {
         toast({
           title: "تنبيه",

@@ -81,6 +81,13 @@ export default function AdminIndex() {
   const [decryptedAccountPasswords, setDecryptedAccountPasswords] = useState<Record<string, string>>({});
   const [decryptingAccountLoading, setDecryptingAccountLoading] = useState<Record<string, boolean>>({});
 
+  const [visibleAccountPins, setVisibleAccountPins] = useState<Record<string, boolean>>({});
+  const [decryptedAccountPins, setDecryptedAccountPins] = useState<Record<string, string>>({});
+  const [decryptingAccountPinLoading, setDecryptingAccountPinLoading] = useState<Record<string, boolean>>({});
+
+  const passwordHideTimersRef = useRef<Record<string, any>>({});
+  const pinHideTimersRef = useRef<Record<string, any>>({});
+
   const [editingAccount, setEditingAccount] = useState<AdminAccountItem | null>(null);
   const [editAccountForm, setEditAccountForm] = useState({ name: "", username: "", password: "" });
   const [showEditAccountPassword, setShowEditAccountPassword] = useState(false);
@@ -108,13 +115,15 @@ export default function AdminIndex() {
     mill_name: "",
     country: "",
     username: "",
-    password: ""
+    password: "",
+    admin_pin: "123456"
   });
   const [createdCredentials, setCreatedCredentials] = useState<{
     mill_name: string;
     owner_name: string;
     username: string;
     password: string;
+    admin_pin?: string;
     owner_phone: string;
     owner_email?: string;
   } | null>(null);
@@ -172,6 +181,7 @@ export default function AdminIndex() {
         country: newAccountData.country.trim() || 'فلسطين',
         username: cleanUsername,
         password: newAccountData.password,
+        adminPin: newAccountData.admin_pin || "123456",
         ownerName: newAccountData.owner_name.trim(),
         ownerPhone: newAccountData.owner_phone.trim(),
         ownerEmail: newAccountData.owner_email.trim() || undefined
@@ -182,6 +192,7 @@ export default function AdminIndex() {
         owner_name: newAccountData.owner_name.trim(),
         username: cleanUsername,
         password: newAccountData.password,
+        admin_pin: newAccountData.admin_pin || "123456",
         owner_phone: newAccountData.owner_phone.trim(),
         owner_email: newAccountData.owner_email.trim() || undefined
       });
@@ -195,7 +206,8 @@ export default function AdminIndex() {
         mill_name: "",
         country: "",
         username: "",
-        password: ""
+        password: "",
+        admin_pin: "123456"
       });
 
       fetchData();
@@ -216,9 +228,11 @@ export default function AdminIndex() {
   // Load Accounts list (without passwords)
   const loadAccounts = async () => {
     setAccountsLoading(true);
-    // Reset revealed passwords cache on reload so stale passwords are never retained
+    // Reset revealed credentials cache on reload so stale secrets are never retained
     setDecryptedAccountPasswords({});
     setVisibleAccountPasswords({});
+    setDecryptedAccountPins({});
+    setVisibleAccountPins({});
     try {
       const data = await fetchAllAdminAccounts();
       setAccounts(data);
@@ -230,20 +244,31 @@ export default function AdminIndex() {
     }
   };
 
-  // On-demand Password Reveal via Credential Vault (Always fetches fresh on reveal)
+  // On-demand Password Reveal via Credential Vault (Auto-masks after 15 seconds)
   const toggleAccountPasswordVisibility = async (acc: AdminAccountItem) => {
     const key = acc.user_id;
     if (visibleAccountPasswords[key]) {
+      if (passwordHideTimersRef.current[key]) {
+        clearTimeout(passwordHideTimersRef.current[key]);
+      }
       setVisibleAccountPasswords((p) => ({ ...p, [key]: false }));
       return;
     }
 
     setDecryptingAccountLoading((p) => ({ ...p, [key]: true }));
     try {
-      const plain = await revealCredential(acc.user_id);
+      const plain = await revealCredential(acc.user_id, 'account_password');
       if (plain) {
         setDecryptedAccountPasswords((p) => ({ ...p, [key]: plain }));
         setVisibleAccountPasswords((p) => ({ ...p, [key]: true }));
+
+        // Auto-hide after 15 seconds for compliance and privacy
+        if (passwordHideTimersRef.current[key]) {
+          clearTimeout(passwordHideTimersRef.current[key]);
+        }
+        passwordHideTimersRef.current[key] = setTimeout(() => {
+          setVisibleAccountPasswords((p) => ({ ...p, [key]: false }));
+        }, 15000);
       } else {
         toast.info("لا توجد كلمة مرور مسجلة في الخزينة لهذا الحساب. اضغط زر المفتاح لتعيينها.");
       }
@@ -259,7 +284,7 @@ export default function AdminIndex() {
     let pass = decryptedAccountPasswords[key];
     if (!pass) {
       try {
-        pass = (await revealCredential(acc.user_id)) || "";
+        pass = (await revealCredential(acc.user_id, 'account_password')) || "";
         if (pass) {
           setDecryptedAccountPasswords((p) => ({ ...p, [key]: pass }));
         }
@@ -270,6 +295,60 @@ export default function AdminIndex() {
       toast.success("تم نسخ كلمة المرور إلى الحافظة");
     } else {
       toast.error("يرجى إظهار كلمة المرور أو تعيينها أولاً");
+    }
+  };
+
+  // On-demand Admin PIN Reveal via Credential Vault (Auto-masks after 15 seconds)
+  const toggleAccountPinVisibility = async (acc: AdminAccountItem) => {
+    const key = acc.user_id;
+    if (visibleAccountPins[key]) {
+      if (pinHideTimersRef.current[key]) {
+        clearTimeout(pinHideTimersRef.current[key]);
+      }
+      setVisibleAccountPins((p) => ({ ...p, [key]: false }));
+      return;
+    }
+
+    setDecryptingAccountPinLoading((p) => ({ ...p, [key]: true }));
+    try {
+      const plain = await revealCredential(acc.user_id, 'admin_pin');
+      if (plain) {
+        setDecryptedAccountPins((p) => ({ ...p, [key]: plain }));
+        setVisibleAccountPins((p) => ({ ...p, [key]: true }));
+
+        // Auto-hide after 15 seconds
+        if (pinHideTimersRef.current[key]) {
+          clearTimeout(pinHideTimersRef.current[key]);
+        }
+        pinHideTimersRef.current[key] = setTimeout(() => {
+          setVisibleAccountPins((p) => ({ ...p, [key]: false }));
+        }, 15000);
+      } else {
+        toast.info("لا يوجد رمز PIN مسجل في الخزينة لهذا الحساب.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "تعذر فك تشفير رمز PIN");
+    } finally {
+      setDecryptingAccountPinLoading((p) => ({ ...p, [key]: false }));
+    }
+  };
+
+  const handleCopyAccountPin = async (acc: AdminAccountItem) => {
+    const key = acc.user_id;
+    let pin = decryptedAccountPins[key];
+    if (!pin) {
+      try {
+        pin = (await revealCredential(acc.user_id, 'admin_pin')) || "";
+        if (pin) {
+          setDecryptedAccountPins((p) => ({ ...p, [key]: pin }));
+        }
+      } catch {}
+    }
+    if (pin) {
+      navigator.clipboard.writeText(pin);
+      toast.success("تم نسخ PIN لوحة الإدارة إلى الحافظة");
+    } else {
+      toast.error("يرجى إظهار رمز PIN أولاً");
     }
   };
 
@@ -694,6 +773,39 @@ export default function AdminIndex() {
                         </Button>
                       </div>
                     </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="admin_pin" className="text-right block text-xs font-semibold">
+                        PIN لوحة الإدارة (Admin PIN) *
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input 
+                          id="admin_pin" 
+                          type="text" 
+                          required 
+                          maxLength={8}
+                          dir="ltr"
+                          className="text-center font-mono tracking-widest h-9 text-sm"
+                          value={newAccountData.admin_pin}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, "");
+                            setNewAccountData((prev) => ({ ...prev, admin_pin: val }));
+                          }}
+                        />
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setNewAccountData(prev => ({ ...prev, admin_pin: String(Math.floor(100000 + Math.random() * 900000)) }))}
+                          className="whitespace-nowrap h-9 text-xs"
+                        >
+                          توليد PIN
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground text-right">
+                        الرمز السري الخاص بالمالك لفتح شاشات لوحة الإدارة (افتراضي: 123456)
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
@@ -754,6 +866,20 @@ export default function AdminIndex() {
                           variant="ghost" 
                           className="h-5 w-5" 
                           onClick={() => copyToClipboard(createdCredentials.password, "كلمة المرور")}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-border/40">
+                      <span className="text-muted-foreground">رمز لوحة الإدارة (Admin PIN):</span>
+                      <div className="flex items-center gap-1.5 font-mono font-bold text-blue-700 dark:text-blue-300">
+                        <span>{createdCredentials.admin_pin || "123456"}</span>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-5 w-5" 
+                          onClick={() => copyToClipboard(createdCredentials.admin_pin || "123456", "رمز لوحة الإدارة")}
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
@@ -998,6 +1124,7 @@ export default function AdminIndex() {
                     <TableHead className="text-right">اسم صاحب الحساب</TableHead>
                     <TableHead className="text-right">اسم المستخدم (Username)</TableHead>
                     <TableHead className="text-right">كلمة المرور (Password)</TableHead>
+                    <TableHead className="text-right">PIN لوحة الإدارة</TableHead>
                     <TableHead className="text-right">الدور / الصلاحيات</TableHead>
                     <TableHead className="text-right">المعصرة المرتبطة</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
@@ -1009,6 +1136,10 @@ export default function AdminIndex() {
                     const isPassVisible = visibleAccountPasswords[acc.user_id] || false;
                     const plainPass = decryptedAccountPasswords[acc.user_id];
                     const isDecrypting = decryptingAccountLoading[acc.user_id] || false;
+
+                    const isPinVisible = visibleAccountPins[acc.user_id] || false;
+                    const plainPin = decryptedAccountPins[acc.user_id];
+                    const isDecryptingPin = decryptingAccountPinLoading[acc.user_id] || false;
 
                     return (
                       <TableRow key={acc.user_id} className={acc.role === 'platform_admin' ? 'bg-amber-500/5' : ''}>
@@ -1084,6 +1215,44 @@ export default function AdminIndex() {
                               <Key className="h-3 w-3" />
                             </Button>
                           </div>
+                        </TableCell>
+
+                        {/* Admin PIN with On-Demand Reveal & Copy (For Mill Owners) */}
+                        <TableCell className="text-right">
+                          {acc.role === 'mill_owner' ? (
+                            <div className="flex items-center gap-1.5 justify-start">
+                              <code className="bg-blue-100 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 font-mono font-bold px-2 py-0.5 rounded text-xs select-all">
+                                {isPinVisible ? (plainPin || "••••••") : "••••••"}
+                              </code>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={isDecryptingPin}
+                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                title={isPinVisible ? "إخفاء رمز PIN" : "إظهار رمز PIN (فك تشفير آمن)"}
+                                onClick={() => toggleAccountPinVisibility(acc)}
+                              >
+                                {isDecryptingPin ? (
+                                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                                ) : isPinVisible ? (
+                                  <EyeOff className="h-3.5 w-3.5 text-blue-600" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                title="نسخ رمز PIN"
+                                onClick={() => handleCopyAccountPin(acc)}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50 font-mono px-2">—</span>
+                          )}
                         </TableCell>
 
                         {/* Role */}

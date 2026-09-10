@@ -11,20 +11,28 @@ export interface AdminAccountItem {
   status: string;
   is_active: boolean;
   has_vault_credential: boolean;
+  has_vault_admin_pin?: boolean;
   created_at: string;
 }
 
 /**
  * Decrypts and reveals a single user's credential on-demand via the authorized server-side Edge Function.
- * Encryption key is NEVER accessible to the client or browser, and passwords are never loaded on page load.
+ * Encryption key is NEVER accessible to the client or browser, and credentials are never loaded on page load.
  */
-export async function revealCredential(userId: string): Promise<string | null> {
+export async function revealCredential(
+  userId: string, 
+  credentialType: 'account_password' | 'admin_pin' = 'account_password'
+): Promise<string | null> {
   if (!userId) return null;
 
   try {
     // Primary: Server-side Edge Function with secret-based AES-256-GCM
     const { data: edgeData, error: edgeError } = await supabase.functions.invoke('credential-vault', {
-      body: { action: 'reveal', user_id: userId }
+      body: { 
+        action: 'reveal', 
+        user_id: userId,
+        credential_type: credentialType 
+      }
     });
 
     if (edgeError) {
@@ -37,26 +45,38 @@ export async function revealCredential(userId: string): Promise<string | null> {
       throw new Error(edgeData.error);
     }
 
-    return edgeData?.password ?? null;
+    return edgeData?.value ?? edgeData?.password ?? null;
   } catch (err: any) {
-    throw new Error(err.message || "تعذر فك تشفير كلمة المرور للحساب");
+    const label = credentialType === 'admin_pin' ? 'PIN لوحة الإدارة' : 'كلمة المرور';
+    throw new Error(err.message || `تعذر فك تشفير ${label} للحساب`);
   }
 }
 
 /**
- * Stores or updates an encrypted password in the server Credential Vault.
+ * Stores or updates an encrypted credential (password or admin_pin) in the server Credential Vault.
  */
-export async function storeCredential(userId: string, password: string): Promise<void> {
-  if (!userId || !password) return;
+export async function storeCredential(
+  userId: string, 
+  value: string, 
+  credentialType: 'account_password' | 'admin_pin' = 'account_password'
+): Promise<void> {
+  if (!userId || !value) return;
 
   try {
     const { data, error } = await supabase.functions.invoke('credential-vault', {
-      body: { action: 'store', user_id: userId, password }
+      body: { 
+        action: 'store', 
+        user_id: userId, 
+        value,
+        password: value,
+        credential_type: credentialType 
+      }
     });
 
     if (error || data?.error) {
       console.warn("Could not store credential via Edge Function:", error || data?.error);
-      throw new Error(data?.error || error?.message || "تعذر مزامنة كلمة المرور في الخزنة المشفرة");
+      const label = credentialType === 'admin_pin' ? 'PIN لوحة الإدارة' : 'كلمة المرور';
+      throw new Error(data?.error || error?.message || `تعذر مزامنة ${label} في الخزنة المشفرة`);
     }
   } catch (err) {
     console.warn("storeCredential exception:", err);
@@ -148,6 +168,7 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
           status: !isActive ? 'disabled' : (m.subscription_status || 'active'),
           is_active: isActive,
           has_vault_credential: true,
+          has_vault_admin_pin: true,
           created_at: m.created_at || new Date().toISOString()
         });
       }
@@ -219,10 +240,11 @@ export async function createMillOwnerAccount(params: {
   country: string;
   username: string;
   password: string;
+  adminPin?: string;
   ownerPhone?: string;
   ownerEmail?: string;
-}): Promise<{ user_id: string; mill_id: string; username: string }> {
-  const { millName, ownerName, country, username, password, ownerPhone, ownerEmail } = params;
+}): Promise<{ user_id: string; mill_id: string; username: string; password?: string; admin_pin?: string }> {
+  const { millName, ownerName, country, username, password, adminPin, ownerPhone, ownerEmail } = params;
 
   // Primary: Edge Function using Supabase Auth Admin API
   const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
@@ -233,6 +255,7 @@ export async function createMillOwnerAccount(params: {
       country: country || 'فلسطين',
       username,
       password,
+      admin_pin: adminPin || '123456',
       owner_phone: ownerPhone,
       owner_email: ownerEmail
     }
@@ -254,7 +277,9 @@ export async function createMillOwnerAccount(params: {
     return {
       user_id: edgeData.user_id,
       mill_id: edgeData.mill_id,
-      username: edgeData.username
+      username: edgeData.username,
+      password: edgeData.password || password,
+      admin_pin: edgeData.admin_pin || adminPin || '123456'
     };
   }
 

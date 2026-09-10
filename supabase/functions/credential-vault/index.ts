@@ -20,7 +20,7 @@ async function getAesKey(secret: string): Promise<CryptoKey> {
 }
 
 // Encrypt plaintext into base64 format "iv:ciphertext"
-async function encryptPassword(plainText: string, secret: string): Promise<string> {
+async function encryptValue(plainText: string, secret: string): Promise<string> {
   const key = await getAesKey(secret);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(plainText);
@@ -36,7 +36,7 @@ async function encryptPassword(plainText: string, secret: string): Promise<strin
 }
 
 // Decrypt base64 format "iv:ciphertext" into plaintext
-async function decryptPassword(encryptedPayload: string, secret: string): Promise<string> {
+async function decryptValue(encryptedPayload: string, secret: string): Promise<string> {
   const parts = encryptedPayload.split(':');
   if (parts.length !== 2) {
     throw new Error('Invalid encrypted credential payload format');
@@ -106,7 +106,16 @@ serve(async (req) => {
     });
 
     const body = await req.json();
-    const { action, user_id: targetUserId, password: newPassword } = body;
+    const { 
+      action, 
+      user_id: targetUserId, 
+      password: newPassword, 
+      value: rawValue, 
+      credential_type: rawType 
+    } = body;
+
+    const credentialType = (rawType === 'admin_pin') ? 'admin_pin' : 'account_password';
+    const secretValue = (rawValue !== undefined && rawValue !== null) ? String(rawValue).trim() : (newPassword ? String(newPassword).trim() : '');
 
     if (!action || !targetUserId) {
       return new Response(
@@ -115,7 +124,7 @@ serve(async (req) => {
       );
     }
 
-    // Platform Admin user_id safeguard: '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114'
+    // Canonical Platform Admin user_id: '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114'
     const isPlatformAdmin = (callerId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') || !!(
       await supabaseAdmin
         .from('user_roles')
@@ -127,49 +136,29 @@ serve(async (req) => {
 
     const isSelf = (callerId === targetUserId);
 
-    // Authorization check
-    let isAuthorized = false;
-    if (isPlatformAdmin) {
-      isAuthorized = true;
-    } else {
-      // Non-admins can NEVER access Platform Admin credentials
-      if (targetUserId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
+    // =========================================================================
+    // ACTION: REVEAL (Platform Admin ONLY)
+    // Employees, Mill Owners, and Non-Admins are STRICTLY forbidden from reveal
+    // =========================================================================
+    if (action === 'reveal') {
+      if (!isPlatformAdmin) {
         return new Response(
-          JSON.stringify({ error: 'غير مصرح لك بالوصول لبيانات حساب المشرف العام' }),
+          JSON.stringify({ error: 'غير مصرح: استرجاع بيانات الاعتماد مخصص فقط للمشرف العام' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // An authenticated user is authorized to store/update their own credential
-      if (isSelf && action === 'store') {
-        isAuthorized = true;
-      } else {
-        // Mill Owner check: allowed to store or reveal cashiers (mill_employee) of their own mill
-        const { data: targetMembership } = await supabaseAdmin
-          .from('mill_memberships')
-          .select('mill_id, role, mills!inner(owner_user_id)')
-          .eq('user_id', targetUserId)
-          .eq('role', 'mill_employee')
-          .maybeSingle();
-
-        if (targetMembership && (targetMembership.mills as any)?.owner_user_id === callerId) {
-          isAuthorized = true;
-        }
+      // Non-admins can NEVER view Platform Admin credentials
+      if (targetUserId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114' && callerId !== '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
+        return new Response(
+          JSON.stringify({ error: 'غير مصرح بالوصول لبيانات المشرف العام' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-    }
 
-    if (!isAuthorized) {
-      return new Response(
-        JSON.stringify({ error: 'غير مصرح لك بالوصول إلى خزينة بيانات الاعتماد لهذا الحساب' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Action: REVEAL
-    if (action === 'reveal') {
       const { data: vaultRow, error: vaultErr } = await supabaseAdmin
         .from('credential_vault')
-        .select('encrypted_password')
+        .select('encrypted_password, encrypted_admin_pin')
         .eq('user_id', targetUserId)
         .maybeSingle();
 
@@ -177,60 +166,96 @@ serve(async (req) => {
         throw vaultErr;
       }
 
-      if (!vaultRow?.encrypted_password) {
+      let encryptedPayload: string | null = null;
+      if (credentialType === 'admin_pin') {
+        encryptedPayload = vaultRow?.encrypted_admin_pin || null;
+      } else {
+        encryptedPayload = vaultRow?.encrypted_password || null;
+      }
+
+      if (!encryptedPayload) {
         return new Response(
-          JSON.stringify({ password: null, message: 'No stored vault password for this user' }),
+          JSON.stringify({ 
+            value: null, 
+            password: null, 
+            credential_type: credentialType, 
+            message: `لا توجد بيانات مسجلة في الخزينة لهذا الحساب (${credentialType})` 
+          }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      const decrypted = await decryptPassword(vaultRow.encrypted_password, vaultSecretKey);
+      const decrypted = await decryptValue(encryptedPayload, vaultSecretKey);
 
-      // Log reveal action for security compliance
+      // Audit Log: Record reveal event (WITHOUT recording the secret value itself)
       try {
         await supabaseAdmin.from('admin_audit_log').insert({
-          admin_id: callerId,
-          action: 'credential_vault_reveal',
-          target_user_id: targetUserId,
-          details: {
-            revealed_by: callerId,
-            timestamp: new Date().toISOString()
-          }
+          admin_user_id: callerId,
+          viewed_user_id: targetUserId,
+          action: `credential_reveal:${credentialType}`
         });
       } catch (logErr) {
         console.warn('Could not record to admin_audit_log:', logErr);
       }
 
       return new Response(
-        JSON.stringify({ password: decrypted }),
+        JSON.stringify({ 
+          value: decrypted, 
+          password: decrypted, 
+          credential_type: credentialType 
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Action: STORE
+    // =========================================================================
+    // ACTION: STORE
+    // Platform Admin OR Authenticated User syncing their own credentials (isSelf)
+    // =========================================================================
     if (action === 'store') {
-      if (!newPassword || typeof newPassword !== 'string' || !newPassword.trim()) {
+      const isAuthorizedToStore = isPlatformAdmin || isSelf;
+
+      if (!isAuthorizedToStore) {
         return new Response(
-          JSON.stringify({ error: 'Missing or empty password' }),
+          JSON.stringify({ error: 'غير مصرح لك بتحديث بيانات الاعتماد لهذا الحساب' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!secretValue) {
+        return new Response(
+          JSON.stringify({ error: 'القيمة المراد تخزينها فارغة' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      const cipherText = await encryptPassword(newPassword.trim(), vaultSecretKey);
+      const cipherText = await encryptValue(secretValue, vaultSecretKey);
+
+      const updatePayload: Record<string, any> = {
+        user_id: targetUserId,
+        updated_at: new Date().toISOString()
+      };
+
+      if (credentialType === 'admin_pin') {
+        updatePayload.encrypted_admin_pin = cipherText;
+      } else {
+        updatePayload.encrypted_password = cipherText;
+      }
+
       const { error: upsertErr } = await supabaseAdmin
         .from('credential_vault')
-        .upsert({
-          user_id: targetUserId,
-          encrypted_password: cipherText,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
+        .upsert(updatePayload, { onConflict: 'user_id' });
 
       if (upsertErr) {
         throw upsertErr;
       }
 
       return new Response(
-        JSON.stringify({ success: true, message: 'Credential stored in vault successfully' }),
+        JSON.stringify({ 
+          success: true, 
+          credential_type: credentialType, 
+          message: 'تم حفظ وتشفير بيانات الاعتماد في الخزينة بنجاح' 
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

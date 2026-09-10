@@ -75,7 +75,6 @@ type SubSettingId =
   // Invoices & Receipts sub-settings
   | "currency"           // العملة المعتمدة
   | "expense_categories" // أنواع المصاريف
-  | "report_security"    // أمن التقارير
   | "receipt_format"     // مواصفات الإيصالات والطباعة
   // Users & Roles sub-settings
   | "cashier_accounts"   // حسابات الكاشير
@@ -83,7 +82,8 @@ type SubSettingId =
   | "roles_overview"     // نظام الصلاحيات
   // Account sub-settings
   | "account_profile"    // الملف الشخصي
-  | "change_password";   // تغيير كلمة المرور
+  | "change_password"    // تغيير كلمة المرور
+  | "admin_pin_setting"; // PIN لوحة الإدارة
 
 export default function Settings() {
   const { user, millId, profile, refreshProfile } = useAuth();
@@ -144,8 +144,10 @@ export default function Settings() {
   
   const [containerDeleteTarget, setContainerDeleteTarget] = useState<ContainerType | null>(null);
   const [expenseDeleteTarget, setExpenseDeleteTarget] = useState<{ id: string, name: string } | null>(null);
-  const [reportPin, setReportPin] = useState("");
-  const [isUpdatingPin, setIsUpdatingPin] = useState(false);
+  const [currentAdminPin, setCurrentAdminPin] = useState("");
+  const [newAdminPin, setNewAdminPin] = useState("");
+  const [confirmAdminPin, setConfirmAdminPin] = useState("");
+  const [isUpdatingAdminPin, setIsUpdatingAdminPin] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
 
   // Screen display settings
@@ -589,27 +591,75 @@ export default function Settings() {
     }
   };
 
-  const updateReportPin = async () => {
-    setIsUpdatingPin(true);
+  const updateAdminPin = async () => {
+    if (!user) return;
+    if (!newAdminPin || newAdminPin.length < 4 || newAdminPin.length > 8) {
+      toast({
+        title: "خطأ",
+        description: "يجب أن يتكون رمز PIN من 4 إلى 8 أرقام",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (newAdminPin !== confirmAdminPin) {
+      toast({
+        title: "خطأ",
+        description: "رمز PIN الجديد وتأكيده غير متطابقين",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsUpdatingAdminPin(true);
     try {
-      const { error } = await supabase.rpc("set_report_pin", {
-        new_pin: reportPin
+      // 1. Verify current PIN if provided
+      if (currentAdminPin) {
+        const { data: verifyData, error: verifyErr } = await supabase.rpc("verify_admin_pin", {
+          input_pin: currentAdminPin.trim()
+        });
+        if (verifyErr || verifyData !== true) {
+          throw new Error("رمز PIN الحالي غير صحيح");
+        }
+      }
+
+      // 2. Set new PIN in database via set_admin_pin RPC (bcrypt hashed)
+      const { error: rpcErr } = await supabase.rpc("set_admin_pin", {
+        new_pin: newAdminPin.trim()
       });
-      if (error) throw error;
-      toast({ 
-        title: "تم تحديث رمز الحماية", 
-        description: reportPin ? "تم تفعيل حماية التقارير بالرمز الجديد" : "تم إلغاء حماية التقارير" 
-      });
-      setReportPin("");
-    } catch (error) {
-      console.error("Error updating PIN:", error);
-      toast({ 
-        title: "خطأ", 
-        description: "حدث خطأ أثناء تحديث رمز الحماية",
-        variant: "destructive" 
+      if (rpcErr) throw rpcErr;
+
+      // 3. Sync encrypted PIN in Credential Vault
+      let vaultSynced = true;
+      try {
+        await storeCredential(user.id, newAdminPin.trim(), 'admin_pin');
+      } catch (vaultErr) {
+        vaultSynced = false;
+        console.warn("Failed to sync admin PIN in vault");
+      }
+
+      if (vaultSynced) {
+        toast({
+          title: "تم تحديث رمز PIN",
+          description: "تم تغيير PIN لوحة الإدارة ومزامنته في الخزنة المشفرة بنجاح"
+        });
+      } else {
+        toast({
+          title: "تم تحديث رمز PIN",
+          description: "تم تغيير PIN محلياً بنجاح، ولكن تعذر مزامنة الخزنة المشفرة مؤقتاً"
+        });
+      }
+
+      setCurrentAdminPin("");
+      setNewAdminPin("");
+      setConfirmAdminPin("");
+    } catch (error: any) {
+      toast({
+        title: "خطأ",
+        description: error.message || "فشل تحديث PIN لوحة الإدارة",
+        variant: "destructive"
       });
     } finally {
-      setIsUpdatingPin(false);
+      setIsUpdatingAdminPin(false);
     }
   };
 
@@ -644,14 +694,14 @@ export default function Settings() {
       // Sync updated password with server Credential Vault
       let vaultSynced = true;
       try {
-        await storeCredential(user.id, newPassword);
+        await storeCredential(user.id, newPassword, 'account_password');
       } catch (vaultErr: any) {
         vaultSynced = false;
         console.warn("Failed to sync credential with vault");
       }
 
       if (vaultSynced) {
-        toast({ title: "تم التحديث", description: "تم تغيير كلمة المرور وتحديث بيانات الحساب بنجاح" });
+        toast({ title: "تم التحديث", description: "تم تغيير كلمة المرور وتحديث بيانات الحساب في الخزنة بنجاح" });
       } else {
         toast({
           title: "تم تغيير كلمة المرور بنجاح",
@@ -776,12 +826,13 @@ export default function Settings() {
                       {activeSubSetting === "currency" && "العملة المعتمدة"}
                       {activeSubSetting === "expense_categories" && "أنواع المصاريف"}
                       {activeSubSetting === "report_security" && "أمن التقارير"}
-                      {activeSubSetting === "receipt_format" && "مواصفات الطباعة والإيصالات"}
-                      {activeSubSetting === "cashier_accounts" && "حسابات موظفي الكاشير"}
-                      {activeSubSetting === "workers_link" && "العمال والأجور"}
+                      {activeSubSetting === "receipt_format" && "مواصفات الطباعة"}
+                      {activeSubSetting === "cashier_accounts" && "حسابات الكاشير"}
+                      {activeSubSetting === "workers_link" && "العمال والرواتب"}
                       {activeSubSetting === "roles_overview" && "نظام الصلاحيات"}
                       {activeSubSetting === "account_profile" && "الملف الشخصي"}
                       {activeSubSetting === "change_password" && "تغيير كلمة المرور"}
+                      {activeSubSetting === "admin_pin_setting" && "PIN لوحة الإدارة"}
                     </span>
                   </>
                 )}
@@ -1784,42 +1835,7 @@ export default function Settings() {
         </Card>
       )}
 
-      {/* INVOICES SUB-SETTING 3: أمن التقارير PIN */}
-      {activeSection === "invoices_receipts" && activeSubSetting === "report_security" && (
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="pb-4 border-b border-border/50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Lock className="h-5 w-5 text-blue-500" />
-              أمن التقارير المالية
-            </CardTitle>
-            <CardDescription>تعيين رمز حماية (PIN) لقفل صفحة التقارير المالية والأرباح</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-6 max-w-md">
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold">رمز الحماية الجديد (4 أرقام)</Label>
-              <Input 
-                type="password" 
-                maxLength={4} 
-                value={reportPin} 
-                onChange={(e) => setReportPin(e.target.value.replace(/\D/g, ""))} 
-                placeholder="أدخل 4 أرقام..."
-                className="max-w-[200px] text-center tracking-widest font-mono text-base rounded-xl"
-              />
-              <p className="text-xs text-muted-foreground">
-                إذا تُرك الحقل فارغاً وحُفظ، ستكون صفحة التقارير مفتوحة بدون قفل.
-              </p>
-            </div>
-            <div className="pt-2">
-              <Button onClick={updateReportPin} disabled={isUpdatingPin} className="rounded-xl font-bold gap-2">
-                <Save className="h-4 w-4" />
-                {isUpdatingPin ? "جارٍ التحديث..." : "حفظ رمز الحماية"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* INVOICES SUB-SETTING 4: مواصفات الطباعة */}
+      {/* INVOICES SUB-SETTING 3: مواصفات الطباعة */}
       {activeSection === "invoices_receipts" && activeSubSetting === "receipt_format" && (
         <Card className="rounded-2xl border-border/70 shadow-sm">
           <CardHeader className="pb-4 border-b border-border/50">
@@ -2094,6 +2110,29 @@ export default function Settings() {
                 <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
               </div>
             )}
+
+            {/* SubCard: PIN لوحة الإدارة */}
+            {userRole === 'mill_owner' && (
+              <div
+                onClick={() => setActiveSubSetting("admin_pin_setting")}
+                className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    <Lock className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
+                      PIN لوحة الإدارة (Admin PIN)
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      تعيين أو تغيير الرمز الإداري السري المستخدم لفتح لوحة الإدارة
+                    </p>
+                  </div>
+                </div>
+                <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2176,6 +2215,66 @@ export default function Settings() {
               >
                 <Key className="h-4 w-4" />
                 {isUpdatingPassword ? "جارٍ التحديث..." : "تحديث كلمة المرور"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ACCOUNT SUB-SETTING 3: PIN لوحة الإدارة */}
+      {activeSection === "account" && activeSubSetting === "admin_pin_setting" && userRole === 'mill_owner' && (
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-4 border-b border-border/50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Lock className="h-5 w-5 text-amber-500" />
+              PIN لوحة الإدارة (Admin PIN)
+            </CardTitle>
+            <CardDescription>
+              رمز الحماية السري المستخدم لفتح شاشات لوحة الإدارة والتحكم (4 إلى 8 أرقام).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6 max-w-md">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">رمز PIN الحالي</Label>
+              <Input 
+                type="password" 
+                maxLength={8}
+                value={currentAdminPin} 
+                onChange={(e) => setCurrentAdminPin(e.target.value.replace(/\D/g, ""))} 
+                placeholder="أدخل الرمز الحالي (الافتراضي: 123456)..."
+                className="rounded-xl font-mono tracking-widest text-center"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">رمز PIN الجديد</Label>
+              <Input 
+                type="password" 
+                maxLength={8}
+                value={newAdminPin} 
+                onChange={(e) => setNewAdminPin(e.target.value.replace(/\D/g, ""))} 
+                placeholder="4 إلى 8 أرقام..."
+                className="rounded-xl font-mono tracking-widest text-center"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">تأكيد رمز PIN الجديد</Label>
+              <Input 
+                type="password" 
+                maxLength={8}
+                value={confirmAdminPin} 
+                onChange={(e) => setConfirmAdminPin(e.target.value.replace(/\D/g, ""))} 
+                placeholder="أعد إدخال الرمز الجديد..."
+                className="rounded-xl font-mono tracking-widest text-center"
+              />
+            </div>
+            <div className="pt-2">
+              <Button 
+                onClick={updateAdminPin} 
+                disabled={isUpdatingAdminPin || !newAdminPin}
+                className="rounded-xl font-bold gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                <Save className="h-4 w-4" />
+                {isUpdatingAdminPin ? "جارٍ الحفظ والمزامنة..." : "حفظ رمز PIN الجديد"}
               </Button>
             </div>
           </CardContent>

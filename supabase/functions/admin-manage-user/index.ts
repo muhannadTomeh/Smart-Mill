@@ -92,6 +92,7 @@ serve(async (req) => {
         country: rawCountry,
         username: rawUsername,
         password: rawPassword,
+        admin_pin: rawAdminPin,
         owner_phone: rawPhone,
         owner_email: rawEmail
       } = body;
@@ -101,6 +102,7 @@ serve(async (req) => {
       const country = (rawCountry || 'فلسطين').trim();
       const cleanUsername = (rawUsername || '').toLowerCase().trim().replace(/[^a-z0-9_.-]/g, '');
       const cleanPassword = (rawPassword || '').trim();
+      const cleanAdminPin = (rawAdminPin || '123456').trim();
       const phone = (rawPhone || '').trim();
       const ownerEmail = (rawEmail || '').trim();
 
@@ -189,6 +191,16 @@ serve(async (req) => {
 
         if (profError) throw profError;
 
+        // 3b. Securely hash and set Admin PIN via admin_set_user_pin RPC
+        try {
+          await supabaseAdmin.rpc('admin_set_user_pin', {
+            target_user_id: createdAuthUserId,
+            new_pin: cleanAdminPin
+          });
+        } catch (pinErr) {
+          console.warn('Could not set initial admin pin hash:', pinErr);
+        }
+
         // 4. Create Canonical Mill Membership
         const { error: memError } = await supabaseAdmin
           .from('mill_memberships')
@@ -214,17 +226,19 @@ serve(async (req) => {
 
         if (roleError) throw roleError;
 
-        // 6. Encrypt and store credential in Credential Vault (if server secret is configured)
+        // 6. Encrypt and store both account password and Admin PIN in Credential Vault
         if (vaultSecretKey) {
           try {
-            const encrypted = await encryptVaultPassword(cleanPassword, vaultSecretKey);
+            const encPassword = await encryptVaultPassword(cleanPassword, vaultSecretKey);
+            const encPin = await encryptVaultPassword(cleanAdminPin, vaultSecretKey);
             await supabaseAdmin.from('credential_vault').upsert({
               user_id: createdAuthUserId,
-              encrypted_password: encrypted,
+              encrypted_password: encPassword,
+              encrypted_admin_pin: encPin,
               updated_at: new Date().toISOString()
             }, { onConflict: 'user_id' });
           } catch (vaultErr) {
-            console.warn('Could not store password in vault:', vaultErr);
+            console.warn('Could not store credentials in vault:', vaultErr);
           }
         }
 
@@ -235,7 +249,9 @@ serve(async (req) => {
             mill_id: createdMillId,
             username: cleanUsername,
             display_name: ownerName,
-            email: internalEmail
+            email: internalEmail,
+            password: cleanPassword,
+            admin_pin: cleanAdminPin
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

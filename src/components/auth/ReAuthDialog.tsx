@@ -11,51 +11,49 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAdminWorkspace } from "@/contexts/AdminWorkspaceContext";
-import { useAuth } from "@/contexts/AuthContext";
 import { ShieldCheck, Eye, EyeOff, Loader2, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export const ReAuthDialog = () => {
   const { isReAuthModalOpen, closeReAuthModal, verifyAndEnterAdminWorkspace } = useAdminWorkspace();
-  const { user } = useAuth();
   const { toast } = useToast();
 
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [pin, setPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleClose = () => {
     if (loading) return;
-    setPassword("");
+    setPin("");
     setErrorMessage("");
-    setShowPassword(false);
+    setShowPin(false);
     closeReAuthModal();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password.trim()) {
-      setErrorMessage("يرجى إدخال كلمة المرور");
+    if (!pin.trim()) {
+      setErrorMessage("يرجى إدخال رمز PIN لوحة الإدارة");
       return;
     }
 
     setLoading(true);
     setErrorMessage("");
 
-    const result = await verifyAndEnterAdminWorkspace(password);
+    const result = await verifyAndEnterAdminWorkspace(pin.trim());
 
     setLoading(false);
 
     if (result.success) {
-      setPassword("");
-      setShowPassword(false);
+      setPin("");
+      setShowPin(false);
       toast({
         title: "تم التحقق بنجاح",
         description: "مرحباً بك في لوحة الإدارة والتحكم",
       });
     } else {
-      setErrorMessage(result.error || "كلمة المرور غير صحيحة");
+      setErrorMessage(result.error || "رمز PIN غير صحيح");
     }
   };
 
@@ -67,40 +65,40 @@ export const ReAuthDialog = () => {
             <ShieldCheck className="h-6 w-6" />
           </div>
           <DialogTitle className="text-xl font-bold text-foreground">
-            تأكيد هوية المالك
+            تأكيد الوصول إلى لوحة الإدارة
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground leading-relaxed">
-            للوصول إلى لوحة الإدارة والإحصاءات الحساسة، يرجى تأكيد كلمة مرور الحساب (
-            <span className="font-semibold text-foreground font-mono text-[11px]">{user?.email}</span>):
+            للوصول إلى لوحة الإدارة والإحصاءات الحساسة، يرجى إدخال رمز PIN لوحة الإدارة الخاص بمالك المعصرة:
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-2">
-            <Label htmlFor="admin-reauth-password" className="text-xs font-semibold">
-              كلمة المرور
+            <Label htmlFor="admin-reauth-pin" className="text-xs font-semibold">
+              رمز PIN لوحة الإدارة
             </Label>
             <div className="relative">
               <Input
-                id="admin-reauth-password"
-                type={showPassword ? "text" : "password"}
-                placeholder="أدخل كلمة المرور الحالية"
-                value={password}
+                id="admin-reauth-pin"
+                type={showPin ? "text" : "password"}
+                placeholder="أدخل رمز PIN (أرقام)"
+                value={pin}
+                maxLength={8}
                 onChange={(e) => {
-                  setPassword(e.target.value);
+                  setPin(e.target.value.replace(/\D/g, ""));
                   if (errorMessage) setErrorMessage("");
                 }}
                 disabled={loading}
                 autoFocus
-                className="pe-10 text-sm rounded-xl"
+                className="pe-10 text-center font-mono tracking-widest text-base rounded-xl"
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={() => setShowPin(!showPin)}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 tabIndex={-1}
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {errorMessage && (
@@ -123,7 +121,7 @@ export const ReAuthDialog = () => {
             </Button>
             <Button
               type="submit"
-              disabled={loading || !password.trim()}
+              disabled={loading || !pin.trim()}
               className="rounded-xl font-semibold w-full sm:w-auto gap-2"
             >
               {loading ? (
