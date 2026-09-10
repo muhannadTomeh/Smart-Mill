@@ -344,6 +344,8 @@ export async function toggleUserAccountActive(userId: string, isActive: boolean)
     throw new Error("لا يمكن تعطيل حساب المشرف العام");
   }
 
+  const subStatus = isActive ? 'active' : 'suspended';
+
   try {
     // 1. Primary: Edge Function
     const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('admin-manage-user', {
@@ -362,27 +364,17 @@ export async function toggleUserAccountActive(userId: string, isActive: boolean)
       throw new Error(edgeData.error);
     }
   } catch (efEx: any) {
-    console.warn("Edge function toggle_active failed, falling back to RPC:", efEx.message);
+    console.warn("Edge function toggle_active failed, falling back to direct update:", efEx.message);
   }
 
-  // 2. Fallback: RPC
-  try {
-    const { error: rpcErr } = await supabase.rpc('admin_toggle_user_active' as any, {
-      p_user_id: userId,
-      p_is_active: isActive
-    });
-
-    if (!rpcErr) return;
-  } catch (rpcEx) {
-    console.warn("admin_toggle_user_active RPC error:", rpcEx);
-  }
-
-  // 3. Fallback: direct table updates
-  await Promise.all([
+  // 2. Fallback: direct table updates
+  await Promise.allSettled([
     supabase.from('mill_memberships').update({ is_active: isActive } as any).eq('user_id', userId),
-    supabase.from('profiles').update({ is_active: isActive } as any).eq('user_id', userId)
+    supabase.from('profiles').update({ is_active: isActive, subscription_status: subStatus, updated_at: new Date().toISOString() } as any).eq('user_id', userId),
+    supabase.from('mills').update({ subscription_status: subStatus } as any).eq('owner_user_id', userId)
   ]);
 }
+
 
 /**
  * Updates a user account's name, username, and optionally password securely.

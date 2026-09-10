@@ -250,10 +250,10 @@ export default function MillDetails() {
         display_name: profile?.display_name || millObj?.name || "صاحب المعصرة",
         country: profile?.country || millObj?.country || "فلسطين",
         mill_location: profile?.mill_location || millObj?.location || "غير محدد",
-        subscription_status: profile?.subscription_status || millObj?.subscription_status || "active",
-        subscription_notes: profile?.subscription_notes || millObj?.subscription_notes || "",
-        monthly_fee: profile?.monthly_fee ?? millObj?.monthly_fee ?? 0,
-        mill_code: profile?.mill_code || millObj?.mill_code || "",
+        subscription_status: millObj?.subscription_status || profile?.subscription_status || "active",
+        subscription_notes: millObj?.subscription_notes || profile?.subscription_notes || "",
+        monthly_fee: millObj?.monthly_fee ?? profile?.monthly_fee ?? 0,
+        mill_code: millObj?.mill_code || profile?.mill_code || "",
         phone: profile?.phone || millObj?.phone || "---",
         secondary_phone: profile?.secondary_phone || millObj?.secondary_phone || null,
       };
@@ -289,33 +289,66 @@ export default function MillDetails() {
     if (!currentMillRecord?.id) return;
     setUpdating(true);
     try {
-      const { error } = await supabase
+      const isActive = (status === 'active');
+
+      // 1. Update mills table (canonical record)
+      const { error: millErr } = await supabase
         .from("mills")
         .update({ subscription_status: status })
         .eq("id", currentMillRecord.id);
 
-      if (error) throw error;
+      if (millErr) throw millErr;
 
-      await supabase.rpc('log_admin_access', {
-        target_user_id: currentMillRecord.id,
-        admin_action: `updated_subscription_status_to_${status}`
-      });
+      // 2. Synchronize owner profile and mill memberships
+      if (currentMillRecord.owner_user_id) {
+        await Promise.allSettled([
+          supabase
+            .from("profiles")
+            .update({ 
+              subscription_status: status,
+              is_active: isActive,
+              updated_at: new Date().toISOString()
+            })
+            .eq("user_id", currentMillRecord.owner_user_id),
+          supabase
+            .from("mill_memberships")
+            .update({ is_active: isActive })
+            .eq("mill_id", currentMillRecord.id)
+        ]);
+      }
+
+      try {
+        await supabase.rpc('log_admin_access', {
+          target_user_id: currentMillRecord.owner_user_id || currentMillRecord.id,
+          admin_action: `updated_subscription_status_to_${status}`
+        });
+      } catch {}
+
+      // 3. Immediately update local state so UI buttons and badge reflect change instantly
+      setCurrentMillRecord((prev: any) => ({
+        ...prev,
+        subscription_status: status
+      }));
 
       setMillData((prev: any) => ({
         ...prev,
-        profile: { ...prev.profile, subscription_status: status }
+        profile: { 
+          ...prev?.profile, 
+          subscription_status: status,
+          is_active: isActive
+        }
       }));
 
       toast({
-        title: "تم التحديث",
-        description: `تم تغيير حالة الاشتراك إلى ${status === 'active' ? 'نشط' : status === 'suspended' ? 'موقف' : 'قيد الانتظار'}`,
+        title: "تم التحديث بنجاح",
+        description: `تم تغيير حالة الاشتراك إلى ${status === 'active' ? 'نشط' : 'غير نشط (موقف)'}`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating status:", error);
       toast({
         variant: "destructive",
         title: "خطأ",
-        description: "فشل تحديث حالة الاشتراك",
+        description: error.message || "فشل تحديث حالة الاشتراك",
       });
     } finally {
       setUpdating(false);
@@ -659,11 +692,12 @@ export default function MillDetails() {
   const getStatusBadge = (s: string) => {
     switch (s) {
       case "active":
-        return <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30">نشط</Badge>;
+        return <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-bold px-3 py-1">نشط</Badge>;
       case "suspended":
-        return <Badge variant="destructive">موقف</Badge>;
+      case "disabled":
+        return <Badge variant="destructive" className="font-bold px-3 py-1">غير نشط (موقف)</Badge>;
       default:
-        return <Badge variant="outline" className="text-amber-600 border-amber-300">قيد الانتظار</Badge>;
+        return <Badge variant="outline" className="text-amber-600 border-amber-300 font-bold px-3 py-1">قيد الانتظار</Badge>;
     }
   };
 
@@ -1434,11 +1468,15 @@ export default function MillDetails() {
                 {getStatusBadge(status)}
               </CardHeader>
               <CardContent className="space-y-4 text-right">
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <Button 
                     onClick={() => updateSubscription('active')} 
                     disabled={updating || status === 'active'}
-                    className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
+                    className={`flex-1 gap-2 transition-all font-bold ${
+                      status === 'active' 
+                        ? 'opacity-40 cursor-not-allowed bg-green-600/40 text-white' 
+                        : 'bg-green-600 hover:bg-green-700 text-white shadow-md ring-2 ring-green-500/40 hover:scale-[1.01]'
+                    }`}
                   >
                     <ShieldCheck className="h-4 w-4" />
                     <span>تفعيل الحساب</span>
@@ -1447,7 +1485,11 @@ export default function MillDetails() {
                     variant="destructive"
                     onClick={() => updateSubscription('suspended')} 
                     disabled={updating || status === 'suspended'}
-                    className="flex-1 gap-2"
+                    className={`flex-1 gap-2 transition-all font-bold ${
+                      status === 'suspended'
+                        ? 'opacity-40 cursor-not-allowed bg-destructive/40 text-white'
+                        : 'bg-red-600 hover:bg-red-700 text-white shadow-md ring-2 ring-red-500/40 hover:scale-[1.01]'
+                    }`}
                   >
                     <ShieldAlert className="h-4 w-4" />
                     <span>إيقاف الحساب</span>

@@ -493,9 +493,11 @@ serve(async (req) => {
       }
 
       // Update DB lifecycle fields non-destructively
+      const subStatus = newActiveState ? 'active' : 'suspended';
       await Promise.all([
         supabaseAdmin.from('mill_memberships').update({ is_active: newActiveState }).eq('user_id', targetUserId),
-        supabaseAdmin.from('profiles').update({ is_active: newActiveState, updated_at: new Date().toISOString() }).eq('user_id', targetUserId),
+        supabaseAdmin.from('profiles').update({ is_active: newActiveState, subscription_status: subStatus, updated_at: new Date().toISOString() }).eq('user_id', targetUserId),
+        supabaseAdmin.from('mills').update({ subscription_status: subStatus }).eq('owner_user_id', targetUserId),
         // Ban / Unban in Supabase Auth
         supabaseAdmin.auth.admin.updateUserById(targetUserId, {
           ban_duration: newActiveState ? 'none' : '876600h'
