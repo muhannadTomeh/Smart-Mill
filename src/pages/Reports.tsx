@@ -6,6 +6,7 @@ import { FileText, DollarSign, Users, Package, TrendingUp, Droplets, Banknote } 
 import { supabase } from "@/integrations/supabase/client";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 
 
