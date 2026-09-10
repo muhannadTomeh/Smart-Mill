@@ -136,18 +136,46 @@ BEGIN
 END;
 $$;
 
--- Grant execution to authenticated users
+-- Secure verify_admin_pin and set_admin_pin permissions: authenticated ONLY (revoke PUBLIC & anon)
+REVOKE ALL ON FUNCTION public.verify_admin_pin(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.verify_admin_pin(text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.verify_admin_pin(text) TO authenticated;
+
+REVOKE ALL ON FUNCTION public.set_admin_pin(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.set_admin_pin(text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.set_admin_pin(text) TO authenticated;
 
--- 8. Create RPC admin_set_user_pin (for privileged service_role and admin edge functions)
+-- 8. Create RPC admin_set_user_pin (strictly for privileged service_role and platform_admin)
 CREATE OR REPLACE FUNCTION public.admin_set_user_pin(target_user_id uuid, new_pin text)
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, extensions
 AS $$
+DECLARE
+  caller_role text;
+  caller_uid uuid;
 BEGIN
+  -- Defense in depth: strictly enforce caller is service_role OR canonical platform_admin
+  caller_role := COALESCE(
+    current_setting('request.jwt.claim.role', true),
+    auth.role(),
+    current_user
+  );
+  caller_uid := auth.uid();
+
+  IF caller_role != 'service_role' AND current_user != 'service_role' THEN
+    IF caller_uid IS NULL OR NOT (
+      caller_uid = '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114'
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles 
+        WHERE user_id = caller_uid AND role = 'platform_admin'
+      )
+    ) THEN
+      RAISE EXCEPTION 'غير مصرح: هذا الإجراء مخصص لخادم النظام (service_role) والمشرف العام فقط';
+    END IF;
+  END IF;
+
   IF new_pin IS NULL OR NOT (new_pin ~ '^[0-9]{4,8}$') THEN
     RAISE EXCEPTION 'رمز PIN غير صالح: يجب أن يتكون من 4 إلى 8 أرقام فقط';
   END IF;
@@ -164,4 +192,9 @@ BEGIN
 END;
 $$;
 
+-- Secure admin_set_user_pin permissions: service_role ONLY (revoke PUBLIC, anon, and authenticated)
+REVOKE ALL ON FUNCTION public.admin_set_user_pin(uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.admin_set_user_pin(uuid, text) FROM anon;
+REVOKE ALL ON FUNCTION public.admin_set_user_pin(uuid, text) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_set_user_pin(uuid, text) TO service_role;
+
