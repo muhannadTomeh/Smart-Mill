@@ -247,14 +247,15 @@ export function AppSidebar() {
                   ) : (
                     /* حالة 2: لوحة الإدارة مفتوحة - إدراج عناصر الإدارة تحت الواجهة التشغيلية مباشرة */
                     <div className="space-y-2 animate-in fade-in-50 duration-200">
+                      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-sm font-bold">
+                        <div className="flex items-center gap-2.5">
+                          <Unlock className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                          {!isCollapsed && <span>لوحة الإدارة مفتوحة</span>}
+                        </div>
+                      </div>
+
                       <MenuGroup 
-                        label="لوحة الإدارة"
-                        badge={
-                          <span className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                            <Unlock className="h-3 w-3 text-emerald-600" />
-                            <span>مفتوحة</span>
-                          </span>
-                        }
+                        label="أدوات الإدارة والتحكم"
                         items={adminManagementItems} 
                         isCollapsed={isCollapsed} 
                       />
