@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Warehouse, Droplets, Wallet, ArrowUp, ArrowDown,
   Receipt, ShoppingCart, Sprout, UserCheck, Calendar, Eye,
-  Package, Save, Clock
+  Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,12 +14,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
-import { useDailyInventory } from "@/hooks/useDailyInventory";
 import { useRole } from "@/contexts/RoleContext";
 import { Navigate } from "react-router-dom";
 import { InvoicePreview, InvoicePreviewData } from "@/components/invoices/InvoicePreview";
 import { formatDate } from "@/lib/formatters";
-import { toast } from "sonner";
 
 type MovementKind = "invoice" | "oil_buy" | "oil_sell" | "expense" | "worker_payment";
 
@@ -47,31 +43,14 @@ const kindMeta: Record<MovementKind, { label: string; icon: any; color: string }
 const Inventory = () => {
   const { isEmployee } = useRole();
   if (isEmployee) return <Navigate to="/queue" replace />;
-  const { user, millId } = useAuth();
+  const { millId } = useAuth();
   const { activeSeason } = useSeason();
   const { inventory, loading: invLoading } = useInventory();
-  const { dailyInv, loading: dailyLoading, updateDailyInv } = useDailyInventory();
 
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | MovementKind>("all");
   const [preview, setPreview] = useState<InvoicePreviewData | null>(null);
-
-  const [dailyForm, setDailyForm] = useState({
-    oil: "0",
-    cash: "0",
-    containers: "0"
-  });
-
-  useEffect(() => {
-    if (dailyInv) {
-      setDailyForm({
-        oil: String(dailyInv.oil_amount),
-        cash: String(dailyInv.cash_amount),
-        containers: String(dailyInv.container_count)
-      });
-    }
-  }, [dailyInv]);
 
   useEffect(() => {
     if (activeSeason) fetchAll();
@@ -167,6 +146,24 @@ const Inventory = () => {
     );
   }, [movements]);
 
+  // Today's movements — auto-calculated from the main movements list
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayMovements = useMemo(
+    () => movements.filter((m) => m.date.startsWith(todayStr)),
+    [movements, todayStr]
+  );
+  const todayTotals = useMemo(() => {
+    return todayMovements.reduce(
+      (acc, m) => {
+        acc.oilDelta += m.oil_delta;
+        acc.cashDelta += m.cash_delta;
+        acc.count += 1;
+        return acc;
+      },
+      { oilDelta: 0, cashDelta: 0, count: 0 }
+    );
+  }, [todayMovements]);
+
   return (
     <div className="space-y-6" dir="rtl">
       <div className="flex items-center gap-3">
@@ -177,73 +174,116 @@ const Inventory = () => {
         </div>
       </div>
 
-      {/* Daily Inventory (Resets daily) */}
+      {/* Today's Movement — auto-calculated from today's transactions */}
       <Card className="border-primary/20 bg-primary/5">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            المخزن اليومي (يُصفر تلقائياً كل يوم)
+            <Activity className="h-5 w-5 text-primary" />
+            حركة اليوم
           </CardTitle>
-          <CardDescription>تتبع حركة الزيت والكاش والتنك خلال اليوم الحالي فقط</CardDescription>
+          <CardDescription>
+            محسوبة تلقائياً من العمليات المسجلة اليوم — {todayStr}
+            {todayTotals.count > 0
+              ? ` • ${todayTotals.count} عملية`
+              : " • لا توجد حركات اليوم"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div className="space-y-2">
-              <Label className="text-xs">زيت اليوم (كغم)</Label>
-              <Input 
-                type="number" 
-                value={dailyForm.oil} 
-                onChange={e => setDailyForm(f => ({ ...f, oil: e.target.value }))}
-                className="bg-background"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">كاش اليوم (₪)</Label>
-              <Input 
-                type="number" 
-                value={dailyForm.cash} 
-                onChange={e => setDailyForm(f => ({ ...f, cash: e.target.value }))}
-                className="bg-background"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">عدد التنك اليوم</Label>
-              <Input 
-                type="number" 
-                value={dailyForm.containers} 
-                onChange={e => setDailyForm(f => ({ ...f, containers: e.target.value }))}
-                className="bg-background"
-              />
-            </div>
-            <Button 
-              className="gap-2 shadow-olive"
-              onClick={async () => {
-                const { error } = await updateDailyInv({
-                  oil_amount: Number(dailyForm.oil),
-                  cash_amount: Number(dailyForm.cash),
-                  container_count: Number(dailyForm.containers)
-                });
-                if (!error) toast.success("تم تحديث المخزن اليومي بنجاح");
-              }}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div
+              className={`rounded-xl p-4 border flex items-center gap-4 ${
+                todayTotals.oilDelta > 0
+                  ? "bg-primary/10 border-primary/20"
+                  : todayTotals.oilDelta < 0
+                  ? "bg-destructive/10 border-destructive/20"
+                  : "bg-background/50 border-border"
+              }`}
             >
-              <Save className="h-4 w-4" />
-              حفظ اليومية
-            </Button>
+              <div className="h-10 w-10 rounded-lg bg-background/60 flex items-center justify-center shrink-0">
+                <Droplets className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">صافي زيت اليوم</p>
+                <p
+                  className={`text-2xl font-bold ${
+                    todayTotals.oilDelta > 0
+                      ? "text-primary"
+                      : todayTotals.oilDelta < 0
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {todayTotals.oilDelta > 0 ? "+" : ""}
+                  {todayTotals.oilDelta.toFixed(2)}{" "}
+                  <span className="text-sm font-normal text-muted-foreground">كغم</span>
+                </p>
+              </div>
+            </div>
+
+            <div
+              className={`rounded-xl p-4 border flex items-center gap-4 ${
+                todayTotals.cashDelta > 0
+                  ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
+                  : todayTotals.cashDelta < 0
+                  ? "bg-destructive/10 border-destructive/20"
+                  : "bg-background/50 border-border"
+              }`}
+            >
+              <div className="h-10 w-10 rounded-lg bg-background/60 flex items-center justify-center shrink-0">
+                <Wallet className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">صافي كاش اليوم</p>
+                <p
+                  className={`text-2xl font-bold ${
+                    todayTotals.cashDelta > 0
+                      ? "text-emerald-600"
+                      : todayTotals.cashDelta < 0
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {todayTotals.cashDelta > 0 ? "+" : ""}
+                  {todayTotals.cashDelta.toFixed(2)}{" "}
+                  <span className="text-sm font-normal text-muted-foreground">₪</span>
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            <div className="bg-background/50 rounded-xl p-3 border border-primary/10">
-              <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">إجمالي الزيت</p>
-              <p className="text-xl font-bold text-primary">{Number(dailyForm.oil).toFixed(1)} كغم</p>
+
+          {todayMovements.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">تفاصيل حركات اليوم:</p>
+              {todayMovements.map((m) => {
+                const meta = kindMeta[m.kind];
+                const Icon = meta.icon;
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between bg-background/60 rounded-lg px-3 py-2 text-sm border border-border/50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className={`h-3.5 w-3.5 ${meta.color}`} />
+                      <span className="font-medium">{m.label}</span>
+                      <span className="text-muted-foreground text-xs hidden sm:inline">— {m.detail}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs font-semibold shrink-0">
+                      {m.oil_delta !== 0 && (
+                        <span className={m.oil_delta > 0 ? "text-primary" : "text-destructive"}>
+                          {m.oil_delta > 0 ? "+" : ""}{m.oil_delta.toFixed(1)} كغم
+                        </span>
+                      )}
+                      {m.cash_delta !== 0 && (
+                        <span className={m.cash_delta > 0 ? "text-emerald-600" : "text-destructive"}>
+                          {m.cash_delta > 0 ? "+" : ""}{m.cash_delta.toFixed(0)} ₪
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="bg-background/50 rounded-xl p-3 border border-primary/10">
-              <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">إجمالي الكاش</p>
-              <p className="text-xl font-bold text-primary">{Number(dailyForm.cash).toFixed(0)} ₪</p>
-            </div>
-            <div className="bg-background/50 rounded-xl p-3 border border-primary/10">
-              <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">عدد التنك</p>
-              <p className="text-xl font-bold text-primary">{dailyForm.containers} تنكة</p>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -284,12 +324,12 @@ const Inventory = () => {
         </Card>
       </div>
 
-      {/* Aggregated flows */}
+      {/* Aggregated season flows */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatTile icon={ArrowDown} title="زيت داخل" value={`${totals.oilIn.toFixed(2)} كغم`} />
-        <StatTile icon={ArrowUp} title="زيت خارج" value={`${totals.oilOut.toFixed(2)} كغم`} />
-        <StatTile icon={ArrowDown} title="كاش داخل" value={`${totals.cashIn.toFixed(2)} ₪`} />
-        <StatTile icon={ArrowUp} title="كاش خارج" value={`${totals.cashOut.toFixed(2)} ₪`} />
+        <StatTile icon={ArrowDown} title="زيت داخل (الموسم)" value={`${totals.oilIn.toFixed(2)} كغم`} />
+        <StatTile icon={ArrowUp} title="زيت خارج (الموسم)" value={`${totals.oilOut.toFixed(2)} كغم`} />
+        <StatTile icon={ArrowDown} title="كاش داخل (الموسم)" value={`${totals.cashIn.toFixed(2)} ₪`} />
+        <StatTile icon={ArrowUp} title="كاش خارج (الموسم)" value={`${totals.cashOut.toFixed(2)} ₪`} />
       </div>
 
       {/* Movements log */}
@@ -332,12 +372,18 @@ const Inventory = () => {
                 {filtered.map((m) => {
                   const meta = kindMeta[m.kind];
                   const Icon = meta.icon;
+                  const isToday = m.date.startsWith(todayStr);
                   return (
-                    <TableRow key={m.id}>
+                    <TableRow key={m.id} className={isToday ? "bg-primary/[0.03]" : ""}>
                       <TableCell className="text-right whitespace-nowrap">
                         <div className="flex items-center gap-1 text-xs font-mono">
                           <Calendar className="h-3.5 w-3.5" />
                           {formatDate(m.date)}
+                          {isToday && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 border-primary/40 text-primary ml-1">
+                              اليوم
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

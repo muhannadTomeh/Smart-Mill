@@ -96,15 +96,32 @@ export default function Settings() {
   // Navigation State: Hub -> Section -> SubSetting -> Edit
   const [activeSection, setActiveSection] = useState<MainSectionId | null>(null);
   const [activeSubSetting, setActiveSubSetting] = useState<SubSettingId | null>(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const section = searchParams.get("section") as MainSectionId | null;
+    const sub = searchParams.get("sub") as SubSettingId | null;
     if (section && ["mill_info", "operations", "invoices_receipts", "users_roles", "account"].includes(section)) {
       setActiveSection(section);
+      setActiveSubSetting(sub || null);
+    } else {
+      setActiveSection(null);
       setActiveSubSetting(null);
     }
   }, [searchParams]);
+
+  const openSection = (sec: MainSectionId) => {
+    setActiveSection(sec);
+    setActiveSubSetting(null);
+    setSearchParams({ section: sec });
+  };
+
+  const openSubSetting = (sub: SubSettingId) => {
+    setActiveSubSetting(sub);
+    if (activeSection) {
+      setSearchParams({ section: activeSection, sub });
+    }
+  };
 
   const [selectedCurrency, setSelectedCurrency] = useState(currency);
 
@@ -768,8 +785,15 @@ export default function Settings() {
   const handleBack = () => {
     if (activeSubSetting) {
       setActiveSubSetting(null);
+      if (activeSection) {
+        setSearchParams({ section: activeSection });
+      } else {
+        setSearchParams({});
+      }
     } else {
       setActiveSection(null);
+      setActiveSubSetting(null);
+      setSearchParams({});
     }
   };
 
@@ -800,14 +824,17 @@ export default function Settings() {
               
               <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
                 <button 
-                  onClick={() => { setActiveSection(null); setActiveSubSetting(null); }}
+                  onClick={() => { setActiveSection(null); setActiveSubSetting(null); setSearchParams({}); }}
                   className="hover:text-primary transition-colors cursor-pointer"
                 >
                   الإعدادات
                 </button>
                 <span>/</span>
                 <button 
-                  onClick={() => setActiveSubSetting(null)}
+                  onClick={() => {
+                    setActiveSubSetting(null);
+                    if (activeSection) setSearchParams({ section: activeSection });
+                  }}
                   className={cn(
                     "hover:text-primary transition-colors cursor-pointer",
                     !activeSubSetting && "font-bold text-foreground"
@@ -872,7 +899,7 @@ export default function Settings() {
           
           {/* Card 1: معلومات المعصرة */}
           <div
-            onClick={() => setActiveSection("mill_info")}
+            onClick={() => openSection("mill_info")}
             className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-emerald-500/50 hover:shadow-md hover:shadow-emerald-500/5 transition-all duration-200 cursor-pointer"
           >
             <div className="flex items-start gap-4 min-w-0">
@@ -895,7 +922,7 @@ export default function Settings() {
 
           {/* Card 2: التشغيل */}
           <div
-            onClick={() => setActiveSection("operations")}
+            onClick={() => openSection("operations")}
             className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-md hover:shadow-amber-500/5 transition-all duration-200 cursor-pointer"
           >
             <div className="flex items-start gap-4 min-w-0">
@@ -918,7 +945,7 @@ export default function Settings() {
 
           {/* Card 3: الفواتير والإيصالات */}
           <div
-            onClick={() => setActiveSection("invoices_receipts")}
+            onClick={() => openSection("invoices_receipts")}
             className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-md hover:shadow-blue-500/5 transition-all duration-200 cursor-pointer"
           >
             <div className="flex items-start gap-4 min-w-0">
@@ -941,7 +968,7 @@ export default function Settings() {
 
           {/* Card 4: المستخدمون والصلاحيات */}
           <div
-            onClick={() => setActiveSection("users_roles")}
+            onClick={() => openSection("users_roles")}
             className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-md hover:shadow-indigo-500/5 transition-all duration-200 cursor-pointer"
           >
             <div className="flex items-start gap-4 min-w-0">
@@ -964,7 +991,7 @@ export default function Settings() {
 
           {/* Card 5: الحساب */}
           <div
-            onClick={() => setActiveSection("account")}
+            onClick={() => openSection("account")}
             className="group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-violet-500/50 hover:shadow-md hover:shadow-violet-500/5 transition-all duration-200 cursor-pointer md:col-span-2 lg:col-span-1"
           >
             <div className="flex items-start gap-4 min-w-0">
@@ -1107,7 +1134,7 @@ export default function Settings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {/* SubCard: إعدادات العصر */}
             <div
-              onClick={() => setActiveSubSetting("pressing_rates")}
+              onClick={() => openSubSetting("pressing_rates")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1128,7 +1155,7 @@ export default function Settings() {
 
             {/* SubCard: أنواع العبوات */}
             <div
-              onClick={() => setActiveSubSetting("container_types")}
+              onClick={() => openSubSetting("container_types")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1149,7 +1176,7 @@ export default function Settings() {
 
             {/* SubCard: شاشة العرض */}
             <div
-              onClick={() => setActiveSubSetting("display_screen")}
+              onClick={() => openSubSetting("display_screen")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1170,7 +1197,7 @@ export default function Settings() {
 
             {/* SubCard: المخزون والسيولة */}
             <div
-              onClick={() => setActiveSubSetting("inventory_cash")}
+              onClick={() => openSubSetting("inventory_cash")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1632,7 +1659,7 @@ export default function Settings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {/* SubCard: العملة */}
             <div
-              onClick={() => setActiveSubSetting("currency")}
+              onClick={() => openSubSetting("currency")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1653,7 +1680,7 @@ export default function Settings() {
 
             {/* SubCard: أنواع المصاريف */}
             <div
-              onClick={() => setActiveSubSetting("expense_categories")}
+              onClick={() => openSubSetting("expense_categories")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1675,7 +1702,7 @@ export default function Settings() {
 
             {/* SubCard: مواصفات الإيصالات والطباعة */}
             <div
-              onClick={() => setActiveSubSetting("receipt_format")}
+              onClick={() => openSubSetting("receipt_format")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-blue-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1867,7 +1894,7 @@ export default function Settings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {/* SubCard: حسابات الكاشير */}
             <div
-              onClick={() => setActiveSubSetting("cashier_accounts")}
+              onClick={() => openSubSetting("cashier_accounts")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1888,7 +1915,7 @@ export default function Settings() {
 
             {/* SubCard: عمال المعصرة */}
             <div
-              onClick={() => setActiveSubSetting("workers_link")}
+              onClick={() => openSubSetting("workers_link")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -1909,7 +1936,7 @@ export default function Settings() {
 
             {/* SubCard: نظام الصلاحيات */}
             <div
-              onClick={() => setActiveSubSetting("roles_overview")}
+              onClick={() => openSubSetting("roles_overview")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-sm transition-all cursor-pointer md:col-span-2"
             >
               <div className="flex items-center gap-3.5">
@@ -2048,7 +2075,7 @@ export default function Settings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {/* SubCard: الملف الشخصي */}
             <div
-              onClick={() => setActiveSubSetting("account_profile")}
+              onClick={() => openSubSetting("account_profile")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-violet-500/50 hover:shadow-sm transition-all cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -2070,7 +2097,7 @@ export default function Settings() {
             {/* SubCard: تغيير كلمة المرور */}
             {userRole === 'mill_owner' && (
               <div
-                onClick={() => setActiveSubSetting("change_password")}
+                onClick={() => openSubSetting("change_password")}
                 className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-violet-500/50 hover:shadow-sm transition-all cursor-pointer"
               >
                 <div className="flex items-center gap-3.5">
@@ -2093,7 +2120,7 @@ export default function Settings() {
             {/* SubCard: PIN لوحة الإدارة */}
             {userRole === 'mill_owner' && (
               <div
-                onClick={() => setActiveSubSetting("admin_pin_setting")}
+                onClick={() => openSubSetting("admin_pin_setting")}
                 className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
               >
                 <div className="flex items-center gap-3.5">
