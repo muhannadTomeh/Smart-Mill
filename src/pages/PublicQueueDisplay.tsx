@@ -466,12 +466,7 @@ export default function PublicQueueDisplay() {
                   {currentItem.name}
                 </span>
 
-                {/* Bags Badge */}
-                {displaySettings.show_bags_count && currentItem.bags > 0 && (
-                  <span className="mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-white/10 text-white/95 text-base md:text-lg font-bold border border-white/15 backdrop-blur-md shadow-sm">
-                    🛍️ {currentItem.bags} شوال
-                  </span>
-                )}
+
               </div>
 
               {/* Bottom Operational Countdown Timer */}

@@ -62,7 +62,7 @@ export const defaultDisplaySettings: DisplaySettings = {
   show_sell_price: true,
   show_buy_price: true,
   show_clock: true,
-  show_bags_count: true,
+  show_bags_count: false,
   show_faqs: true,
   custom_faqs: [],
 };
