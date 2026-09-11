@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useRole } from "@/contexts/RoleContext";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useCashSession } from "@/contexts/CashSessionContext";
 import { printThermalZReport, type ThermalZReportData } from "@/lib/thermalReceiptPrinter";
 import { formatDate, formatTime } from "@/lib/formatters";
 
@@ -58,11 +59,13 @@ export default function DailyClosing() {
   const { activeSeason } = useSeason();
   const { isEmployee } = useRole();
   const { currency } = useCurrency();
+  const { session, isOpen, closeSession } = useCashSession();
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
   const cashierName = profile?.display_name || user?.email?.split("@")[0] || "مسؤول الصندوق";
 
   const [loading, setLoading] = useState(true);
-  const [openingCash, setOpeningCash] = useState<number>(0);
+  // openingCash now comes from the active session; fallback 0
+  const openingCash = session ? Number(session.opening_balance) : 0;
   const [actualCashStr, setActualCashStr] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [closing, setClosing] = useState(false);
@@ -104,10 +107,15 @@ export default function DailyClosing() {
     if (!activeSeason) return;
     setLoading(true);
 
-    // Get today's start at local midnight
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startOfTodayIso = today.toISOString();
+    // Use session.opened_at as the period start if available; otherwise fallback to today midnight
+    let periodStart: string;
+    if (session?.opened_at) {
+      periodStart = session.opened_at;
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      periodStart = today.toISOString();
+    }
 
     try {
       const [invRes, expRes, salesRes, purRes, wpRes] = await Promise.all([
@@ -115,33 +123,33 @@ export default function DailyClosing() {
           .from("invoices")
           .select("*")
           .eq("season_id", activeSeason.id)
-          .gte("created_at", startOfTodayIso)
+          .gte("created_at", periodStart)
           .order("created_at", { ascending: false }),
         supabase
           .from("expenses")
           .select("*")
           .eq("season_id", activeSeason.id)
-          .gte("created_at", startOfTodayIso)
+          .gte("created_at", periodStart)
           .order("created_at", { ascending: false }),
         supabase
           .from("oil_transactions")
           .select("*")
           .eq("season_id", activeSeason.id)
           .eq("type", "sell")
-          .gte("created_at", startOfTodayIso)
+          .gte("created_at", periodStart)
           .order("created_at", { ascending: false }),
         supabase
           .from("oil_transactions")
           .select("*")
           .eq("season_id", activeSeason.id)
           .eq("type", "buy")
-          .gte("created_at", startOfTodayIso)
+          .gte("created_at", periodStart)
           .order("created_at", { ascending: false }),
         supabase
           .from("worker_payments")
           .select("*")
           .eq("season_id", activeSeason.id)
-          .gte("created_at", startOfTodayIso)
+          .gte("created_at", periodStart)
           .order("created_at", { ascending: false }),
       ]);
 
@@ -163,7 +171,8 @@ export default function DailyClosing() {
       loadHistory();
       fetchTodayData();
     }
-  }, [activeSeason?.id]);
+  // Re-fetch when session changes (new session opened or closed)
+  }, [activeSeason?.id, session?.id, session?.opened_at]);
 
 
   // Totals calculations
@@ -207,6 +216,44 @@ export default function DailyClosing() {
 
     setClosing(true);
 
+    // If a real Cash Session is open, close it via RPC
+    if (isOpen && session) {
+      const result = await closeSession(actualCash, notes.trim() || undefined);
+      if (!result.success) {
+        setClosing(false);
+        return;
+      }
+      // Print Z-Report if requested
+      if (shouldPrint) {
+        printThermalZReport({
+          report_number: "Z-" + Date.now().toString().slice(-6),
+          closing_date: new Date().toISOString(),
+          season_name: activeSeason?.name,
+          cashier_name: cashierName,
+          opening_cash: openingCash,
+          invoices_cash: invoicesCash,
+          invoices_count: invoicesCount,
+          oil_sales_cash: oilSalesCash,
+          total_inflows: totalInflows,
+          expenses_cash: expensesCash,
+          oil_purchases_cash: oilPurchasesCash,
+          worker_payments_cash: workerPaymentsCash,
+          total_outflows: totalOutflows,
+          net_movement: netMovement,
+          expected_cash: result.expected ?? expectedCash,
+          actual_cash: actualCash,
+          difference: result.difference ?? (difference || 0),
+          notes: notes.trim() || undefined,
+        }, millName, currency);
+      }
+      toast.success(shouldPrint ? "تم إغلاق الصندوق وطباعة تقرير Z بنجاح" : "تم اعتماد إغلاق الصندوق بنجاح");
+      setActualCashStr("");
+      setNotes("");
+      setClosing(false);
+      return;
+    }
+
+    // Legacy fallback: no active session — save to localStorage only
     const record: DailyClosingRecord = {
       id: "Z-" + Date.now().toString().slice(-6),
       closing_date: new Date().toISOString(),
@@ -228,7 +275,6 @@ export default function DailyClosing() {
       notes: notes.trim() || undefined,
     };
 
-    // 1. Save to localStorage
     try {
       const existing = [record, ...closingsHistory];
       localStorage.setItem(storageKey, JSON.stringify(existing));
@@ -237,7 +283,6 @@ export default function DailyClosing() {
       console.error("Failed to save to local storage", e);
     }
 
-    // 2. Attempt saving to Supabase if table exists
     try {
       await supabase.from("daily_closings" as any).insert({
         user_id: user?.id,
@@ -260,7 +305,7 @@ export default function DailyClosing() {
         notes: notes.trim() || null,
       } as any);
     } catch {
-      // Graceful fallback: table might not be in DB schema, local storage holds it securely
+      // Graceful fallback
     }
 
     // 3. Print Z-Report if requested

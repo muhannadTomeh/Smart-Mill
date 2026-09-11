@@ -11,10 +11,12 @@ import { RoleProvider, useRole } from "@/contexts/RoleContext";
 import { SubscriptionProvider, useSubscription } from "@/contexts/SubscriptionContext";
 import { SeasonProvider, useSeason } from "@/contexts/SeasonContext";
 import { AdminWorkspaceProvider, useAdminWorkspace } from "@/contexts/AdminWorkspaceContext";
+import { CashSessionProvider } from "@/contexts/CashSessionContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, Calendar, Plus, Users, Receipt, Wallet, User, ChevronDown, Menu, Lock, Phone, ShieldCheck, Undo2 } from "lucide-react";
 import { ReAuthDialog } from "@/components/auth/ReAuthDialog";
+import { CashSessionBanner } from "@/components/CashSessionBanner";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -107,6 +109,9 @@ const HeaderBar = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Cash Session Banner - only for non-admin mill users */}
+        {!isAdmin && <CashSessionBanner />}
+
         {/* Quick Add - Only for Mill Owners/Employees */}
         {!isAdmin && (
           <DropdownMenu>
@@ -318,22 +323,24 @@ const ProtectedLayout = () => {
   return (
     <SubscriptionGate>
       <SeasonProvider>
-        <AdminWorkspaceProvider>
-          <SidebarProvider>
-            <div className="min-h-screen flex w-full bg-background" dir="rtl">
-              <AppSidebar />
-              <div className="flex-1 flex flex-col min-w-0">
-                <HeaderBar />
-                <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
-                  <AppErrorBoundary>
-                    <SeasonGateContent />
-                  </AppErrorBoundary>
-                </main>
+        <CashSessionProvider>
+          <AdminWorkspaceProvider>
+            <SidebarProvider>
+              <div className="min-h-screen flex w-full bg-background" dir="rtl">
+                <AppSidebar />
+                <div className="flex-1 flex flex-col min-w-0">
+                  <HeaderBar />
+                  <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+                    <AppErrorBoundary>
+                      <SeasonGateContent />
+                    </AppErrorBoundary>
+                  </main>
+                </div>
               </div>
-            </div>
-            <ReAuthDialog />
-          </SidebarProvider>
-        </AdminWorkspaceProvider>
+              <ReAuthDialog />
+            </SidebarProvider>
+          </AdminWorkspaceProvider>
+        </CashSessionProvider>
       </SeasonProvider>
     </SubscriptionGate>
   );

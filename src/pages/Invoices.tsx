@@ -37,6 +37,7 @@ import {
 } from "@/lib/invoiceCalculations";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
+import { CashSessionGuard } from "@/components/CashSessionGuard";
 
 interface PaymentMethod extends PaymentBreakdown {
   total: string;
@@ -407,6 +408,7 @@ export default function Invoices() {
   };
 
   return (
+    <CashSessionGuard>
     <div className="space-y-6" dir="rtl">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b">
@@ -859,5 +861,6 @@ export default function Invoices() {
       </Dialog>
 
     </div>
+    </CashSessionGuard>
   );
 }

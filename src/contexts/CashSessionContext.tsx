@@ -1,0 +1,176 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSeason } from "@/contexts/SeasonContext";
+import { toast } from "sonner";
+
+export interface CashSession {
+  id: string;
+  mill_id: string;
+  season_id: string;
+  opened_by: string;
+  opening_balance: number;
+  opened_at: string;
+  status: "open" | "closed";
+  total_cash_in: number;
+  total_cash_out: number;
+}
+
+interface CashSessionContextValue {
+  session: CashSession | null;
+  isOpen: boolean;
+  loading: boolean;
+  millId: string | null;
+  openSession: (openingBalance: number) => Promise<boolean>;
+  closeSession: (actualBalance: number, note?: string) => Promise<{ success: boolean; expected?: number; difference?: number }>;
+  refresh: () => Promise<void>;
+}
+
+const CashSessionContext = createContext<CashSessionContextValue>({
+  session: null,
+  isOpen: false,
+  loading: true,
+  millId: null,
+  openSession: async () => false,
+  closeSession: async () => ({ success: false }),
+  refresh: async () => {},
+});
+
+export function useCashSession() {
+  return useContext(CashSessionContext);
+}
+
+export function CashSessionProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const { activeSeason } = useSeason();
+  const [session, setSession] = useState<CashSession | null>(null);
+  const [millId, setMillId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!user) {
+      setSession(null);
+      setMillId(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.rpc("get_active_cash_session" as any);
+      if (error) {
+        // User may be platform admin (no membership) — no session
+        setSession(null);
+        setMillId(null);
+      } else if (data) {
+        const result = data as any;
+        setMillId(result.mill_id ?? null);
+        setSession(result.session ?? null);
+      } else {
+        setSession(null);
+        setMillId(null);
+      }
+    } catch {
+      setSession(null);
+      setMillId(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Realtime subscription: watch for changes to cash_sessions for this mill
+  useEffect(() => {
+    if (!millId) return;
+    const channel = supabase
+      .channel(`cash_sessions_mill_${millId}`)
+      .on(
+        "postgres_changes" as any,
+        {
+          event: "*",
+          schema: "public",
+          table: "cash_sessions",
+          filter: `mill_id=eq.${millId}`,
+        },
+        () => {
+          refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [millId, refresh]);
+
+  const openSession = useCallback(async (openingBalance: number): Promise<boolean> => {
+    if (!activeSeason) {
+      toast.error("لا يوجد موسم نشط. يرجى تحديد الموسم أولاً.");
+      return false;
+    }
+    try {
+      const { data, error } = await supabase.rpc("open_cash_session" as any, {
+        p_season_id: activeSeason.id,
+        p_opening_balance: openingBalance,
+      });
+      if (error) {
+        toast.error(error.message || "حدث خطأ أثناء فتح الصندوق");
+        return false;
+      }
+      toast.success(`✅ تم فتح الصندوق بنجاح — الرصيد الافتتاحي: ${openingBalance} ₪`);
+      await refresh();
+      return true;
+    } catch (err: any) {
+      toast.error(err.message || "حدث خطأ أثناء فتح الصندوق");
+      return false;
+    }
+  }, [activeSeason, refresh]);
+
+  const closeSession = useCallback(async (
+    actualBalance: number,
+    note?: string
+  ): Promise<{ success: boolean; expected?: number; difference?: number }> => {
+    if (!session) {
+      toast.error("لا يوجد صندوق مفتوح");
+      return { success: false };
+    }
+    try {
+      const { data, error } = await supabase.rpc("close_cash_session" as any, {
+        p_session_id: session.id,
+        p_actual_balance: actualBalance,
+        p_closing_note: note ?? null,
+      });
+      if (error) {
+        toast.error(error.message || "حدث خطأ أثناء إغلاق الصندوق");
+        return { success: false };
+      }
+      const result = data as any;
+      await refresh();
+      return {
+        success: true,
+        expected: result.expected_balance,
+        difference: result.difference,
+      };
+    } catch (err: any) {
+      toast.error(err.message || "حدث خطأ أثناء إغلاق الصندوق");
+      return { success: false };
+    }
+  }, [session, refresh]);
+
+  return (
+    <CashSessionContext.Provider
+      value={{
+        session,
+        isOpen: session !== null && session.status === "open",
+        loading,
+        millId,
+        openSession,
+        closeSession,
+        refresh,
+      }}
+    >
+      {children}
+    </CashSessionContext.Provider>
+  );
+}
