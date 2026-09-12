@@ -18,19 +18,22 @@ export default defineTool({
     const supabase = supabaseForUser(ctx);
     try {
       const seasonId = await resolveSeasonId(supabase, season_id);
-      const { data, error } = await supabase
-        .from("expenses")
-        .insert({
-          user_id: ctx.getUserId(),
-          season_id: seasonId,
-          amount,
-          category,
-          description: description || null,
-        })
-        .select()
-        .single();
+      // Keep MCP-created expenses on the same atomic financial path as the UI.
+      // This records the ledger entry, enforces the open cash drawer, and updates
+      // the season inventory together.
+      const { data, error } = await supabase.rpc("record_expense_v2", {
+        p_season_id: seasonId,
+        p_category: category,
+        p_amount: amount,
+        p_description: description || null,
+        p_payment_method: "cash",
+        p_partner_id: null,
+        p_supplier_id: null,
+        p_partner_name: null,
+        p_creditor_name: null,
+      });
       if (error) return errorResult(error.message);
-      return textResult({ expense: data });
+      return textResult({ expense: data, payment_method: "cash" });
     } catch (e) {
       return errorResult(e instanceof Error ? e.message : String(e));
     }

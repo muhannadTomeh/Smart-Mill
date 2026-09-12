@@ -141,7 +141,7 @@ const Inventory = () => {
     const [invoicesRes, oilTxRes, expensesRes, workerPayRes] = await Promise.all([
       supabase.from("invoices").select("*").eq("season_id", activeSeason.id),
       supabase.from("oil_transactions").select("*").eq("season_id", activeSeason.id),
-      supabase.from("expenses").select("*").eq("season_id", activeSeason.id),
+      supabase.from("expenses").select("*").eq("season_id", activeSeason.id).is("voided_at", null),
       supabase
         .from("worker_payments")
         .select("*, workers(name)")

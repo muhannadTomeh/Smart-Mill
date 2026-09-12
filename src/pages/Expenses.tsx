@@ -156,7 +156,8 @@ const Expenses = () => {
       let query = supabase
         .from("expenses")
         .select("*, partners(name), suppliers(name)")
-        .eq("season_id", activeSeason.id);
+        .eq("season_id", activeSeason.id)
+        .is("voided_at", null);
 
       const effectiveMillId = millId || activeSeason.mill_id;
       if (effectiveMillId) {
@@ -285,9 +286,12 @@ const Expenses = () => {
     }
     if (!deleteTarget) return;
     const { id } = deleteTarget;
-    const { error } = await supabase.from("expenses").delete().eq("id", id);
+    const { error } = await supabase.rpc("void_expense_and_reverse" as any, {
+      p_expense_id: id,
+      p_reason: "إلغاء من واجهة إدارة المصاريف",
+    });
     if (!error) {
-      toast({ title: "تم الحذف", description: "تم حذف سجل المصروف بنجاح" });
+      toast({ title: "تم الإلغاء", description: "أُلغي المصروف وعُكست حركته النقدية بأمان" });
       setDeleteTarget(null);
       await fetchExpenses();
       await refetchInventory();
@@ -897,10 +901,10 @@ const Expenses = () => {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent dir="rtl" className="rounded-2xl max-w-md p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-right text-base font-bold">تأكيد حذف المصروف</AlertDialogTitle>
+            <AlertDialogTitle className="text-right text-base font-bold">تأكيد إلغاء المصروف</AlertDialogTitle>
             <AlertDialogDescription className="text-right text-xs text-muted-foreground mt-2">
-              هل تريد بالتأكيد حذف مصروف <strong>"{deleteTarget?.category}"</strong> بقيمة{" "}
-              <strong>{deleteTarget?.amount} {activeCurrency}</strong>؟
+              سيتم الاحتفاظ بالسجل لأغراض التدقيق وإلغاء الحركة المالية المرتبطة به. لا يمكن إلغاء المصروفات
+              المرتبطة بذمم مالية من هذه الشاشة.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 pt-3">
@@ -909,7 +913,7 @@ const Expenses = () => {
               onClick={deleteExpense}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-bold rounded-xl"
             >
-              تأكيد الحذف
+              تأكيد الإلغاء
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

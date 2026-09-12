@@ -182,7 +182,7 @@ export default function MillDetails() {
         supabase.from("seasons").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }).limit(5),
         supabase.from("invoices").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
         supabase.from("queue").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
-        supabase.from("expenses").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
+        supabase.from("expenses").select("*").eq("mill_id", canonicalMillId).is("voided_at", null).order("created_at", { ascending: false }),
         supabase.from("oil_transactions").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
         supabase.from("inventory").select("*").eq("mill_id", canonicalMillId).limit(1),
         supabase.from("subscription_payments").select("*").eq("mill_id", canonicalMillId).order("payment_date", { ascending: false })

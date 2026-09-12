@@ -20,6 +20,7 @@ export default defineTool({
         .from("expenses")
         .select("id,amount,category,description,created_at")
         .eq("season_id", seasonId)
+        .is("voided_at", null)
         .order("created_at", { ascending: false })
         .limit(limit ?? 50);
       if (error) return errorResult(error.message);

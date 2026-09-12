@@ -176,6 +176,7 @@ export default function DailyClosing() {
           .from("expenses")
           .select("*")
           .eq("cash_session_id", session.id)
+          .is("voided_at", null)
           .order("created_at", { ascending: false }),
         supabase
           .from("oil_transactions")
@@ -225,6 +226,7 @@ export default function DailyClosing() {
           .from("expenses")
           .select("*")
           .eq("season_id", activeSeason.id)
+          .is("voided_at", null)
           .gte("created_at", session.opened_at)
           .order("created_at", { ascending: false });
         if (fallback.data && fallback.data.length > 0) finalExpenses = fallback.data;
@@ -254,7 +256,7 @@ export default function DailyClosing() {
     try {
       const [invRes, expRes, salesRes, purRes, wpRes] = await Promise.all([
         supabase.from("invoices").select("*").eq("season_id", activeSeason.id).gte("created_at", todayMidnight),
-        supabase.from("expenses").select("*").eq("season_id", activeSeason.id).gte("created_at", todayMidnight),
+        supabase.from("expenses").select("*").eq("season_id", activeSeason.id).is("voided_at", null).gte("created_at", todayMidnight),
         supabase.from("oil_transactions").select("*").eq("season_id", activeSeason.id).eq("type", "sell").gte("created_at", todayMidnight),
         supabase.from("oil_transactions").select("*").eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", todayMidnight),
         supabase.from("worker_payments").select("*").eq("season_id", activeSeason.id).gte("created_at", todayMidnight),
@@ -341,105 +343,23 @@ export default function DailyClosing() {
 
     setClosing(true);
 
-    // Close session via RPC
-    if (isOpen && session) {
-      const result = await closeSession(actualCash, notes.trim() || undefined);
-      if (!result.success) {
-        setClosing(false);
-        return;
-      }
-      // Print Z-Report if requested
-      if (shouldPrint) {
-        printThermalZReport({
-          report_number: "Z-" + Date.now().toString().slice(-6),
-          closing_date: new Date().toISOString(),
-          season_name: activeSeason?.name,
-          cashier_name: cashierName,
-          opening_cash: openingCash,
-          invoices_cash: invoicesCash,
-          invoices_count: invoicesCount,
-          oil_sales_cash: oilSalesCash,
-          total_inflows: totalInflows,
-          expenses_cash: expensesCash,
-          oil_purchases_cash: oilPurchasesCash,
-          worker_payments_cash: workerPaymentsCash,
-          total_outflows: totalOutflows,
-          net_movement: netMovement,
-          expected_cash: result.expected ?? expectedCash,
-          actual_cash: actualCash,
-          difference: result.difference ?? (difference || 0),
-          notes: notes.trim() || undefined,
-        }, millName, currency);
-      }
-      toast.success(shouldPrint ? "تم إغلاق الصندوق وطباعة تقرير Z بنجاح" : "تم اعتماد إغلاق الصندوق بنجاح");
-      setActualCashStr("");
-      setNotes("");
+    if (!isOpen || !session) {
+      toast.error("لا يوجد صندوق مفتوح لإغلاقه. افتح جلسة صندوق رسمية أولاً.");
       setClosing(false);
-      await loadHistory();
       return;
     }
 
-    // Legacy fallback: no active session — save to localStorage only
-    const record: DailyClosingRecord = {
-      id: "Z-" + Date.now().toString().slice(-6),
-      closing_date: new Date().toISOString(),
-      season_id: activeSeason?.id || "",
-      cashier_name: cashierName,
-      opening_cash: openingCash,
-      invoices_cash: invoicesCash,
-      invoices_count: invoicesCount,
-      oil_sales_cash: oilSalesCash,
-      total_inflows: totalInflows,
-      expenses_cash: expensesCash,
-      oil_purchases_cash: oilPurchasesCash,
-      worker_payments_cash: workerPaymentsCash,
-      total_outflows: totalOutflows,
-      net_movement: netMovement,
-      expected_cash: expectedCash,
-      actual_cash: actualCash,
-      difference: difference || 0,
-      notes: notes.trim() || undefined,
-    };
-
-    try {
-      const existing = [record, ...closingsHistory];
-      const storageKey = `closings_history_${millId || activeSeason?.id || 'default'}`;
-      localStorage.setItem(storageKey, JSON.stringify(existing));
-      setClosingsHistory(existing);
-    } catch (e) {
-      console.error("Failed to save to local storage", e);
+    const result = await closeSession(actualCash, notes.trim() || undefined);
+    if (!result.success) {
+      setClosing(false);
+      return;
     }
 
-    try {
-      await supabase.from("daily_closings" as any).insert({
-        user_id: user?.id,
-        mill_id: millId || activeSeason?.mill_id || null,
-        season_id: activeSeason?.id,
-        cashier_name: cashierName,
-        opening_cash: openingCash,
-        invoices_cash: invoicesCash,
-        invoices_count: invoicesCount,
-        oil_sales_cash: oilSalesCash,
-        total_inflows: totalInflows,
-        expenses_cash: expensesCash,
-        oil_purchases_cash: oilPurchasesCash,
-        worker_payments_cash: workerPaymentsCash,
-        total_outflows: totalOutflows,
-        net_movement: netMovement,
-        expected_cash: expectedCash,
-        actual_cash: actualCash,
-        difference: difference || 0,
-        notes: notes.trim() || null,
-      } as any);
-    } catch {
-      // Graceful fallback
-    }
-
-    // 3. Print Z-Report if requested
+    // Print Z-Report only after the official cash-session RPC succeeds.
     if (shouldPrint) {
       printThermalZReport({
-        report_number: record.id,
-        closing_date: record.closing_date,
+        report_number: "Z-" + Date.now().toString().slice(-6),
+        closing_date: new Date().toISOString(),
         season_name: activeSeason?.name,
         cashier_name: cashierName,
         opening_cash: openingCash,
@@ -452,15 +372,18 @@ export default function DailyClosing() {
         worker_payments_cash: workerPaymentsCash,
         total_outflows: totalOutflows,
         net_movement: netMovement,
-        expected_cash: expectedCash,
+        expected_cash: result.expected ?? expectedCash,
         actual_cash: actualCash,
-        difference: difference || 0,
-        notes: record.notes,
+        difference: result.difference ?? (difference || 0),
+        notes: notes.trim() || undefined,
       }, millName, currency);
     }
 
     toast.success(shouldPrint ? "تم إغلاق الصندوق وطباعة تقرير Z بنجاح" : "تم اعتماد إغلاق الصندوق بنجاح");
+    setActualCashStr("");
+    setNotes("");
     setClosing(false);
+    await loadHistory();
   };
 
   const reprintPastZReport = (record: DailyClosingRecord) => {

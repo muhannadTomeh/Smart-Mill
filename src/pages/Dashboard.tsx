@@ -71,6 +71,7 @@ export default function Dashboard() {
         .from("expenses")
         .select("amount")
         .eq("season_id", activeSeason.id)
+        .is("voided_at", null)
         .gte("created_at", today),
     ]);
 

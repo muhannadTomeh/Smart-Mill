@@ -280,15 +280,19 @@ var add_expense_default = defineTool8({
     const supabase = supabaseForUser(ctx);
     try {
       const seasonId = await resolveSeasonId(supabase, season_id);
-      const { data, error } = await supabase.from("expenses").insert({
-        user_id: ctx.getUserId(),
-        season_id: seasonId,
-        amount,
-        category,
-        description: description || null
-      }).select().single();
+      const { data, error } = await supabase.rpc("record_expense_v2", {
+        p_season_id: seasonId,
+        p_category: category,
+        p_amount: amount,
+        p_description: description || null,
+        p_payment_method: "cash",
+        p_partner_id: null,
+        p_supplier_id: null,
+        p_partner_name: null,
+        p_creditor_name: null
+      });
       if (error) return errorResult(error.message);
-      return textResult({ expense: data });
+      return textResult({ expense: data, payment_method: "cash" });
     } catch (e) {
       return errorResult(e instanceof Error ? e.message : String(e));
     }
@@ -312,7 +316,7 @@ var list_expenses_default = defineTool9({
     const supabase = supabaseForUser(ctx);
     try {
       const seasonId = await resolveSeasonId(supabase, season_id);
-      const { data, error } = await supabase.from("expenses").select("id,amount,category,description,created_at").eq("season_id", seasonId).order("created_at", { ascending: false }).limit(limit ?? 50);
+      const { data, error } = await supabase.from("expenses").select("id,amount,category,description,created_at").eq("season_id", seasonId).is("voided_at", null).order("created_at", { ascending: false }).limit(limit ?? 50);
       if (error) return errorResult(error.message);
       return textResult({ season_id: seasonId, expenses: data ?? [] });
     } catch (e) {
@@ -322,7 +326,7 @@ var list_expenses_default = defineTool9({
 });
 
 // src/lib/mcp/index.ts
-var projectRef = "cfrxehfzrjbzxqgxpgcv";
+var projectRef = "sqefiqkarwekdxzvgmtr";
 var mcp_default = defineMcp({
   name: "olive-flow-manager",
   title: "olive-flow-manager",
