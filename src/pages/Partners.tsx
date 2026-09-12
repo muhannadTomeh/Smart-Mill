@@ -404,7 +404,6 @@ export default function Partners() {
             <div className="space-y-1.5">
               <Label>اسم الشريك <span className="text-rose-500">*</span></Label>
               <Input
-                placeholder="الاسم الكامل"
                 value={newPartner.name}
                 onChange={(e) => setNewPartner({ ...newPartner, name: e.target.value })}
                 autoFocus
@@ -414,7 +413,6 @@ export default function Partners() {
             <div className="space-y-1.5">
               <Label>رقم الهاتف</Label>
               <Input
-                placeholder="059xxxxxxx"
                 value={newPartner.phone}
                 onChange={(e) => setNewPartner({ ...newPartner, phone: e.target.value })}
               />
@@ -427,7 +425,6 @@ export default function Partners() {
                 min="0"
                 max="100"
                 step="0.1"
-                placeholder="مثال: 25"
                 value={newPartner.share_percent}
                 onChange={(e) => setNewPartner({ ...newPartner, share_percent: e.target.value })}
               />
@@ -436,7 +433,6 @@ export default function Partners() {
             <div className="space-y-1.5">
               <Label>ملاحظات</Label>
               <Textarea
-                placeholder="ملاحظات حول الشراكة أو الاتفاق..."
                 value={newPartner.notes}
                 onChange={(e) => setNewPartner({ ...newPartner, notes: e.target.value })}
                 rows={2}
@@ -479,7 +475,6 @@ export default function Partners() {
                 type="number"
                 min="0.01"
                 step="0.01"
-                placeholder="0"
                 value={txAmount}
                 onChange={(e) => setTxAmount(e.target.value)}
                 className="text-right font-bold text-base"
@@ -496,7 +491,6 @@ export default function Partners() {
             <div className="space-y-1.5">
               <Label>البيان / ملاحظات الحركة</Label>
               <Input
-                placeholder={txType === "deposit" ? "مثال: تمويل سيولة طارئة" : "مثال: سحب دفعة تحت الحساب"}
                 value={txNotes}
                 onChange={(e) => setTxNotes(e.target.value)}
               />

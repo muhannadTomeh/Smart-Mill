@@ -312,7 +312,6 @@ export default function Payables() {
                   <div className="relative w-48 sm:w-64">
                     <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="بحث في الدائنين والملاحظات..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className="pr-8 h-9 text-xs"
@@ -577,7 +576,6 @@ export default function Payables() {
               <div className="space-y-1.5">
                 <Label>ملاحظات السداد (اختياري)</Label>
                 <Input
-                  placeholder="رقم الإيصال أو تفاصيل السداد..."
                   value={settleNotes}
                   onChange={(e) => setSettleNotes(e.target.value)}
                 />
@@ -617,7 +615,6 @@ export default function Payables() {
             <div className="space-y-1.5">
               <Label>اسم المورد أو الشركة <span className="text-rose-500">*</span></Label>
               <Input
-                placeholder="مثال: شركة القدس للتغليف"
                 value={newSupplier.name}
                 onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
                 autoFocus
@@ -627,7 +624,6 @@ export default function Payables() {
             <div className="space-y-1.5">
               <Label>رقم الهاتف</Label>
               <Input
-                placeholder="059xxxxxxx"
                 value={newSupplier.phone}
                 onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
               />
@@ -636,7 +632,6 @@ export default function Payables() {
             <div className="space-y-1.5">
               <Label>العنوان أو المنطقة</Label>
               <Input
-                placeholder="مثال: المنطقة الصناعية - جنين"
                 value={newSupplier.address}
                 onChange={(e) => setNewSupplier({ ...newSupplier, address: e.target.value })}
               />
@@ -645,7 +640,6 @@ export default function Payables() {
             <div className="space-y-1.5">
               <Label>ملاحظات إضافية</Label>
               <Textarea
-                placeholder="تفاصيل التوريد أو الشروط..."
                 value={newSupplier.notes}
                 onChange={(e) => setNewSupplier({ ...newSupplier, notes: e.target.value })}
                 rows={2}

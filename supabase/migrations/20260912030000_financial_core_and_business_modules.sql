@@ -216,7 +216,9 @@ CREATE OR REPLACE FUNCTION public.record_expense_v2(
   p_description    text DEFAULT NULL,
   p_payment_method text DEFAULT 'cash',
   p_partner_id     uuid DEFAULT NULL,
-  p_supplier_id    uuid DEFAULT NULL
+  p_supplier_id    uuid DEFAULT NULL,
+  p_partner_name   text DEFAULT NULL,
+  p_creditor_name  text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -304,6 +306,10 @@ BEGIN
     IF p_supplier_id IS NOT NULL THEN
       SELECT name INTO v_supplier_name FROM public.suppliers WHERE id = p_supplier_id AND mill_id = v_mill_id;
       v_creditor_name := COALESCE(v_supplier_name, 'مورد معتمد');
+    ELSIF p_creditor_name IS NOT NULL AND trim(p_creditor_name) <> '' THEN
+      v_creditor_name := trim(p_creditor_name);
+    ELSIF p_partner_name IS NOT NULL AND trim(p_partner_name) <> '' THEN
+      v_creditor_name := trim(p_partner_name);
     ELSE
       v_creditor_name := COALESCE(p_description, 'دائن مصروف مؤجل');
     END IF;
@@ -333,13 +339,25 @@ BEGIN
 
   -- Method 3: Paid by Partner / Shareholder
   ELSIF p_payment_method = 'partner' THEN
-    IF p_partner_id IS NULL THEN
-      RAISE EXCEPTION 'يرجى تحديد الشريك/المساهم الذي دفع المصروف';
-    END IF;
-
-    SELECT name INTO v_partner_name FROM public.partners WHERE id = p_partner_id AND mill_id = v_mill_id;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION 'الشريك المحدد غير موجود';
+    -- If partner_id is provided, resolve name
+    IF p_partner_id IS NOT NULL THEN
+      SELECT name INTO v_partner_name FROM public.partners WHERE id = p_partner_id AND mill_id = v_mill_id;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'الشريك المحدد غير موجود';
+      END IF;
+    -- If partner_id is not provided, but partner_name is written:
+    ELSIF p_partner_name IS NOT NULL AND trim(p_partner_name) <> '' THEN
+      v_partner_name := trim(p_partner_name);
+      -- Check if partner already exists by name
+      SELECT id INTO p_partner_id FROM public.partners WHERE mill_id = v_mill_id AND lower(trim(name)) = lower(v_partner_name) LIMIT 1;
+      -- If not found, automatically register this partner
+      IF p_partner_id IS NULL THEN
+        INSERT INTO public.partners (mill_id, name, active, created_at)
+        VALUES (v_mill_id, v_partner_name, true, now())
+        RETURNING id INTO p_partner_id;
+      END IF;
+    ELSE
+      RAISE EXCEPTION 'يرجى تدوين أو اختيار اسم الشريك الذي دفع المصروف';
     END IF;
 
     -- Create Payable Due to Partner

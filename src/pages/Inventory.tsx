@@ -976,7 +976,6 @@ const Inventory = () => {
                   step="1"
                   value={purchaseForm.quantity}
                   onChange={(e) => setPurchaseForm((p) => ({ ...p, quantity: e.target.value }))}
-                  placeholder="مثال: 50"
                   className="h-10 text-sm rounded-xl font-mono"
                 />
               </div>
@@ -989,7 +988,6 @@ const Inventory = () => {
                   step="0.5"
                   value={purchaseForm.purchase_price}
                   onChange={(e) => setPurchaseForm((p) => ({ ...p, purchase_price: e.target.value }))}
-                  placeholder="0"
                   className="h-10 text-sm rounded-xl font-mono"
                 />
               </div>
@@ -1002,7 +1000,6 @@ const Inventory = () => {
                   step="0.5"
                   value={purchaseForm.sale_price}
                   onChange={(e) => setPurchaseForm((p) => ({ ...p, sale_price: e.target.value }))}
-                  placeholder="0"
                   className="h-10 text-sm rounded-xl font-mono"
                 />
               </div>
@@ -1097,7 +1094,6 @@ const Inventory = () => {
               <Textarea
                 value={purchaseForm.notes}
                 onChange={(e) => setPurchaseForm((p) => ({ ...p, notes: e.target.value }))}
-                placeholder="رقم فاتورة الشراء أو تفاصيل الإرسالية..."
                 rows={2}
                 className="text-sm rounded-xl resize-none"
               />
@@ -1157,7 +1153,6 @@ const Inventory = () => {
               <Input
                 value={newProductForm.name}
                 onChange={(e) => setNewProductForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="مثال: تنك حديد 16 لتر، أكياس خيش كبيرة..."
                 className="h-10 text-sm rounded-xl"
               />
             </div>
@@ -1167,7 +1162,6 @@ const Inventory = () => {
               <Input
                 value={newProductForm.unit}
                 onChange={(e) => setNewProductForm((p) => ({ ...p, unit: e.target.value }))}
-                placeholder="قطعة، تنك، كيس..."
                 className="h-10 text-sm rounded-xl"
               />
             </div>

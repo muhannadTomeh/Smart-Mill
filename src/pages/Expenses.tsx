@@ -90,7 +90,9 @@ const Expenses = () => {
     description: "",
     payment_method: "cash" as "cash" | "credit" | "partner",
     partner_id: "",
+    partner_name: "",
     supplier_id: "",
+    creditor_name: "",
   });
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
@@ -180,7 +182,9 @@ const Expenses = () => {
       description: "",
       payment_method: "cash",
       partner_id: "",
+      partner_name: "",
       supplier_id: "",
+      creditor_name: "",
     });
     setCustomCategory("");
     if (categories.length > 0) {
@@ -205,8 +209,8 @@ const Expenses = () => {
       return;
     }
 
-    if (newExpense.payment_method === "partner" && !newExpense.partner_id) {
-      toast({ title: "تنبيه", description: "يرجى اختيار الشريك الذي دفع المصروف", variant: "destructive" });
+    if (newExpense.payment_method === "partner" && !newExpense.partner_id && !newExpense.partner_name.trim()) {
+      toast({ title: "تنبيه", description: "يرجى تدوين أو اختيار اسم الشريك الذي دفع المصروف", variant: "destructive" });
       return;
     }
 
@@ -221,8 +225,10 @@ const Expenses = () => {
         p_amount: amount,
         p_description: newExpense.description.trim() || null,
         p_payment_method: newExpense.payment_method,
-        p_partner_id: newExpense.payment_method === "partner" ? newExpense.partner_id : null,
+        p_partner_id: newExpense.payment_method === "partner" && newExpense.partner_id ? newExpense.partner_id : null,
         p_supplier_id: newExpense.payment_method === "credit" && newExpense.supplier_id ? newExpense.supplier_id : null,
+        p_partner_name: newExpense.payment_method === "partner" ? (newExpense.partner_name.trim() || null) : null,
+        p_creditor_name: newExpense.payment_method === "credit" ? (newExpense.creditor_name.trim() || null) : null,
       });
 
       if (error) throw error;
@@ -616,7 +622,6 @@ const Expenses = () => {
                 <Input
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
-                  placeholder="اكتب نوع المصروف (مثل: طعام وضيافة، صيانة، وقود...)"
                   className="h-10 text-sm rounded-xl"
                   autoFocus
                 />
@@ -677,7 +682,6 @@ const Expenses = () => {
                 type="number"
                 value={newExpense.amount}
                 onChange={(e) => setNewExpense((p) => ({ ...p, amount: e.target.value }))}
-                placeholder="أدخل مبلغ المصروف..."
                 min="0"
                 step="0.5"
                 className="h-10 text-sm rounded-xl font-mono"
@@ -736,45 +740,109 @@ const Expenses = () => {
 
             {/* Conditional Sub-selectors */}
             {newExpense.payment_method === "partner" && (
-              <div className="space-y-1.5 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20">
-                <Label className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                  اختر الشريك الذي دفع المصروف *
-                </Label>
-                <select
-                  value={newExpense.partner_id}
-                  onChange={(e) => setNewExpense((p) => ({ ...p, partner_id: e.target.value }))}
-                  className="w-full h-10 px-3 border border-input rounded-xl text-sm bg-background text-foreground"
-                >
-                  <option value="">-- اضغط لاختيار الشريك --</option>
-                  {partners.map((pt) => (
-                    <option key={pt.id} value={pt.id}>
-                      {pt.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-2.5 p-3.5 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                    اسم الشريك الذي دفع المصروف *
+                  </Label>
+                  <Input
+                    value={newExpense.partner_name}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const matched = partners.find((p) => p.name.trim().toLowerCase() === val.trim().toLowerCase());
+                      setNewExpense((prev) => ({
+                        ...prev,
+                        partner_name: val,
+                        partner_id: matched ? matched.id : "",
+                      }));
+                    }}
+                    className="h-10 text-sm rounded-xl"
+                  />
+                </div>
+
+                {partners.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] text-muted-foreground font-medium block">أو اختر من الشركاء المسجلين:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {partners.map((pt) => (
+                        <button
+                          key={pt.id}
+                          type="button"
+                          onClick={() =>
+                            setNewExpense((prev) => ({
+                              ...prev,
+                              partner_id: pt.id,
+                              partner_name: pt.name,
+                            }))
+                          }
+                          className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                            newExpense.partner_id === pt.id || newExpense.partner_name === pt.name
+                              ? "bg-blue-600 text-white border-blue-600 font-bold"
+                              : "bg-background hover:bg-muted text-muted-foreground border-border/60"
+                          }`}
+                        >
+                          {pt.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-[11px] text-muted-foreground">
-                  سيتم اعتبار المصروف مدفوعاً، وتسجيل التزام مستحق للشريك بقيمة {newExpense.amount || 0} {activeCurrency} دون لمس كاش المعصرة.
+                  يكفي تدوين اسم الشريك دون الحاجة لتسجيله مسبقاً؛ وسيتم قيد المصروف مدفوعاً وإثبات دين مستحق للشريك بقيمة {newExpense.amount || 0} {activeCurrency} دون مساس بكاش المعصرة.
                 </p>
               </div>
             )}
 
             {newExpense.payment_method === "credit" && (
-              <div className="space-y-1.5 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                <Label className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                  اختر المورد أو الجهة الدائنة (اختياري)
-                </Label>
-                <select
-                  value={newExpense.supplier_id}
-                  onChange={(e) => setNewExpense((p) => ({ ...p, supplier_id: e.target.value }))}
-                  className="w-full h-10 px-3 border border-input rounded-xl text-sm bg-background text-foreground"
-                >
-                  <option value="">-- جهة دائنة أخرى / بدون تحديد مورد --</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-2.5 p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                    الجهة الدائنة / المورد / الشريك (اختياري)
+                  </Label>
+                  <Input
+                    value={newExpense.creditor_name}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const matched = suppliers.find((s) => s.name.trim().toLowerCase() === val.trim().toLowerCase());
+                      setNewExpense((prev) => ({
+                        ...prev,
+                        creditor_name: val,
+                        supplier_id: matched ? matched.id : "",
+                      }));
+                    }}
+                    className="h-10 text-sm rounded-xl"
+                  />
+                </div>
+
+                {suppliers.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] text-muted-foreground font-medium block">أو اختر من الموردين المسجلين:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {suppliers.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() =>
+                            setNewExpense((prev) => ({
+                              ...prev,
+                              supplier_id: s.id,
+                              creditor_name: s.name,
+                            }))
+                          }
+                          className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                            newExpense.supplier_id === s.id || newExpense.creditor_name === s.name
+                              ? "bg-amber-600 text-white border-amber-600 font-bold"
+                              : "bg-background hover:bg-muted text-muted-foreground border-border/60"
+                          }`}
+                        >
+                          {s.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-[11px] text-muted-foreground">
                   سيتم قيد المصروف وتسجيل ذمة مستحقة الدفع (Payable) على المعصرة دون خصم كاش الصندوق الآن.
                 </p>
@@ -787,7 +855,6 @@ const Expenses = () => {
               <Textarea
                 value={newExpense.description}
                 onChange={(e) => setNewExpense((p) => ({ ...p, description: e.target.value }))}
-                placeholder="أي ملاحظات أو تفاصيل إضافية حول المصروف..."
                 rows={2}
                 className="text-sm rounded-xl resize-none"
               />
