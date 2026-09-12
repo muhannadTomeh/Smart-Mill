@@ -305,7 +305,11 @@ export default function Invoices() {
 
       const containerSummary = getContainerSummary() || "بدون تنكات";
 
-      const { error } = await supabase.rpc("create_invoice_command" as any, {
+      const containerLines = containerTypes
+        .filter((container) => (containerCounts[container.id] || 0) > 0)
+        .map((container) => ({ name: container.name, quantity: containerCounts[container.id] }));
+
+      const { error } = await supabase.rpc("create_invoice_with_containers_command" as any, {
         p_season_id: activeSeason!.id,
         p_customer_id: customerId,
         p_customer_name: invoiceData.customerName.trim(),
@@ -317,6 +321,7 @@ export default function Invoices() {
         p_cash_amount: selectedPayment.cashAmount,
         p_total_display: selectedPayment.total,
         p_queue_id: queueId && queueId !== "manual" ? queueId : null,
+        p_container_lines: containerLines,
         p_idempotency_key: crypto.randomUUID(),
       });
 
