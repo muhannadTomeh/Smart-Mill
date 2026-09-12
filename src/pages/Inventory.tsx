@@ -230,6 +230,31 @@ const Inventory = () => {
     }
   };
 
+  const adjustProductStock = async (product: Product) => {
+    if (!activeSeason) return;
+    const rawQuantity = window.prompt(`تعديل رصيد ${product.name}: أدخل رقمًا موجبًا للإضافة أو سالبًا للخصم.`);
+    if (rawQuantity === null) return;
+    const quantity = Number(rawQuantity);
+    if (!Number.isInteger(quantity) || quantity === 0) {
+      toast({ title: "كمية غير صالحة", description: "أدخل عددًا صحيحًا غير صفر.", variant: "destructive" });
+      return;
+    }
+    const notes = window.prompt("سبب التعديل (اختياري):") ?? null;
+    const { error } = await supabase.rpc("adjust_product_stock_command" as any, {
+      p_season_id: activeSeason.id,
+      p_product_id: product.id,
+      p_quantity: quantity,
+      p_notes: notes,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) {
+      toast({ title: "تعذر تعديل الرصيد", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "تم تسجيل حركة المخزون" });
+    await fetchProductsData();
+  };
+
   const handleProductSelectForPurchase = (productId: string) => {
     const selected = products.find((p) => p.id === productId);
     setPurchaseForm((p) => ({
@@ -817,6 +842,9 @@ const Inventory = () => {
                             </span>
                           </div>
                         </div>
+                        <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => void adjustProductStock(p)}>
+                          تعديل الرصيد بسجل حركة
+                        </Button>
                       </CardContent>
                     </Card>
                   );

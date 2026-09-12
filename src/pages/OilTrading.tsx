@@ -24,6 +24,7 @@ import { CashSessionGuard } from "@/components/CashSessionGuard";
 interface Transaction {
   id: string;
   type: string;
+  ownership: "mill" | "customer";
   amount: number;
   price: number;
   total_price: number;
@@ -50,6 +51,7 @@ const OilTrading = () => {
 
   const [newTransaction, setNewTransaction] = useState({
     type: 'buy' as 'buy' | 'sell',
+    ownership: 'mill' as 'mill' | 'customer',
     amount: "",
     price: "",
     partyName: "",
@@ -70,7 +72,7 @@ const OilTrading = () => {
     setLoading(true);
     try {
       let query = supabase
-        .from("oil_transactions")
+        .from("oil_movements" as any)
         .select("*")
         .eq("season_id", activeSeason.id);
 
@@ -83,7 +85,12 @@ const OilTrading = () => {
       if (error) {
         console.error("fetchTransactions error:", error);
       }
-      setTransactions((data as Transaction[]) || []);
+      setTransactions(((data ?? []) as any[]).map((tx) => ({
+        ...tx,
+        type: tx.direction === "in" ? "buy" : "sell",
+        price: Number(tx.unit_price ?? 0),
+        total_price: Number(tx.amount) * Number(tx.unit_price ?? 0),
+      })) as Transaction[]);
     } catch (err) {
       console.error("Error fetching transactions:", err);
     } finally {
@@ -92,7 +99,7 @@ const OilTrading = () => {
   };
 
   const resetForm = () => {
-    setNewTransaction({ type: 'buy', amount: "", price: "", partyName: "", notes: "" });
+    setNewTransaction({ type: 'buy', ownership: 'mill', amount: "", price: "", partyName: "", notes: "" });
   };
 
   const addTransaction = async () => {
@@ -157,18 +164,19 @@ const OilTrading = () => {
 
     setIsSubmitting(true);
     try {
-      const { error } = await (supabase.rpc as any)("record_oil_transaction_command", {
+      const { error } = await (supabase.rpc as any)("record_oil_movement_command", {
         p_season_id: activeSeason.id,
-        p_type: newTransaction.type,
+        p_ownership: newTransaction.ownership,
+        p_direction: newTransaction.type === 'buy' ? 'in' : 'out',
         p_amount: amount,
-        p_price: price,
+        p_unit_price: price,
         p_party_name: newTransaction.partyName.trim() || null,
         p_notes: newTransaction.notes.trim() || null,
         p_idempotency_key: crypto.randomUUID(),
       });
 
       if (error) {
-        console.error("record_oil_transaction_atomic error:", error);
+        console.error("record_oil_movement_command error:", error);
         toast({
           title: "خطأ في تسجيل العملية",
           description: error.message || "تعذر حفظ المعاملة في قاعدة البيانات",
@@ -428,6 +436,14 @@ const OilTrading = () => {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs font-semibold">ملكية الزيت *</Label>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <button type="button" onClick={() => setNewTransaction((p) => ({ ...p, ownership: 'mill' }))} className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.ownership === 'mill' ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground'}`}>زيت المعصرة</button>
+                <button type="button" onClick={() => setNewTransaction((p) => ({ ...p, ownership: 'customer' }))} className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.ownership === 'customer' ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-border/60 text-muted-foreground'}`}>زيت العميل</button>
+              </div>
+              {newTransaction.ownership === 'customer' && <p className="text-[11px] text-muted-foreground mt-2">زيت العميل يسجل منفصلًا ولا يدخل في مخزون المعصرة أو الصندوق.</p>}
+            </div>
             {/* Type Selection */}
             <div>
               <Label className="text-xs font-semibold">نوع العملية *</Label>
