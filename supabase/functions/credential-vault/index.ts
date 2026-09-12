@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const REVEAL_WINDOW_MINUTES = 10;
+const MAX_REVEALS_PER_WINDOW = 5;
+
 // Derive a standard AES-GCM 256-bit CryptoKey from the server environment secret
 async function getAesKey(secret: string): Promise<CryptoKey> {
   const enc = new TextEncoder();
@@ -135,6 +138,7 @@ serve(async (req) => {
     ).data;
 
     const isSelf = (callerId === targetUserId);
+    const auditReveal = async (outcome: string) => supabaseAdmin.from('credential_reveal_events').insert({ actor_user_id: callerId, target_user_id: targetUserId, credential_type: credentialType, outcome });
 
     // =========================================================================
     // ACTION: REVEAL (Platform Admin ONLY)
@@ -142,11 +146,15 @@ serve(async (req) => {
     // =========================================================================
     if (action === 'reveal') {
       if (!isPlatformAdmin) {
+        await auditReveal('denied');
         return new Response(
           JSON.stringify({ error: 'غير مصرح: استرجاع بيانات الاعتماد مخصص فقط للمشرف العام' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
+      const { count } = await supabaseAdmin.from('credential_reveal_events').select('id', { count: 'exact', head: true }).eq('actor_user_id', callerId).gte('created_at', new Date(Date.now() - REVEAL_WINDOW_MINUTES * 60000).toISOString());
+      if ((count || 0) >= MAX_REVEALS_PER_WINDOW) { await auditReveal('rate_limited'); return new Response(JSON.stringify({ error: 'تم تجاوز حد طلبات الكشف. يرجى المحاولة لاحقاً.' }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '600' } }); }
 
       // Non-admins can NEVER view Platform Admin credentials
       if (targetUserId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114' && callerId !== '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
@@ -174,6 +182,7 @@ serve(async (req) => {
       }
 
       if (!encryptedPayload) {
+        await auditReveal('missing');
         return new Response(
           JSON.stringify({ 
             value: null, 
@@ -189,6 +198,7 @@ serve(async (req) => {
 
       // Audit Log: Record reveal event (WITHOUT recording the secret value itself)
       try {
+        await auditReveal('success');
         await supabaseAdmin.from('admin_audit_log').insert({
           admin_user_id: callerId,
           viewed_user_id: targetUserId,
