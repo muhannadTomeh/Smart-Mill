@@ -24,7 +24,7 @@ import { CashSessionGuard } from "@/components/CashSessionGuard";
 interface Transaction {
   id: string;
   type: string;
-  ownership: "mill" | "customer";
+  source_type: string;
   amount: number;
   price: number;
   total_price: number;
@@ -51,7 +51,7 @@ const OilTrading = () => {
 
   const [newTransaction, setNewTransaction] = useState({
     type: 'buy' as 'buy' | 'sell',
-    ownership: 'mill' as 'mill' | 'customer',
+    paymentMethod: 'cash' as 'cash' | 'credit',
     amount: "",
     price: "",
     partyName: "",
@@ -87,7 +87,7 @@ const OilTrading = () => {
       }
       setTransactions(((data ?? []) as any[]).map((tx) => ({
         ...tx,
-        type: tx.direction === "in" ? "buy" : "sell",
+        type: tx.movement_type === "IN" ? "buy" : "sell",
         price: Number(tx.unit_price ?? 0),
         total_price: Number(tx.amount) * Number(tx.unit_price ?? 0),
       })) as Transaction[]);
@@ -99,7 +99,7 @@ const OilTrading = () => {
   };
 
   const resetForm = () => {
-    setNewTransaction({ type: 'buy', ownership: 'mill', amount: "", price: "", partyName: "", notes: "" });
+    setNewTransaction({ type: 'buy', paymentMethod: 'cash', amount: "", price: "", partyName: "", notes: "" });
   };
 
   const addTransaction = async () => {
@@ -153,7 +153,7 @@ const OilTrading = () => {
       return;
     }
 
-    if (newTransaction.type === 'buy' && totalPrice > inventory.total_cash) {
+    if (newTransaction.type === 'buy' && newTransaction.paymentMethod === 'cash' && totalPrice > inventory.total_cash) {
       toast({
         title: "الرصيد النقدي لا يكفي",
         description: `الكاش المتوفر بالصندوق: ${inventory.total_cash.toLocaleString()} ${selectedCurrency} فقط`,
@@ -164,19 +164,19 @@ const OilTrading = () => {
 
     setIsSubmitting(true);
     try {
-      const { error } = await (supabase.rpc as any)("record_oil_movement_command", {
+      const { error } = await (supabase.rpc as any)("record_oil_trade_command", {
         p_season_id: activeSeason.id,
-        p_ownership: newTransaction.ownership,
-        p_direction: newTransaction.type === 'buy' ? 'in' : 'out',
-        p_amount: amount,
+        p_movement_type: newTransaction.type === 'buy' ? 'IN' : 'OUT',
+        p_quantity: amount,
         p_unit_price: price,
+        p_payment_method: newTransaction.type === 'buy' ? newTransaction.paymentMethod : 'cash',
         p_party_name: newTransaction.partyName.trim() || null,
         p_notes: newTransaction.notes.trim() || null,
         p_idempotency_key: crypto.randomUUID(),
       });
 
       if (error) {
-        console.error("record_oil_movement_command error:", error);
+        console.error("record_oil_trade_command error:", error);
         toast({
           title: "خطأ في تسجيل العملية",
           description: error.message || "تعذر حفظ المعاملة في قاعدة البيانات",
@@ -436,14 +436,16 @@ const OilTrading = () => {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {newTransaction.type === 'buy' && (
             <div>
-              <Label className="text-xs font-semibold">ملكية الزيت *</Label>
+              <Label className="text-xs font-semibold">طريقة الدفع *</Label>
               <div className="grid grid-cols-2 gap-3 mt-2">
-                <button type="button" onClick={() => setNewTransaction((p) => ({ ...p, ownership: 'mill' }))} className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.ownership === 'mill' ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground'}`}>زيت المعصرة</button>
-                <button type="button" onClick={() => setNewTransaction((p) => ({ ...p, ownership: 'customer' }))} className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.ownership === 'customer' ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-border/60 text-muted-foreground'}`}>زيت العميل</button>
+                <button type="button" onClick={() => setNewTransaction((p) => ({ ...p, paymentMethod: 'cash' }))} className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.paymentMethod === 'cash' ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground'}`}>نقدي</button>
+                <button type="button" onClick={() => setNewTransaction((p) => ({ ...p, paymentMethod: 'credit' }))} className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.paymentMethod === 'credit' ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground'}`}>آجل</button>
               </div>
-              {newTransaction.ownership === 'customer' && <p className="text-[11px] text-muted-foreground mt-2">زيت العميل يسجل منفصلًا ولا يدخل في مخزون المعصرة أو الصندوق.</p>}
+              {newTransaction.paymentMethod === 'credit' && <p className="text-[11px] text-muted-foreground mt-2">سيُضاف الزيت إلى المخزون ويُنشأ مستحق للمورّد دون خصم نقدي.</p>}
             </div>
+            )}
             {/* Type Selection */}
             <div>
               <Label className="text-xs font-semibold">نوع العملية *</Label>

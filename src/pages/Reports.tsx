@@ -62,6 +62,10 @@ export default function Reports() {
     totalOilSalesAmount: 0,
     totalOilPurchases: 0,
     totalOilPurchasesAmount: 0,
+    oilFromMilling: 0,
+    oilPurchasedKg: 0,
+    oilSoldKg: 0,
+    oilOpeningAndAdjustments: 0,
   });
 
   useEffect(() => {
@@ -72,12 +76,13 @@ export default function Reports() {
     if (!activeSeason) return;
     const dateFrom = getDateRange(period);
 
-    const [invoicesRes, expensesRes, salesRes, purchasesRes, workerPaymentsRes] = await Promise.all([
+    const [invoicesRes, expensesRes, salesRes, purchasesRes, workerPaymentsRes, oilMovementsRes] = await Promise.all([
       supabase.from("invoices").select("*").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
       supabase.from("expenses").select("amount").eq("season_id", activeSeason.id).is("voided_at", null).gte("created_at", dateFrom),
       supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "sell").gte("created_at", dateFrom),
       supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),
       supabase.from("worker_payments").select("amount").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
+      (supabase.from("oil_movements" as any) as any).select("source_type,movement_type,quantity").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
     ]);
 
     const invoices = invoicesRes.data || [];
@@ -91,6 +96,11 @@ export default function Reports() {
     const totalOilSalesAmount = (salesRes.data || []).reduce((s, t: any) => s + Number(t.amount), 0);
     const totalOilPurchases = (purchasesRes.data || []).reduce((s, t: any) => s + Number(t.total_price), 0);
     const totalOilPurchasesAmount = (purchasesRes.data || []).reduce((s, t: any) => s + Number(t.amount), 0);
+    const movements = (oilMovementsRes.data || []) as any[];
+    const oilFromMilling = movements.filter((m) => m.source_type === "milling_settlement" && m.movement_type === "IN").reduce((s, m) => s + Number(m.quantity), 0);
+    const oilPurchasedKg = movements.filter((m) => m.source_type === "oil_purchase" && m.movement_type === "IN").reduce((s, m) => s + Number(m.quantity), 0);
+    const oilSoldKg = movements.filter((m) => m.source_type === "oil_sale" && m.movement_type === "OUT").reduce((s, m) => s + Number(m.quantity), 0);
+    const oilOpeningAndAdjustments = movements.filter((m) => m.source_type === "opening_balance" || m.source_type === "adjustment").reduce((s, m) => s + (m.movement_type === "IN" ? Number(m.quantity) : -Number(m.quantity)), 0);
 
     setStats({
       totalOilProduced,
@@ -103,6 +113,10 @@ export default function Reports() {
       totalOilSalesAmount,
       totalOilPurchases,
       totalOilPurchasesAmount,
+      oilFromMilling,
+      oilPurchasedKg,
+      oilSoldKg,
+      oilOpeningAndAdjustments,
     });
   };
 
@@ -224,6 +238,13 @@ export default function Reports() {
                   <p className="text-2xl font-bold">{inventory.total_oil} كغم</p>
                 </div>
               </div>
+            </div>
+            <div className="p-4 rounded-lg bg-muted/50 border space-y-2 text-sm">
+              <p className="font-medium">مصادر حركة الزيت خلال الفترة</p>
+              <div className="flex justify-between"><span className="text-muted-foreground">ردّ تسويات العصر</span><strong>+{stats.oilFromMilling.toFixed(1)} كغم</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">زيت مُشترى</span><strong>+{stats.oilPurchasedKg.toFixed(1)} كغم</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">زيت مباع</span><strong>-{stats.oilSoldKg.toFixed(1)} كغم</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">رصيد افتتاحي / تعديلات</span><strong>{stats.oilOpeningAndAdjustments >= 0 ? "+" : ""}{stats.oilOpeningAndAdjustments.toFixed(1)} كغم</strong></div>
             </div>
             <div className="flex items-center justify-between p-4 rounded-lg bg-green-500/5 border">
               <div className="flex items-center gap-3">
