@@ -636,78 +636,6 @@ export type Database = {
         }
         Relationships: []
       }
-      mills: {
-        Row: {
-          country: string | null
-          created_at: string | null
-          id: string
-          location: string | null
-          mill_code: string | null
-          monthly_fee: number | null
-          name: string
-          owner_user_id: string | null
-          phone: string | null
-          secondary_phone: string | null
-          subscription_status: Database["public"]["Enums"]["subscription_status"] | null
-          updated_at: string | null
-        }
-        Insert: {
-          country?: string | null
-          created_at?: string | null
-          id?: string
-          location?: string | null
-          mill_code?: string | null
-          monthly_fee?: number | null
-          name: string
-          owner_user_id?: string | null
-          phone?: string | null
-          secondary_phone?: string | null
-          subscription_status?: Database["public"]["Enums"]["subscription_status"] | null
-          updated_at?: string | null
-        }
-        Update: {
-          country?: string | null
-          created_at?: string | null
-          id?: string
-          location?: string | null
-          mill_code?: string | null
-          monthly_fee?: number | null
-          name?: string
-          owner_user_id?: string | null
-          phone?: string | null
-          secondary_phone?: string | null
-          subscription_status?: Database["public"]["Enums"]["subscription_status"] | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      mill_memberships: {
-        Row: {
-          created_at: string | null
-          display_username: string | null
-          id: string
-          mill_id: string
-          role: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          display_username?: string | null
-          id?: string
-          mill_id: string
-          role: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          display_username?: string | null
-          id?: string
-          mill_id?: string
-          role?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       system_settings: {
         Row: {
           key: string
@@ -988,8 +916,12 @@ export type Database = {
         Args: { input_pin: string; owner_id: string }
         Returns: boolean
       }
-      has_role: {
-        Args: { _role: string; _user_id: string }
+      verify_admin_pin: {
+        Args: { p_pin: string }
+        Returns: boolean
+      }
+      set_admin_pin: {
+        Args: { p_new_pin: string; p_current_pin?: string }
         Returns: boolean
       }
       is_platform_admin: {

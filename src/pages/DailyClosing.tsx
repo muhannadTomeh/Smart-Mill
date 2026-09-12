@@ -403,6 +403,7 @@ export default function DailyClosing() {
 
     try {
       const existing = [record, ...closingsHistory];
+      const storageKey = `closings_history_${millId || activeSeason?.id || 'default'}`;
       localStorage.setItem(storageKey, JSON.stringify(existing));
       setClosingsHistory(existing);
     } catch (e) {

@@ -814,6 +814,8 @@ const Customers = () => {
               millName={millName}
               data={{
                 ...previewInvoice,
+                oil_amount: previewInvoice.oil_amount ?? 0,
+                cash_amount: previewInvoice.cash_amount ?? 0,
                 season_name: activeSeason?.name,
               }}
             />

@@ -653,7 +653,10 @@ export default function MillDetails() {
       const originalPassword = newEmployee.password.trim();
       const originalName = newEmployee.name.trim();
 
-      const targetMillId = millData?.mill?.id || millId || resolvedOwnerId;
+      const targetMillId = millData?.mill?.id || millId;
+      if (!targetMillId) {
+        throw new Error("معرف المعصرة غير متوفر");
+      }
       const { user_id: createdUserId } = await createEmployeeAccount({
         millId: targetMillId,
         displayName: originalName,

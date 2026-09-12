@@ -71,8 +71,8 @@ const Expenses = () => {
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, refetch: refetchInventory } = useInventory();
-  const { currency, selectedCurrency } = useCurrency();
-  const activeCurrency = selectedCurrency || currency || "₪";
+  const { currency } = useCurrency();
+  const activeCurrency = currency || "₪";
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);

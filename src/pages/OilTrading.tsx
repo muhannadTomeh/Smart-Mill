@@ -36,7 +36,8 @@ const OilTrading = () => {
   const { user, millId } = useAuth();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
-  const { selectedCurrency } = useCurrency();
+  const { currency } = useCurrency();
+  const selectedCurrency = currency || "₪";
   const { inventory, refetch: refetchInventory } = useInventory();
   
   const [transactions, setTransactions] = useState<Transaction[]>([]);

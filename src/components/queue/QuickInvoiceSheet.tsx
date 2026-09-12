@@ -27,7 +27,7 @@ interface ContainerType {
 interface QuickInvoiceSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  customer: { id: string; name: string; phone: string | null } | null;
+  customer: { id: string; name: string; phone: string | null; notes?: string | null } | null;
   onCompleted: (invoicedQueueId?: string) => void;
 }
 

@@ -20,6 +20,7 @@ export interface Profile {
 }
 
 export type UserRole = 'platform_admin' | 'mill_owner' | 'mill_employee';
+export type AppRole = UserRole;
 
 export interface MillInfo {
   id: string;

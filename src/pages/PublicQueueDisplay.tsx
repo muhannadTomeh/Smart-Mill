@@ -142,7 +142,8 @@ export default function PublicQueueDisplay() {
                          (localMatch ? parseStartedAt(localMatch) : null);
 
       const parsedEst = parseEstimatedMinutes(i) ?? (localEst ? Number(localEst) : null);
-      const parsedStart = parseStartedAt(i) ?? (localStart ? (typeof localStart === "number" ? new Date(localStart).toISOString() : localStart) : null);
+      const parsedStartMs = parseStartedAt(i);
+      const parsedStart = parsedStartMs ? new Date(parsedStartMs).toISOString() : (localStart ? (typeof localStart === "number" ? new Date(localStart).toISOString() : String(localStart)) : null);
 
       let pos = Number(i.queue_position ?? i.position);
       if (isNaN(pos) || pos <= 0) {

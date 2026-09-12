@@ -19,6 +19,8 @@ import {
   Unlock,
   UserCog,
   LockOpen,
+  HandCoins,
+  Users2,
 } from "lucide-react"
 import { useState } from "react"
 import { NavLink, useLocation } from "react-router-dom"
