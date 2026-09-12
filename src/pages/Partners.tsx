@@ -172,12 +172,13 @@ export default function Partners() {
 
     setTxLoading(true);
     try {
-      const { data, error } = await supabase.rpc("record_partner_transaction_atomic" as any, {
+      const { data, error } = await supabase.rpc("record_partner_transaction_command" as any, {
         p_season_id: activeSeason.id,
         p_partner_id: txDialogTarget.id,
         p_type: txType,
         p_amount: amount,
         p_notes: txNotes.trim() || null,
+        p_idempotency_key: crypto.randomUUID(),
       });
 
       if (error) throw error;

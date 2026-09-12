@@ -305,7 +305,7 @@ export default function Invoices() {
 
       const containerSummary = getContainerSummary() || "بدون تنكات";
 
-      const { error } = await supabase.rpc("create_invoice_and_settle", {
+      const { error } = await supabase.rpc("create_invoice_command" as any, {
         p_season_id: activeSeason!.id,
         p_customer_id: customerId,
         p_customer_name: invoiceData.customerName.trim(),
@@ -317,6 +317,7 @@ export default function Invoices() {
         p_cash_amount: selectedPayment.cashAmount,
         p_total_display: selectedPayment.total,
         p_queue_id: queueId && queueId !== "manual" ? queueId : null,
+        p_idempotency_key: crypto.randomUUID(),
       });
 
       if (error) {

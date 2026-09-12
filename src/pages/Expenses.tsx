@@ -220,7 +220,7 @@ const Expenses = () => {
 
     try {
       // 1. Call Atomic RPC: record_expense_v2
-      const { data, error } = await supabase.rpc("record_expense_v2" as any, {
+      const { data, error } = await supabase.rpc("record_expense_command" as any, {
         p_season_id: activeSeason.id,
         p_category: finalCategory,
         p_amount: amount,
@@ -230,6 +230,7 @@ const Expenses = () => {
         p_supplier_id: newExpense.payment_method === "credit" && newExpense.supplier_id ? newExpense.supplier_id : null,
         p_partner_name: newExpense.payment_method === "partner" ? (newExpense.partner_name.trim() || null) : null,
         p_creditor_name: newExpense.payment_method === "credit" ? (newExpense.creditor_name.trim() || null) : null,
+        p_idempotency_key: crypto.randomUUID(),
       });
 
       if (error) throw error;

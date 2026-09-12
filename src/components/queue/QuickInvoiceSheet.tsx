@@ -178,7 +178,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       }
     }
 
-    const { error } = await supabase.rpc("create_invoice_and_settle", {
+    const { error } = await supabase.rpc("create_invoice_command" as any, {
       p_season_id: activeSeason!.id,
       p_customer_id: customerId,
       p_customer_name: customer.name,
@@ -190,6 +190,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       p_cash_amount: selected.cashAmount,
       p_total_display: selected.label,
       p_queue_id: customer.id,
+      p_idempotency_key: crypto.randomUUID(),
     });
 
     if (error) {

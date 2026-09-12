@@ -157,13 +157,14 @@ const OilTrading = () => {
 
     setIsSubmitting(true);
     try {
-      const { error } = await (supabase.rpc as any)("record_oil_transaction_atomic", {
+      const { error } = await (supabase.rpc as any)("record_oil_transaction_command", {
         p_season_id: activeSeason.id,
         p_type: newTransaction.type,
         p_amount: amount,
         p_price: price,
         p_party_name: newTransaction.partyName.trim() || null,
         p_notes: newTransaction.notes.trim() || null,
+        p_idempotency_key: crypto.randomUUID(),
       });
 
       if (error) {

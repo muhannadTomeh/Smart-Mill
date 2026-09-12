@@ -154,11 +154,12 @@ export default function Payables() {
 
     setSettleLoading(true);
     try {
-      const { data, error } = await supabase.rpc("settle_payable_atomic" as any, {
+      const { data, error } = await supabase.rpc("settle_payable_command" as any, {
         p_payable_id: settleTarget.id,
         p_amount: amount,
         p_payment_method: settleMethod,
         p_notes: settleNotes.trim() || null,
+        p_idempotency_key: crypto.randomUUID(),
       });
 
       if (error) throw error;
