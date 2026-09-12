@@ -93,7 +93,22 @@ export function CashSessionProvider({ children }: { children: React.ReactNode })
       } else if (data) {
         const result = data as any;
         setMillId(result.mill_id ?? null);
-        setSession(result.session ?? null);
+        if (result.session) {
+          const s = result.session;
+          const openBal = Number(s.opening_balance) || 0;
+          const cashIn = Number(s.total_cash_in) || 0;
+          const cashOut = Number(s.total_cash_out) || 0;
+          const expBal = s.expected_balance !== undefined ? Number(s.expected_balance) : (openBal + cashIn - cashOut);
+          setSession({
+            ...s,
+            opening_balance: openBal,
+            total_cash_in: cashIn,
+            total_cash_out: cashOut,
+            expected_balance: expBal,
+          });
+        } else {
+          setSession(null);
+        }
       } else {
         setSession(null);
         setMillId(null);

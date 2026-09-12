@@ -79,16 +79,27 @@ interface CloseDialogProps {
   onClose: () => void;
   onConfirm: (balance: number, note: string) => void;
   loading: boolean;
-  sessionCashIn: number;
-  sessionCashOut: number;
-  openingBalance: number;
+  sessionCashIn?: number;
+  sessionCashOut?: number;
+  openingBalance?: number;
 }
 
-function CloseSessionDialog({ open, onClose, onConfirm, loading, sessionCashIn, sessionCashOut, openingBalance }: CloseDialogProps) {
+function CloseSessionDialog({ 
+  open, 
+  onClose, 
+  onConfirm, 
+  loading, 
+  sessionCashIn = 0, 
+  sessionCashOut = 0, 
+  openingBalance = 0 
+}: CloseDialogProps) {
   const [balance, setBalance] = useState("");
   const [note, setNote] = useState("");
 
-  const expectedBalance = openingBalance + sessionCashIn - sessionCashOut;
+  const cashIn = Number(sessionCashIn) || 0;
+  const cashOut = Number(sessionCashOut) || 0;
+  const openBal = Number(openingBalance) || 0;
+  const expectedBalance = openBal + cashIn - cashOut;
   const actualBalance = balance === "" ? null : parseFloat(balance) || 0;
   const difference = actualBalance !== null ? actualBalance - expectedBalance : null;
 
@@ -111,15 +122,15 @@ function CloseSessionDialog({ open, onClose, onConfirm, loading, sessionCashIn, 
           <div className="rounded-xl bg-muted p-3 space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">الرصيد الافتتاحي</span>
-              <span className="font-medium">{openingBalance.toFixed(2)} ₪</span>
+              <span className="font-medium">{openBal.toFixed(2)} ₪</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3 w-3 text-emerald-500" /> إجمالي الوارد</span>
-              <span className="font-medium text-emerald-600">+{sessionCashIn.toFixed(2)} ₪</span>
+              <span className="font-medium text-emerald-600">+{cashIn.toFixed(2)} ₪</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground flex items-center gap-1"><TrendingDown className="h-3 w-3 text-rose-500" /> إجمالي الصادر</span>
-              <span className="font-medium text-rose-600">-{sessionCashOut.toFixed(2)} ₪</span>
+              <span className="font-medium text-rose-600">-{cashOut.toFixed(2)} ₪</span>
             </div>
             <div className="border-t border-border/60 pt-1 flex justify-between font-semibold">
               <span>المتوقع في الدرج</span>
@@ -249,9 +260,9 @@ export function CashSessionBanner() {
           onClose={() => setCloseDialog(false)}
           onConfirm={handleClose}
           loading={actionLoading}
-          sessionCashIn={session.total_cash_in}
-          sessionCashOut={session.total_cash_out}
-          openingBalance={session.opening_balance}
+          sessionCashIn={Number(session?.total_cash_in) || 0}
+          sessionCashOut={Number(session?.total_cash_out) || 0}
+          openingBalance={Number(session?.opening_balance) || 0}
         />
       </>
     );

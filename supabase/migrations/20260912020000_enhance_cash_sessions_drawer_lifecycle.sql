@@ -256,19 +256,73 @@ BEGIN
   LEFT JOIN public.profiles p ON p.id = u.id
   WHERE u.id = v_session.opened_by;
 
-  RETURN jsonb_build_object(
-    'session', jsonb_build_object(
-      'id',              v_session.id,
-      'mill_id',         v_session.mill_id,
-      'season_id',       v_session.season_id,
-      'opened_by',       v_session.opened_by,
-      'opener_name',     v_opener_name,
-      'opening_balance', v_session.opening_balance,
-      'opened_at',       v_session.opened_at,
-      'status',          v_session.status
-    ),
-    'mill_id', v_mill_id
-  );
+  -- Calculate live cash in for this session
+  DECLARE
+    v_invoices_cash  numeric := 0;
+    v_oil_sales_cash numeric := 0;
+    v_cust_pay_cash  numeric := 0;
+    v_expenses_cash  numeric := 0;
+    v_oil_pur_cash   numeric := 0;
+    v_worker_cash    numeric := 0;
+    v_standalone_in  numeric := 0;
+    v_standalone_out numeric := 0;
+    v_cash_in        numeric := 0;
+    v_cash_out       numeric := 0;
+  BEGIN
+    SELECT COALESCE(SUM(cash_amount), 0) INTO v_invoices_cash
+    FROM public.invoices
+    WHERE cash_session_id = v_session.id;
+
+    SELECT COALESCE(SUM(total_price), 0) INTO v_oil_sales_cash
+    FROM public.oil_transactions
+    WHERE cash_session_id = v_session.id AND type = 'sell';
+
+    SELECT COALESCE(SUM(amount), 0) INTO v_cust_pay_cash
+    FROM public.customer_payments
+    WHERE cash_session_id = v_session.id AND payment_method = 'cash';
+
+    SELECT COALESCE(SUM(amount), 0) INTO v_standalone_in
+    FROM public.financial_transactions
+    WHERE cash_session_id = v_session.id AND type = 'income' AND payment_method = 'cash';
+
+    v_cash_in := v_invoices_cash + v_oil_sales_cash + v_cust_pay_cash + v_standalone_in;
+
+    -- Calculate live cash out for this session
+    SELECT COALESCE(SUM(amount), 0) INTO v_expenses_cash
+    FROM public.expenses
+    WHERE cash_session_id = v_session.id;
+
+    SELECT COALESCE(SUM(total_price), 0) INTO v_oil_pur_cash
+    FROM public.oil_transactions
+    WHERE cash_session_id = v_session.id AND type = 'buy';
+
+    SELECT COALESCE(SUM(amount), 0) INTO v_worker_cash
+    FROM public.worker_payments
+    WHERE cash_session_id = v_session.id;
+
+    SELECT COALESCE(SUM(amount), 0) INTO v_standalone_out
+    FROM public.financial_transactions
+    WHERE cash_session_id = v_session.id AND type = 'expense' AND payment_method = 'cash';
+
+    v_cash_out := v_expenses_cash + v_oil_pur_cash + v_worker_cash + v_standalone_out;
+
+    RETURN jsonb_build_object(
+      'session', jsonb_build_object(
+        'id',               v_session.id,
+        'mill_id',          v_session.mill_id,
+        'season_id',        v_session.season_id,
+        'opened_by',        v_session.opened_by,
+        'opener_name',      v_opener_name,
+        'opening_balance',  v_session.opening_balance,
+        'opened_at',        v_session.opened_at,
+        'status',           v_session.status,
+        'total_cash_in',    v_cash_in,
+        'total_cash_out',   v_cash_out,
+        'expected_balance', (v_session.opening_balance + v_cash_in - v_cash_out)
+      ),
+      'mill_id', v_mill_id
+    );
+  END;
 END;
 $$;
 

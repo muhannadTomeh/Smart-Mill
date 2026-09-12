@@ -109,8 +109,8 @@ export default function Dashboard() {
 
 
   const statCards = [
-    { label: "الرصيد", hint: "نقداً", value: `${inventory.total_cash.toFixed(0)} ₪`, icon: DollarSign, tone: "text-primary", bg: "bg-primary/10", sensitive: true },
-    { label: "الزيت", hint: `${(inventory.total_oil / 16).toFixed(1)} تنكة`, value: `${inventory.total_oil.toFixed(1)} كغم`, icon: Droplets, tone: "text-[hsl(var(--primary-glow))]", bg: "bg-[hsl(var(--primary-glow))]/12" },
+    { label: "الرصيد", hint: "نقداً", value: `${(Number(inventory?.total_cash) || 0).toFixed(0)} ₪`, icon: DollarSign, tone: "text-primary", bg: "bg-primary/10", sensitive: true },
+    { label: "الزيت", hint: `${((Number(inventory?.total_oil) || 0) / 16).toFixed(1)} تنكة`, value: `${(Number(inventory?.total_oil) || 0).toFixed(1)} كغم`, icon: Droplets, tone: "text-[hsl(var(--primary-glow))]", bg: "bg-[hsl(var(--primary-glow))]/12" },
     { label: "في الطابور", hint: "زبون بانتظار العصر", value: stats.waitingCount, icon: Clock, tone: "text-[hsl(var(--warning))]", bg: "bg-[hsl(var(--warning))]/12" },
     { label: "تم الإنجاز", hint: "اليوم", value: stats.doneCount, icon: CheckCircle, tone: "text-[hsl(var(--success))]", bg: "bg-[hsl(var(--success))]/12" },
     { label: "مصاريف اليوم", hint: "شيكل", value: `${stats.todayExpenses} ₪`, icon: Wallet, tone: "text-destructive", bg: "bg-destructive/10", sensitive: true },
