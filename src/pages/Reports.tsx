@@ -47,7 +47,6 @@ const periodLabels: Record<Period, string> = {
 export default function Reports() {
   const { user, millId } = useAuth();
   const { isEmployee } = useRole();
-  if (isEmployee) return <Navigate to="/queue" replace />;
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
   const [period, setPeriod] = useState<Period>("daily");
@@ -110,6 +109,10 @@ export default function Reports() {
   const totalOutgoing = stats.totalExpenses + stats.totalWorkerPayments + stats.totalOilPurchases;
   const totalIncoming = stats.totalCashEarned + stats.totalOilSales;
   const netProfit = totalIncoming - totalOutgoing;
+
+  if (isEmployee) {
+    return <Navigate to="/queue" replace />;
+  }
 
   return (
     <div className="space-y-6" dir="rtl">

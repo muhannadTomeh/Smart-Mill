@@ -80,7 +80,6 @@ const kindMeta: Record<MovementKind, { label: string; icon: any; color: string }
 
 const Inventory = () => {
   const { isEmployee } = useRole();
-  if (isEmployee) return <Navigate to="/queue" replace />;
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
   const { inventory, loading: invLoading, refetch: refetchInventory } = useInventory();
@@ -377,6 +376,10 @@ const Inventory = () => {
       { oilDelta: 0, cashDelta: 0, count: 0 }
     );
   }, [todayMovements]);
+
+  if (isEmployee) {
+    return <Navigate to="/queue" replace />;
+  }
 
   return (
     <div className="space-y-6 text-right" dir="rtl">

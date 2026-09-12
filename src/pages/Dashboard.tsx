@@ -25,7 +25,6 @@ import {
 
 export default function Dashboard() {
   const { isEmployee } = useRole();
-  if (isEmployee) return <Navigate to="/queue" replace />;
   const { user, millId } = useAuth();
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
@@ -125,6 +124,10 @@ export default function Dashboard() {
 
   const procRemSec = currentProcessing ? getRemainingSeconds(currentProcessing, nowMs) : null;
   const procEstMin = currentProcessing ? parseEstimatedMinutes(currentProcessing) : null;
+
+  if (isEmployee) {
+    return <Navigate to="/queue" replace />;
+  }
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto animate-rise" dir="rtl">
