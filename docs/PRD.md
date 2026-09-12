@@ -60,7 +60,7 @@ Goals: quick daily operation; correct, traceable financial effects; inventory th
 
 - `PROD-001` **PARTIAL**: products, suppliers, purchases and stock movement ledger exist; purchase RPC increases stock and records funding. Product sale is not yet connected to invoice creation, so product stock cannot yet be claimed as end-to-end correct.
 - `PROD-002` **PARTIAL**: `products.current_stock` is mutable alongside stock movements; one authoritative balance/constraint is required to prevent drift and negatives.
-- `OIL-001` **PARTIAL**: oil transactions have an atomic RPC and `inventory.total_oil`; ownership class (mill-owned versus customer-owned) is not represented clearly enough.
+- `OIL-001` **PARTIAL**: sellable mill oil uses source-classified movements. Milling settlement and oil purchase are separate `IN` sources; oil sale is `OUT`. The normal trade UI never asks the operator to choose oil ownership.
 - `WORK-001` **PARTIAL**: workers, work records and cash wage payment exist. Workers can still be created/edited/deleted directly from the UI; historical worker/debt rules need protection.
 - `INV-002` **PARTIAL**: `inventory` holds seasonal total oil/cash and `daily_inventory` remains a manual/legacy parallel store. Daily movement must become a derived view rather than a synchronization task.
 
@@ -68,7 +68,7 @@ Goals: quick daily operation; correct, traceable financial effects; inventory th
 
 - `FIN-002` **PROPOSED**: each economic event has exactly one immutable financial event or a linked explicit reversal; voids never delete history.
 - `FIN-003` **PROPOSED**: distinguish mill cash, drawer cash, revenue, expense, receivable, supplier payable, partner due, contribution and withdrawal in labels and reports.
-- `INV-003` **PROPOSED**: only mill-owned oil is saleable inventory; customer oil is custody/settlement information, not mill stock.
+- `INV-003` **PROPOSED**: all oil in sellable mill inventory is traced by source (`milling_settlement`, `oil_purchase`, `opening_balance`, or `adjustment`); a sale creates `oil_sale / OUT`. Customer oil that is not transferred to the mill is not an inventory movement.
 - `INV-004` **PROPOSED**: no stock may fall below zero; invoice lines retain price, description and quantity at the time of sale.
 - `CASH-004` **PROPOSED**: only cash events that physically affect the drawer receive `cash_session_id`; credit/partner-funded events must not.
 - `CASH-005` **EXISTING**: opening a second session fails; closing records expected, actual and difference.
@@ -89,10 +89,43 @@ Goals: quick daily operation; correct, traceable financial effects; inventory th
 - `UX-001` **EXISTING**: app shell is RTL and has mobile sidebar patterns; all primary flows must be tested at 320–430px widths.
 - `UX-002` **PROPOSED**: use Arabic operational terms and show a single next action: open drawer, process queue customer, or reconcile drawer.
 - `REP-001` **PARTIAL**: reports and daily closing exist but use calendar-day queries. They must report drawer/session totals separately from date/season performance.
-- `VAL-001` **PROPOSED**: validate membership, season status, party ownership, positive amounts, cash sufficiency, inventory availability and duplicate-submit key at the backend.
+- `VAL-001` **PROPOSED**: validate membership, season status, party relationship, positive amounts, cash sufficiency, inventory availability, oil source classification and duplicate-submit key at the backend.
 
 ## 9. Acceptance criteria and scope
 
-Before delivery: no cross-mill read/write; all material money/stock movements atomic and idempotent; session reconciliation uses the same authoritative ledger; no negative stock; owner admin PIN cannot elevate employee; product/oil ownership is clear; deployment contains the migrations/functions tested against production-like data.
+Before delivery: no cross-mill read/write; all material money/stock movements atomic and idempotent; session reconciliation uses the same authoritative ledger; no negative stock; owner admin PIN cannot elevate employee; product stock ownership and oil source classification are clear; deployment contains the migrations/functions tested against production-like data.
 
 Out of scope: full double-entry accounting, bank reconciliation, tax filing, multi-mill owner switching, payroll taxation and advanced forecasting. Future considerations: receipts/printer reliability, offline queue capture with conflict handling, barcode input, accounting export, notifications and audit search.
+
+## 10. Transaction Lifecycle & Reversal Model
+
+`TXN-001`: every business mutation is a database command with one idempotency key and one immutable operation identity. The command validates role, active membership, season state and all dependent balances before writing any effect.
+
+`TXN-002`: a source document and all of its effects are created atomically:
+
+```text
+Business operation
+  -> source document
+  -> financial event(s)
+  -> obligation movement(s)
+  -> product/oil movement(s)
+  -> cash-session association when physical cash moves
+```
+
+`TXN-003`: no frontend flow may directly create or mutate financial events, obligations, inventory balances, oil balances, settlements, cancellations or season closure. Master data writes must also move to reviewed commands where historical references exist.
+
+`TXN-004`: history is never physically deleted. A cancellation updates the source document to `cancelled` and appends opposite effects linked to the original effects. An original effect is considered reversed when a unique reversal row references it.
+
+`TXN-005`: cancellation is dependency-aware. A parent document cannot be cancelled while a dependent settlement, collection, reimbursement, return or later stock consumption remains effective. The UI explains the required preceding action in Arabic.
+
+`TXN-006`: cash reversals preserve drawer history. If the original event belongs to an open session, its opposite event uses that session. If the original session is closed, the opposite physical cash event requires the current open session and is posted there; the closed session is never recalculated.
+
+`TXN-007`: canonical obligations cover customer receivables, supplier payables and partner dues. Obligation balances are derived from immutable increase, settlement, settlement-reversal and cancellation movements.
+
+`TXN-008`: product and oil balances are derived/reconciled from immutable movement ledgers. Cached balances may exist for performance but are updated only by the same locked command and must reconcile to the ledger.
+
+`TXN-009`: reports use effective operations/effects and exclude cancelled or fully reversed impact without deleting the audit trail. They do not independently sum overlapping source tables and financial events.
+
+`TXN-010`: supported user actions use business language: `إلغاء المصروف`, `إلغاء المصروف والذمة`, `عكس دفعة السداد`, `إلغاء الفاتورة`, `إرجاع بيع`, and `أرشفة`. Raw database errors and generic delete icons are not user-facing behavior.
+
+The complete event catalog, dependency rules, status transitions and implementation boundaries are defined in `TRANSACTION_LIFECYCLE.md` and `TRANSACTION_MATRIX.md`.
