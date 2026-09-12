@@ -82,9 +82,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchUserData = useCallback(async (currentUser: User) => {
     try {
       // 1. Check if Platform Admin (canonical: user_roles table)
-      let userIsAdmin = currentUser.id === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114';
-      if (!userIsAdmin) {
-        try {
+      let userIsAdmin = false;
+      try {
           const { data: adminRole } = await supabase
             .from('user_roles')
             .select('role')
@@ -97,7 +96,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         } catch (roleErr) {
           console.warn("Could not check user_roles:", roleErr);
-        }
       }
 
       setIsAdmin(userIsAdmin);
@@ -169,22 +167,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         } catch (millErr) {
           console.warn("Could not query mill record:", millErr);
-        }
-      }
-      if (!resolvedMillId && !userIsAdmin) {
-        try {
-          const { data: ownerMill } = await supabase
-            .from('mills')
-            .select('id, name, mill_code, location, country, phone, secondary_phone, subscription_status, monthly_fee')
-            .eq('owner_user_id', currentUser.id)
-            .maybeSingle();
-          if (ownerMill) {
-            resolvedMillId = ownerMill.id;
-            resolvedMill = ownerMill;
-            resolvedRole = 'mill_owner';
-          }
-        } catch (e) {
-          console.warn("Could not check owner mill fallback:", e);
         }
       }
 
