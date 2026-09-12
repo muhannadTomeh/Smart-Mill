@@ -115,6 +115,7 @@ const Inventory = () => {
     sale_price: "",
     payment_method: "cash" as "cash" | "credit" | "partner",
     partner_id: "",
+    partner_name: "",
     notes: "",
   });
 
@@ -257,8 +258,8 @@ const Inventory = () => {
       toast({ title: "تنبيه", description: "يرجى إدخال سعر شراء صحيح", variant: "destructive" });
       return;
     }
-    if (purchaseForm.payment_method === "partner" && !purchaseForm.partner_id) {
-      toast({ title: "تنبيه", description: "يرجى اختيار الشريك الذي دفع قيمة الشراء", variant: "destructive" });
+    if (purchaseForm.payment_method === "partner" && !purchaseForm.partner_name.trim() && !purchaseForm.partner_id) {
+      toast({ title: "تنبيه", description: "يرجى تدوين أو اختيار اسم الشريك الذي دفع قيمة الشراء", variant: "destructive" });
       return;
     }
 
@@ -269,11 +270,12 @@ const Inventory = () => {
         p_product_id: purchaseForm.product_id,
         p_quantity: qty,
         p_unit_price: buyPrice,
-        p_sale_price: sellPrice,
         p_payment_method: purchaseForm.payment_method,
         p_supplier_id: purchaseForm.supplier_id || null,
-        p_partner_id: purchaseForm.payment_method === "partner" ? purchaseForm.partner_id : null,
+        p_partner_id: purchaseForm.payment_method === "partner" ? (purchaseForm.partner_id || null) : null,
         p_notes: purchaseForm.notes.trim() || null,
+        p_sale_price: sellPrice > 0 ? sellPrice : null,
+        p_partner_name: purchaseForm.payment_method === "partner" ? (purchaseForm.partner_name.trim() || null) : null,
       });
 
       if (error) throw error;
@@ -292,6 +294,7 @@ const Inventory = () => {
         sale_price: "",
         payment_method: "cash",
         partner_id: "",
+        partner_name: "",
         notes: "",
       });
 
@@ -1058,24 +1061,52 @@ const Inventory = () => {
               </div>
             </div>
 
-            {/* Conditional Partner Selector */}
+            {/* Conditional Partner Input (Free-text + quick pick badges) */}
             {purchaseForm.payment_method === "partner" && (
-              <div className="space-y-1.5 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20">
+              <div className="space-y-2 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20">
                 <Label className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                  اختر الشريك المموّل *
+                  اسم الشريك المموّل *
                 </Label>
-                <select
-                  value={purchaseForm.partner_id}
-                  onChange={(e) => setPurchaseForm((p) => ({ ...p, partner_id: e.target.value }))}
-                  className="w-full h-10 px-3 border border-input rounded-xl text-sm bg-background text-foreground"
-                >
-                  <option value="">-- اضغط لاختيار الشريك --</option>
-                  {partners.map((pt) => (
-                    <option key={pt.id} value={pt.id}>
-                      {pt.name}
-                    </option>
-                  ))}
-                </select>
+                <Input
+                  value={purchaseForm.partner_name}
+                  onChange={(e) => {
+                    const typed = e.target.value;
+                    const matched = partners.find((pt) => pt.name.trim().toLowerCase() === typed.trim().toLowerCase());
+                    setPurchaseForm((p) => ({
+                      ...p,
+                      partner_name: typed,
+                      partner_id: matched ? matched.id : "",
+                    }));
+                  }}
+                  className="h-10 text-sm rounded-xl"
+                />
+                {partners.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] text-muted-foreground">أو اختر شريكاً مسجلاً:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {partners.map((pt) => (
+                        <button
+                          key={pt.id}
+                          type="button"
+                          onClick={() => {
+                            setPurchaseForm((p) => ({
+                              ...p,
+                              partner_id: pt.id,
+                              partner_name: pt.name,
+                            }));
+                          }}
+                          className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                            purchaseForm.partner_id === pt.id || purchaseForm.partner_name === pt.name
+                              ? "bg-blue-600 text-white border-blue-600 font-semibold shadow-xs"
+                              : "bg-background hover:bg-muted border-border/70 text-foreground"
+                          }`}
+                        >
+                          {pt.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <p className="text-[11px] text-muted-foreground">
                   سيتم تسجيل البضاعة بالمخزن وإثبات ذمة مستحقة للشريك دون خصم كاش الصندوق.
                 </p>
