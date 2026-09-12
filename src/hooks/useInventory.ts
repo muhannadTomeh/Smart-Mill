@@ -21,7 +21,22 @@ export function useInventory() {
       return;
     }
     fetchInventory();
-  }, [activeSeason?.id]);
+  }, [activeSeason?.id, millId]);
+
+  useEffect(() => {
+    const effectiveMillId = millId || activeSeason?.mill_id;
+    if (!activeSeason || !effectiveMillId) return;
+    const channel = supabase
+      .channel(`inventory_${effectiveMillId}_${activeSeason.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "inventory", filter: `mill_id=eq.${effectiveMillId}` }, (payload) => {
+        const row = payload.new as { season_id?: string; total_oil?: number; total_cash?: number };
+        if (row.season_id === activeSeason.id) {
+          setInventory({ total_oil: Number(row.total_oil ?? 0), total_cash: Number(row.total_cash ?? 0) });
+        }
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [activeSeason?.id, activeSeason?.mill_id, millId]);
 
   const fetchInventory = async () => {
     if (!activeSeason) return;

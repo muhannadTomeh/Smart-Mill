@@ -25,6 +25,8 @@ type LedgerEvent = {
   reversal_of: string | null;
   reversal_reason: string | null;
   cash_session_id: string | null;
+  reference_type: string;
+  reference_id: string | null;
 };
 
 const money = new Intl.NumberFormat("ar-PS", { style: "currency", currency: "ILS", maximumFractionDigits: 2 });
@@ -46,7 +48,7 @@ export default function FinancialLedger() {
     setLoading(true);
     const { data, error } = await supabase
       .from("financial_transactions" as any)
-      .select("id, amount, direction, type, category, description, party_name, payment_method, status, created_at, reversal_of, reversal_reason, cash_session_id")
+      .select("id, amount, direction, type, category, description, party_name, payment_method, status, created_at, reversal_of, reversal_reason, cash_session_id, reference_type, reference_id")
       .eq("mill_id", millId)
       .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: false })
@@ -75,10 +77,9 @@ export default function FinancialLedger() {
     const reason = window.prompt("سبب عكس الحركة (اختياري):") ?? null;
     if (!window.confirm("سيُنشأ قيد عكسي دائم ولن يتم حذف الحركة الأصلية. متابعة؟")) return;
     setReversingId(event.id);
-    const { error } = await supabase.rpc("void_financial_transaction" as any, {
-      p_transaction_id: event.id,
-      p_reason: reason,
-    });
+    const { error } = event.reference_type === "expense" && event.reference_id
+      ? await supabase.rpc("void_expense_and_reverse" as any, { p_expense_id: event.reference_id, p_reason: reason })
+      : await supabase.rpc("void_financial_transaction" as any, { p_transaction_id: event.id, p_reason: reason });
     setReversingId(null);
     if (error) {
       toast({ title: "تعذر عكس الحركة", description: error.message, variant: "destructive" });
