@@ -37,6 +37,9 @@ Goals: quick daily operation; correct, traceable financial effects; inventory th
 - `AUTH-004` **PARTIAL**: Admin Workspace is owner-only in UI and uses `verify_admin_pin`; it must use a short-lived server-verifiable privilege, not only React state.
 - `ADMIN-001` **EXISTING**: platform-admin routes are separate and bypass normal subscription/mill gating.
 - `ADMIN-002` **PARTIAL**: account lifecycle is non-destructive, but owner/cashier creation depends on deployed Edge Functions and has unsafe direct-update fallbacks.
+- `CRED-001` **EXISTING / HARDEN**: Platform Admin may reveal the current account password or Admin PIN for support only. Values are masked by default and revealed only after an explicit action. Mill owners and employees may never reveal credentials.
+- `CRED-002` **PROPOSED**: credential values are AES-256-GCM encrypted server-side; the encryption key exists only in Edge Function secrets. Plaintext must never be persisted in database/frontend storage or logs, and may be returned only by an authorized reveal response.
+- `CRED-003` **PROPOSED**: every reveal is audited without the secret value, rate-limited, and automatically hidden in the UI after a short period. No client code may contain a service-role secret.
 
 ### Operations, invoices and customers
 
@@ -79,7 +82,7 @@ Goals: quick daily operation; correct, traceable financial effects; inventory th
 | Open/close cash drawer | Support-only | Yes | Yes, if policy permits |
 | Expenses, products, supplier/partner/payable, workers | Support-only | Admin PIN | No |
 | Customer/master settings/seasons/reports | Support-only | Admin PIN | No |
-| Reveal credentials | Avoid; break-glass only | No | No |
+| Reveal current password/Admin PIN | Yes, explicit audited support action | No | No |
 
 ## 8. UX, reporting and validation
 

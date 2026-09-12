@@ -4,7 +4,8 @@
 |---|---|---|---|---|---|
 | 0 / SEC-01 | Snapshot/audit production migrations, tables, RLS, grants, functions, Edge deploys and backups | required before changing behavior | unknown deployed drift | M | BLOCKER |
 | 0 / TEN-01 | Backfill/validate `mill_id`; enforce membership helper; remove user/owner fallback writes | depends SEC-01 | cross-tenant exposure | L | BLOCKER |
-| 0 / AUTH-01 | Replace hard-coded admin identity and recoverable password reveal; harden server account commands | depends SEC-01 | privilege/credential loss | M | BLOCKER |
+| 0 / AUTH-01 | Replace hard-coded admin identity; harden Platform Admin-only Credential Vault reveal and server account commands | depends SEC-01 | privilege/credential exposure | M | BLOCKER |
+| 0 / CRED-01 | Verify AES-256-GCM Edge Function-only encryption, secret configuration, no plaintext persistence/logging, no client service-role secret, explicit/masked/time-limited reveal, audit-without-secret, and rate limiting | depends AUTH-01 | credential disclosure | M | BLOCKER |
 | 1 / FIN-01 | Define immutable financial event/reversal contract and migrate reports/drawer to it | depends TEN-01 | financial migration | L | REQUIRED |
 | 1 / FIN-02 | Add idempotency, locks, tests for invoice, collection, expense, payable, worker, partner and oil commands | depends FIN-01 | duplicate/partial events | L | REQUIRED |
 | 1 / CASH-01 | Reconcile all cash events/session stamping; test close, variance and concurrent use | depends FIN-01 | wrong drawer close | M | REQUIRED |
