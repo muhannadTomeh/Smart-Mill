@@ -18,11 +18,25 @@ import {
   Lock,
   Unlock,
   UserCog,
+  LockOpen,
 } from "lucide-react"
+import { useState } from "react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useRole } from "@/contexts/RoleContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { useAdminWorkspace } from "@/contexts/AdminWorkspaceContext"
+import { useCashSession } from "@/contexts/CashSessionContext"
+import { useSeason } from "@/contexts/SeasonContext"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 import {
   Sidebar,
@@ -68,16 +82,20 @@ const adminManagementItems = [
 let lastNavTimestamp = 0;
 const NAV_THROTTLE_MS = 300;
 
+const CASH_LOCKED_URLS = ["/queue", "/invoices", "/oil-trading", "/expenses"];
+
 function MenuGroup({
   label,
   badge,
   items,
   isCollapsed,
+  cashClosed = false,
 }: {
   label: string;
   badge?: React.ReactNode;
   items: Array<{ title: string; url: string; icon: any }>;
   isCollapsed: boolean;
+  cashClosed?: boolean;
 }) {
   const location = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -99,9 +117,11 @@ function MenuGroup({
               ? location.pathname === "/settings" && (!location.search || !location.search.includes("section=users_roles"))
               : location.pathname === item.url;
 
+            const isLockedByCash = cashClosed && CASH_LOCKED_URLS.includes(item.url);
+
             return (
               <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton asChild tooltip={item.title}>
+                <SidebarMenuButton asChild tooltip={isLockedByCash ? `${item.title} (يتطلب فتح الصندوق)` : item.title}>
                   <NavLink
                     to={item.url}
                     end
@@ -137,7 +157,16 @@ function MenuGroup({
                       }`}
                     />
                     <item.icon className="h-[18px] w-[18px] shrink-0" />
-                    {!isCollapsed && <span>{item.title}</span>}
+                    {!isCollapsed && (
+                      <div className="flex items-center justify-between flex-1 overflow-hidden">
+                        <span className="truncate">{item.title}</span>
+                        {isLockedByCash && (
+                          <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold px-1.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20 shrink-0">
+                            مغلق
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -154,7 +183,24 @@ export function AppSidebar() {
   const { isAdmin, isOwner, isEmployee } = useRole()
   const { profile } = useAuth()
   const { isAdminWorkspace, openReAuthModal, exitAdminWorkspace } = useAdminWorkspace()
+  const { session, isOpen, openSession } = useCashSession()
+  const { activeSeason } = useSeason()
   const isCollapsed = state === "collapsed"
+
+  const [showOpenCashDialog, setShowOpenCashDialog] = useState(false)
+  const [openingBalance, setOpeningBalance] = useState("0")
+  const [openingLoading, setOpeningLoading] = useState(false)
+
+  const handleOpenCash = async () => {
+    if (!activeSeason) return
+    setOpeningLoading(true)
+    const ok = await openSession(parseFloat(openingBalance) || 0)
+    setOpeningLoading(false)
+    if (ok) {
+      setShowOpenCashDialog(false)
+      setOpeningBalance("0")
+    }
+  }
 
   const isMillOwner = isOwner || (!isAdmin && !isEmployee);
 
@@ -230,11 +276,61 @@ export function AppSidebar() {
             />
           ) : (
             <>
+              {/* Cash Session Status Card */}
+              {!isCollapsed ? (
+                <div className="mx-1 mb-3">
+                  {isOpen && session ? (
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                        <span>الصندوق مفتوح</span>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300" dir="ltr">
+                        {Number(session.opening_balance).toLocaleString()} ₪
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/25 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-400 font-semibold">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                          <span>الصندوق مغلق</span>
+                        </div>
+                        <span className="text-[10px] text-rose-600/80 dark:text-rose-400/80">العمليات معطلة</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => setShowOpenCashDialog(true)}
+                        className="w-full h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1.5 shadow-sm"
+                      >
+                        <LockOpen className="h-3.5 w-3.5" />
+                        فتح الصندوق
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex justify-center mb-2">
+                  {isOpen ? (
+                    <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" title="الصندوق مفتوح" />
+                  ) : (
+                    <button
+                      onClick={() => setShowOpenCashDialog(true)}
+                      className="w-4 h-4 rounded-full bg-rose-500/20 border border-rose-500 flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
+                      title="الصندوق مغلق - اضغط لفتح الصندوق"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* 1. الواجهة التشغيلية الأساسية: دائماً موجودة بنفس الترتيب والمكان للمالك والموظف */}
               <MenuGroup 
                 label="الواجهة التشغيلية" 
                 items={operationalItems} 
                 isCollapsed={isCollapsed} 
+                cashClosed={!isOpen}
               />
 
               {/* 2. قسم لوحة الإدارة: يظهر فقط للمالك (Owner) ولا يظهر نهائياً للموظف */}
@@ -331,6 +427,48 @@ export function AppSidebar() {
           )}
         </SidebarFooter>
       </Sidebar>
+
+      <Dialog open={showOpenCashDialog} onOpenChange={setShowOpenCashDialog}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LockOpen className="h-5 w-5 text-emerald-500" />
+              فتح الصندوق
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              أدخل الرصيد الافتتاحي (المبلغ الموجود في الدرج لحظة الفتح):
+            </p>
+            <div className="space-y-1.5">
+              <Label>الرصيد الافتتاحي (شيكل)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={openingBalance}
+                onChange={(e) => setOpeningBalance(e.target.value)}
+                placeholder="0"
+                className="text-right"
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleOpenCash()}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowOpenCashDialog(false)} disabled={openingLoading}>
+              إلغاء
+            </Button>
+            <Button
+              onClick={handleOpenCash}
+              disabled={openingLoading}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {openingLoading ? "جاري الفتح..." : "فتح الصندوق"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useCashSession } from "@/contexts/CashSessionContext";
+import { useCashSession, formatSessionDuration } from "@/contexts/CashSessionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,16 +12,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { LockOpen, Lock, Clock, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { ar } from "date-fns/locale";
-
-function formatDuration(openedAt: string): string {
-  try {
-    return formatDistanceToNow(new Date(openedAt), { addSuffix: false, locale: ar });
-  } catch {
-    return "";
-  }
-}
 
 interface OpenDialogProps {
   open: boolean;
@@ -172,11 +162,13 @@ function CloseSessionDialog({ open, onClose, onConfirm, loading, sessionCashIn, 
 
           {/* Note */}
           <div className="space-y-1.5">
-            <Label>ملاحظات (اختياري)</Label>
+            <Label className={difference !== null && Math.abs(difference) >= 0.01 ? "text-rose-600 dark:text-rose-400 font-semibold" : ""}>
+              {difference !== null && Math.abs(difference) >= 0.01 ? "سبب الفرق (إجباري لوجود فرق بالصندوق) *" : "ملاحظات الإغلاق (اختياري)"}
+            </Label>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="سبب الفرق أو ملاحظات إضافية..."
+              placeholder={difference !== null && Math.abs(difference) >= 0.01 ? "يرجى كتابة سبب الفرق في الصندوق بالتفصيل..." : "ملاحظات إضافية..."}
               className="resize-none text-right"
               rows={2}
             />
@@ -188,7 +180,11 @@ function CloseSessionDialog({ open, onClose, onConfirm, loading, sessionCashIn, 
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={loading || actualBalance === null}
+            disabled={
+              loading || 
+              actualBalance === null || 
+              (difference !== null && Math.abs(difference) >= 0.01 && !note.trim())
+            }
             variant="destructive"
           >
             {loading ? "جاري الإغلاق..." : "إغلاق الصندوق"}
@@ -235,7 +231,10 @@ export function CashSessionBanner() {
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-medium select-none">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
           <Clock className="h-3.5 w-3.5 shrink-0" />
-          <span className="hidden sm:inline">الصندوق مفتوح منذ {formatDuration(session.opened_at)}</span>
+          <span className="hidden sm:inline">
+            الصندوق مفتوح منذ {formatSessionDuration(session.opened_at)}
+            {session.opener_name ? ` (${session.opener_name})` : ""}
+          </span>
           <span className="inline sm:hidden">مفتوح</span>
           <button
             onClick={() => setCloseDialog(true)}

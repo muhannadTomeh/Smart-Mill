@@ -9,11 +9,41 @@ export interface CashSession {
   mill_id: string;
   season_id: string;
   opened_by: string;
+  opener_name?: string;
   opening_balance: number;
   opened_at: string;
   status: "open" | "closed";
+  closed_at?: string;
+  closed_by?: string;
+  expected_balance?: number;
+  actual_balance?: number;
+  difference?: number;
+  closing_note?: string;
   total_cash_in: number;
   total_cash_out: number;
+}
+
+/** Formats duration between opened_at and now/closed_at into friendly Arabic text */
+export function formatSessionDuration(openedAt: string, closedAt?: string): string {
+  try {
+    const start = new Date(openedAt).getTime();
+    const end = closedAt ? new Date(closedAt).getTime() : Date.now();
+    const diffMs = Math.max(0, end - start);
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const days = Math.floor(diffMins / (60 * 24));
+    const hours = Math.floor((diffMins % (60 * 24)) / 60);
+    const minutes = diffMins % 60;
+
+    if (days > 0) {
+      return `${days} ${days === 1 ? 'يوم' : days === 2 ? 'يومان' : 'أيام'} و ${hours} ساعة`;
+    }
+    if (hours > 0) {
+      return `${hours} ${hours === 1 ? 'ساعة' : hours === 2 ? 'ساعتان' : 'ساعات'} و ${minutes} دقيقة`;
+    }
+    return `${minutes} دقيقة`;
+  } catch {
+    return "";
+  }
 }
 
 interface CashSessionContextValue {
