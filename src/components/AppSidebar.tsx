@@ -21,6 +21,7 @@ import {
   LockOpen,
   HandCoins,
   Users2,
+  BookOpen,
 } from "lucide-react"
 import { useState } from "react"
 import { NavLink, useLocation } from "react-router-dom"
@@ -76,6 +77,7 @@ const adminManagementItems = [
   { title: "الشركاء والمساهمين", url: "/partners", icon: Users2 },
   { title: "المخزون والمنتجات", url: "/inventory", icon: Warehouse },
   { title: "التقارير المفصلة", url: "/reports", icon: BarChart3 },
+  { title: "الدفتر المالي", url: "/financial-ledger", icon: BookOpen },
   { title: "العمال والرواتب", url: "/workers", icon: UserCheck },
   { title: "الزبائن", url: "/customers", icon: Users },
   { title: "المواسم", url: "/seasons", icon: Calendar },

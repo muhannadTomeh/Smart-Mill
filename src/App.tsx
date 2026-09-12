@@ -40,6 +40,7 @@ import Partners from "./pages/Partners";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Notifications from "./pages/Notifications";
+import FinancialLedger from "./pages/FinancialLedger";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import LandingPage from "./pages/LandingPage";
@@ -419,6 +420,7 @@ const SeasonGateContent = () => {
       <Route path="/payables" element={<AdminRouteGuard><Payables /></AdminRouteGuard>} />
       <Route path="/partners" element={<AdminRouteGuard><Partners /></AdminRouteGuard>} />
       <Route path="/reports" element={<AdminRouteGuard><Reports /></AdminRouteGuard>} />
+      <Route path="/financial-ledger" element={<AdminRouteGuard><FinancialLedger /></AdminRouteGuard>} />
       <Route path="/workers" element={<AdminRouteGuard><Workers /></AdminRouteGuard>} />
       <Route path="/customers" element={<AdminRouteGuard><Customers /></AdminRouteGuard>} />
       <Route path="/inventory" element={<AdminRouteGuard><Inventory /></AdminRouteGuard>} />
