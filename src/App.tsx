@@ -35,6 +35,8 @@ import Workers from "./pages/Workers";
 import OilTrading from "./pages/OilTrading";
 import Expenses from "./pages/Expenses";
 import Inventory from "./pages/Inventory";
+import Payables from "./pages/Payables";
+import Partners from "./pages/Partners";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Notifications from "./pages/Notifications";
@@ -132,10 +134,12 @@ const HeaderBar = () => {
                 <Receipt className="h-4 w-4 text-primary" />
                 إنشاء فاتورة
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/expenses")} className="gap-2 py-2.5">
-                <Wallet className="h-4 w-4 text-primary" />
-                إضافة مصروف
-              </DropdownMenuItem>
+              {!isEmployee && (
+                <DropdownMenuItem onClick={() => navigate("/expenses")} className="gap-2 py-2.5">
+                  <Wallet className="h-4 w-4 text-primary" />
+                  إضافة مصروف
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -419,11 +423,13 @@ const SeasonGateContent = () => {
       <Route path="/invoices-history" element={<InvoicesHistory />} />
       <Route path="/oil-trading" element={<OilTrading />} />
       <Route path="/daily-closing" element={<DailyClosing />} />
-      <Route path="/expenses" element={<Expenses />} />
       <Route path="/queue-display" element={<QueueDisplay />} />
 
       {/* 2. Admin Workspace Routes (Owner Only + Re-authenticated) */}
       <Route path="/dashboard" element={<AdminRouteGuard><Dashboard /></AdminRouteGuard>} />
+      <Route path="/expenses" element={<AdminRouteGuard><Expenses /></AdminRouteGuard>} />
+      <Route path="/payables" element={<AdminRouteGuard><Payables /></AdminRouteGuard>} />
+      <Route path="/partners" element={<AdminRouteGuard><Partners /></AdminRouteGuard>} />
       <Route path="/reports" element={<AdminRouteGuard><Reports /></AdminRouteGuard>} />
       <Route path="/workers" element={<AdminRouteGuard><Workers /></AdminRouteGuard>} />
       <Route path="/customers" element={<AdminRouteGuard><Customers /></AdminRouteGuard>} />

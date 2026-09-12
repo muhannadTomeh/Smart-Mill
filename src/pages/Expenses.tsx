@@ -32,10 +32,25 @@ interface Expense {
   category: string;
   amount: number;
   description: string | null;
+  payment_method?: "cash" | "credit" | "partner";
+  partner_id?: string | null;
+  supplier_id?: string | null;
+  partners?: { name: string } | null;
+  suppliers?: { name: string } | null;
   created_at: string;
 }
 
 interface ExpenseCategory {
+  id: string;
+  name: string;
+}
+
+interface PartnerOption {
+  id: string;
+  name: string;
+}
+
+interface SupplierOption {
   id: string;
   name: string;
 }
@@ -55,19 +70,28 @@ const Expenses = () => {
   const { isEmployee } = useRole();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
-  const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
+  const { inventory, refetch: refetchInventory } = useInventory();
   const { currency, selectedCurrency } = useCurrency();
   const activeCurrency = selectedCurrency || currency || "₪";
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Dialog State
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   // New Expense form state
-  const [newExpense, setNewExpense] = useState({ category: "", amount: "", description: "" });
+  const [newExpense, setNewExpense] = useState({ 
+    category: "", 
+    amount: "", 
+    description: "",
+    payment_method: "cash" as "cash" | "credit" | "partner",
+    partner_id: "",
+    supplier_id: "",
+  });
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
   const [savingExpense, setSavingExpense] = useState(false);
@@ -80,12 +104,28 @@ const Expenses = () => {
     if (activeSeason) {
       fetchExpenses();
       fetchCategories();
+      fetchPartnersAndSuppliers();
     } else {
       setExpenses([]);
       setCategories([]);
+      setPartners([]);
+      setSuppliers([]);
       setLoading(false);
     }
   }, [activeSeason?.id]);
+
+  const fetchPartnersAndSuppliers = async () => {
+    try {
+      const [ptRes, supRes] = await Promise.all([
+        supabase.from("partners" as any).select("id, name").eq("active", true).order("name"),
+        supabase.from("suppliers" as any).select("id, name").eq("active", true).order("name")
+      ]);
+      if (ptRes.data) setPartners(ptRes.data as any);
+      if (supRes.data) setSuppliers(supRes.data as any);
+    } catch (e) {
+      console.error("fetchPartnersAndSuppliers error:", e);
+    }
+  };
 
   const fetchCategories = async () => {
     if (!activeSeason) return;
@@ -113,7 +153,7 @@ const Expenses = () => {
     try {
       let query = supabase
         .from("expenses")
-        .select("*")
+        .select("*, partners(name), suppliers(name)")
         .eq("season_id", activeSeason.id);
 
       const effectiveMillId = millId || activeSeason.mill_id;
@@ -134,7 +174,14 @@ const Expenses = () => {
   };
 
   const resetForm = () => {
-    setNewExpense({ category: "", amount: "", description: "" });
+    setNewExpense({
+      category: "",
+      amount: "",
+      description: "",
+      payment_method: "cash",
+      partner_id: "",
+      supplier_id: "",
+    });
     setCustomCategory("");
     if (categories.length > 0) {
       setIsCustomMode(false);
@@ -158,21 +205,25 @@ const Expenses = () => {
       return;
     }
 
+    if (newExpense.payment_method === "partner" && !newExpense.partner_id) {
+      toast({ title: "تنبيه", description: "يرجى اختيار الشريك الذي دفع المصروف", variant: "destructive" });
+      return;
+    }
+
     const amount = parseFloat(newExpense.amount);
     setSavingExpense(true);
 
     try {
-      const effectiveMillId = millId || activeSeason?.mill_id || null;
-
-      // 1. Insert into expenses table
-      const { error } = await supabase.from("expenses").insert({
-        user_id: user?.id!,
-        mill_id: effectiveMillId,
-        season_id: activeSeason.id,
-        category: finalCategory,
-        amount,
-        description: newExpense.description.trim() || null,
-      } as any);
+      // 1. Call Atomic RPC: record_expense_v2
+      const { data, error } = await supabase.rpc("record_expense_v2" as any, {
+        p_season_id: activeSeason.id,
+        p_category: finalCategory,
+        p_amount: amount,
+        p_description: newExpense.description.trim() || null,
+        p_payment_method: newExpense.payment_method,
+        p_partner_id: newExpense.payment_method === "partner" ? newExpense.partner_id : null,
+        p_supplier_id: newExpense.payment_method === "credit" && newExpense.supplier_id ? newExpense.supplier_id : null,
+      });
 
       if (error) throw error;
 
@@ -182,6 +233,7 @@ const Expenses = () => {
       );
       if (!alreadyExists && user?.id) {
         try {
+          const effectiveMillId = millId || activeSeason?.mill_id || null;
           await supabase.from("expense_categories").insert({
             user_id: user.id,
             mill_id: effectiveMillId,
@@ -192,12 +244,15 @@ const Expenses = () => {
         } catch {}
       }
 
-      // 3. Update inventory cash
-      await updateInventory({ total_cash: inventory.total_cash - amount });
-
       toast({
         title: "تمت إضافة المصروف بنجاح",
-        description: `تم تسجيل مصروف "${finalCategory}" بقيمة ${amount} ${activeCurrency}`,
+        description: `تم تسجيل مصروف "${finalCategory}" بقيمة ${amount} ${activeCurrency} (${
+          newExpense.payment_method === "cash"
+            ? "نقداً من الصندوق"
+            : newExpense.payment_method === "credit"
+            ? "دين مؤجل"
+            : "مدفوع من الشريك"
+        })`,
       });
 
       // Close modal & reset form
@@ -223,11 +278,10 @@ const Expenses = () => {
       return;
     }
     if (!deleteTarget) return;
-    const { id, amount } = deleteTarget;
+    const { id } = deleteTarget;
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (!error) {
-      await updateInventory({ total_cash: inventory.total_cash + amount });
-      toast({ title: "تم الحذف", description: "تم حذف المصروف بنجاح واسترجاع قيمته إلى الصندوق" });
+      toast({ title: "تم الحذف", description: "تم حذف سجل المصروف بنجاح" });
       setDeleteTarget(null);
       await fetchExpenses();
       await refetchInventory();
@@ -278,7 +332,7 @@ const Expenses = () => {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">إدارة المصاريف</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">تسجيل ومتابعة مصاريف المعصرة اليومية والتشغيلية</p>
+            <p className="text-xs text-muted-foreground mt-0.5">تسجيل ومتابعة مصاريف المعصرة اليومية والتشغيلية والالتزامات</p>
           </div>
         </div>
 
@@ -289,6 +343,7 @@ const Expenses = () => {
             onClick={() => {
               fetchExpenses();
               fetchCategories();
+              fetchPartnersAndSuppliers();
               refetchInventory();
             }}
             className="gap-2 rounded-xl text-xs h-9"
@@ -355,7 +410,7 @@ const Expenses = () => {
         </Card>
       </div>
 
-      {/* Main Expenses Table Card (Full Width - 100%) */}
+      {/* Main Expenses Table Card */}
       <Card className="border border-border/60 shadow-xs rounded-2xl overflow-hidden">
         <CardHeader className="border-b border-border/70 bg-card/60 p-4 sm:p-5">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -365,7 +420,7 @@ const Expenses = () => {
                 <span>سجل المصاريف</span>
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                عرض ومراجعة كافة المصاريف التشغيلية المسجلة خلال الموسم
+                عرض ومراجعة كافة المصاريف التشغيلية ومصادر تمويلها خلال الموسم
               </CardDescription>
             </div>
 
@@ -459,6 +514,7 @@ const Expenses = () => {
                   <TableRow>
                     <TableHead className="text-right font-bold text-xs">التاريخ</TableHead>
                     <TableHead className="text-right font-bold text-xs">نوع المصروف</TableHead>
+                    <TableHead className="text-right font-bold text-xs">طريقة التمويل</TableHead>
                     <TableHead className="text-right font-bold text-xs">المبلغ</TableHead>
                     <TableHead className="text-right font-bold text-xs">الوصف والتفاصيل</TableHead>
                     {!isEmployee && <TableHead className="text-left font-bold text-xs">الإجراءات</TableHead>}
@@ -477,6 +533,21 @@ const Expenses = () => {
                         <Badge variant="outline" className="text-xs font-semibold bg-muted/40 border-border/60">
                           {exp.category}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {exp.payment_method === "partner" ? (
+                          <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[11px]">
+                            شريك: {exp.partners?.name || "شريك مساهم"}
+                          </Badge>
+                        ) : exp.payment_method === "credit" ? (
+                          <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[11px]">
+                            دين مؤجل {exp.suppliers?.name ? `(${exp.suppliers.name})` : ""}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[11px]">
+                            كاش الصندوق
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-bold text-sm text-destructive font-mono">
                         {formatNumber(exp.amount)} {activeCurrency}
@@ -507,17 +578,17 @@ const Expenses = () => {
       </Card>
 
       {/* ─────────────────────────────────────────────────────────────
-          ADD EXPENSE MODAL (DIALOG) — Like Settings Hub Pattern
+          ADD EXPENSE MODAL (DIALOG)
       ───────────────────────────────────────────────────────────── */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] text-right rounded-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="sm:max-w-[520px] text-right rounded-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader className="text-right sm:text-right pb-2 border-b border-border/60">
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Plus className="h-5 w-5 text-primary" />
               <span>إضافة مصروف جديد</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              تسجيل نفقة جديدة للمعصرة وخصم قيمتها من رصيد الصندوق النقدي تلقائياً
+              تسجيل نفقة تشغيلية وتحديد مصدر التمويل (كاش، دين مؤجل، أو دفع من شريك)
             </DialogDescription>
           </DialogHeader>
 
@@ -611,10 +682,104 @@ const Expenses = () => {
                 step="0.5"
                 className="h-10 text-sm rounded-xl font-mono"
               />
-              <p className="text-[11px] text-muted-foreground">
-                رصيد الصندوق المتوفر: <strong>{inventory.total_cash.toLocaleString()} {activeCurrency}</strong>
-              </p>
+              {newExpense.payment_method === "cash" && (
+                <p className="text-[11px] text-muted-foreground">
+                  رصيد الصندوق المتوفر: <strong>{inventory.total_cash.toLocaleString()} {activeCurrency}</strong> (يشترط جلسة صندوق مفتوحة)
+                </p>
+              )}
             </div>
+
+            {/* Payment Method Selector */}
+            <div className="space-y-2 pt-1">
+              <Label className="text-xs font-semibold text-foreground">مصدر التمويل وطريقة السداد *</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewExpense((p) => ({ ...p, payment_method: "cash" }))}
+                  className={`p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition-all ${
+                    newExpense.payment_method === "cash"
+                      ? "border-primary bg-primary/10 text-primary font-bold shadow-xs"
+                      : "border-border/60 hover:bg-muted/40 text-muted-foreground"
+                  }`}
+                >
+                  <Wallet className="h-4 w-4" />
+                  <span>كاش الصندوق</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewExpense((p) => ({ ...p, payment_method: "credit" }))}
+                  className={`p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition-all ${
+                    newExpense.payment_method === "credit"
+                      ? "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold shadow-xs"
+                      : "border-border/60 hover:bg-muted/40 text-muted-foreground"
+                  }`}
+                >
+                  <Tag className="h-4 w-4" />
+                  <span>دين مؤجل</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewExpense((p) => ({ ...p, payment_method: "partner" }))}
+                  className={`p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition-all ${
+                    newExpense.payment_method === "partner"
+                      ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shadow-xs"
+                      : "border-border/60 hover:bg-muted/40 text-muted-foreground"
+                  }`}
+                >
+                  <DollarSign className="h-4 w-4" />
+                  <span>دفع من شريك</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Conditional Sub-selectors */}
+            {newExpense.payment_method === "partner" && (
+              <div className="space-y-1.5 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                <Label className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                  اختر الشريك الذي دفع المصروف *
+                </Label>
+                <select
+                  value={newExpense.partner_id}
+                  onChange={(e) => setNewExpense((p) => ({ ...p, partner_id: e.target.value }))}
+                  className="w-full h-10 px-3 border border-input rounded-xl text-sm bg-background text-foreground"
+                >
+                  <option value="">-- اضغط لاختيار الشريك --</option>
+                  {partners.map((pt) => (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  سيتم اعتبار المصروف مدفوعاً، وتسجيل التزام مستحق للشريك بقيمة {newExpense.amount || 0} {activeCurrency} دون لمس كاش المعصرة.
+                </p>
+              </div>
+            )}
+
+            {newExpense.payment_method === "credit" && (
+              <div className="space-y-1.5 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <Label className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                  اختر المورد أو الجهة الدائنة (اختياري)
+                </Label>
+                <select
+                  value={newExpense.supplier_id}
+                  onChange={(e) => setNewExpense((p) => ({ ...p, supplier_id: e.target.value }))}
+                  className="w-full h-10 px-3 border border-input rounded-xl text-sm bg-background text-foreground"
+                >
+                  <option value="">-- جهة دائنة أخرى / بدون تحديد مورد --</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  سيتم قيد المصروف وتسجيل ذمة مستحقة الدفع (Payable) على المعصرة دون خصم كاش الصندوق الآن.
+                </p>
+              </div>
+            )}
 
             {/* Description Field */}
             <div className="space-y-1.5">
@@ -623,7 +788,7 @@ const Expenses = () => {
                 value={newExpense.description}
                 onChange={(e) => setNewExpense((p) => ({ ...p, description: e.target.value }))}
                 placeholder="أي ملاحظات أو تفاصيل إضافية حول المصروف..."
-                rows={3}
+                rows={2}
                 className="text-sm rounded-xl resize-none"
               />
             </div>
@@ -668,7 +833,7 @@ const Expenses = () => {
             <AlertDialogTitle className="text-right text-base font-bold">تأكيد حذف المصروف</AlertDialogTitle>
             <AlertDialogDescription className="text-right text-xs text-muted-foreground mt-2">
               هل تريد بالتأكيد حذف مصروف <strong>"{deleteTarget?.category}"</strong> بقيمة{" "}
-              <strong>{deleteTarget?.amount} {activeCurrency}</strong>؟ سيتم إعادة المبلغ إلى رصيد الصندوق تلقائياً.
+              <strong>{deleteTarget?.amount} {activeCurrency}</strong>؟
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 pt-3">

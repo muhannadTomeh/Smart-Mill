@@ -37,7 +37,7 @@ const OilTrading = () => {
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { selectedCurrency } = useCurrency();
-  const { inventory, updateInventory, refetch: refetchInventory } = useInventory();
+  const { inventory, refetch: refetchInventory } = useInventory();
   
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -156,22 +156,17 @@ const OilTrading = () => {
 
     setIsSubmitting(true);
     try {
-      const effectiveMillId = millId || activeSeason.mill_id || null;
-
-      const { error } = await supabase.from("oil_transactions").insert({
-        user_id: user.id,
-        mill_id: effectiveMillId,
-        season_id: activeSeason.id,
-        type: newTransaction.type,
-        amount,
-        price,
-        total_price: totalPrice,
-        party_name: newTransaction.partyName.trim() || null,
-        notes: newTransaction.notes.trim() || null,
-      } as any);
+      const { error } = await (supabase.rpc as any)("record_oil_transaction_atomic", {
+        p_season_id: activeSeason.id,
+        p_type: newTransaction.type,
+        p_amount: amount,
+        p_price: price,
+        p_party_name: newTransaction.partyName.trim() || null,
+        p_notes: newTransaction.notes.trim() || null,
+      });
 
       if (error) {
-        console.error("oil_transactions insert error:", error);
+        console.error("record_oil_transaction_atomic error:", error);
         toast({
           title: "خطأ في تسجيل العملية",
           description: error.message || "تعذر حفظ المعاملة في قاعدة البيانات",
@@ -179,11 +174,6 @@ const OilTrading = () => {
         });
         return;
       }
-
-      await updateInventory({
-        total_oil: newTransaction.type === 'buy' ? inventory.total_oil + amount : inventory.total_oil - amount,
-        total_cash: newTransaction.type === 'buy' ? inventory.total_cash - totalPrice : inventory.total_cash + totalPrice
-      });
 
       resetForm();
       setAddDialogOpen(false);

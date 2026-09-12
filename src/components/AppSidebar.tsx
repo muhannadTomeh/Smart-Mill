@@ -64,16 +64,18 @@ const operationalItems = [
   { title: "الفواتير السابقة", url: "/invoices-history", icon: FileText },
   { title: "بيع وشراء الزيت", url: "/oil-trading", icon: ShoppingCart },
   { title: "إغلاق الصندوق", url: "/daily-closing", icon: Receipt },
-  { title: "المصاريف", url: "/expenses", icon: Wallet },
 ]
 
 // Management & Admin workspace navigation items (Owner only, shown underneath operational items when admin is opened)
 const adminManagementItems = [
   { title: "الرئيسية والإحصاءات", url: "/dashboard", icon: LayoutDashboard },
+  { title: "المصاريف", url: "/expenses", icon: Wallet },
+  { title: "الموردين والالتزامات", url: "/payables", icon: HandCoins },
+  { title: "الشركاء والمساهمين", url: "/partners", icon: Users2 },
+  { title: "المخزون والمنتجات", url: "/inventory", icon: Warehouse },
   { title: "التقارير المفصلة", url: "/reports", icon: BarChart3 },
   { title: "العمال والرواتب", url: "/workers", icon: UserCheck },
-  { title: "الزبائن والموردين", url: "/customers", icon: Users },
-  { title: "المخزون", url: "/inventory", icon: Warehouse },
+  { title: "الزبائن", url: "/customers", icon: Users },
   { title: "المواسم", url: "/seasons", icon: Calendar },
   { title: "الإعدادات والأسعار", url: "/settings", icon: Cog },
   { title: "إدارة حسابات المستخدمين", url: "/settings?section=users_roles", icon: UserCog },
@@ -82,7 +84,7 @@ const adminManagementItems = [
 let lastNavTimestamp = 0;
 const NAV_THROTTLE_MS = 300;
 
-const CASH_LOCKED_URLS = ["/queue", "/invoices", "/oil-trading", "/expenses"];
+const CASH_LOCKED_URLS = ["/queue", "/invoices", "/oil-trading"];
 
 function MenuGroup({
   label,

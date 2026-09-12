@@ -49,7 +49,7 @@ const Workers = () => {
   const { user, millId } = useAuth();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
-  const { inventory, updateInventory } = useInventory();
+  const { inventory } = useInventory();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecord[]>([]);
   const [payments, setPayments] = useState<WorkerPayment[]>([]);
