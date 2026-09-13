@@ -55,6 +55,7 @@ import MillDetails from "./pages/admin/MillDetails";
 import { AdminRoute } from "./components/AdminRoute";
 import { AdminErrorBoundary } from "./components/AdminErrorBoundary";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { FormDraftPersistence } from "./components/FormDraftPersistence";
 
 const queryClient = new QueryClient();
 
@@ -467,6 +468,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
+            <FormDraftPersistence />
             <RoleProvider>
               <SubscriptionProvider>
                 <Routes>

@@ -359,6 +359,7 @@ export default function Invoices() {
         title: shouldPrint ? "تم تأكيد الفاتورة وإرسال أمر الطباعة" : "تم تأكيد الفاتورة بنجاح", 
         description: `تم حفظ فاتورة لـ ${invoiceData.customerName}` 
       });
+      window.dispatchEvent(new CustomEvent("smart-mill:clear-form-draft", { detail: "/invoices" }));
 
       // Reset form
       setInvoiceData({ customerName: "", customerPhone: "", oilProduced: 0, notes: "" });
