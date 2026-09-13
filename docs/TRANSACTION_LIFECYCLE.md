@@ -290,9 +290,11 @@ Automated database integration tests cover the A-N scenarios in `TRANSACTION_MAT
 
 Current non-admin business data is disposable, but the Platform Admin Auth user, profile, role and Credential Vault behavior are preserved. Work is split into separately tested commits:
 
-### Step A — Financial lifecycle foundation
+### Step A — Financial lifecycle foundation — COMPLETE (2026-09-13)
 
-Add operation/command/audit foundations, effect linkage, reversal uniqueness, effective views and revoke unsafe raw/legacy mutation paths after replacements are ready.
+Implemented `business_operations`, immutable dependencies/audit events, generalized internal command receipts, mandatory `financial_transactions.operation_id`, automatic compatibility linkage, reversal validation and the tenant-safe `financial_effective_events` view. Platform Admin authorization is now role-backed only; no authorization function contains the historical fixed UUID. The financial ledger UI reads the effective view, includes reversal rows in its net, and no longer exposes a generic reversal action.
+
+The legacy `financial_command_receipts` and public `void_financial_transaction` remain transitional until each source-aware module replacement is deployed. Their removal is deliberately coupled to Steps B–F so an intermediate migration cannot disable current expense/invoice/oil workflows.
 
 ### Step B — Expenses and obligations
 

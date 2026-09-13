@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -38,10 +38,291 @@ export type Database = {
         }
         Relationships: []
       }
+      business_command_receipts: {
+        Row: {
+          actor_user_id: string
+          command_name: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          idempotency_key: string
+          mill_id: string | null
+          operation_id: string | null
+          result: Json | null
+          season_id: string | null
+          state: string
+        }
+        Insert: {
+          actor_user_id: string
+          command_name: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          mill_id?: string | null
+          operation_id?: string | null
+          result?: Json | null
+          season_id?: string | null
+          state?: string
+        }
+        Update: {
+          actor_user_id?: string
+          command_name?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          mill_id?: string | null
+          operation_id?: string | null
+          result?: Json | null
+          season_id?: string | null
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_command_receipts_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_command_receipts_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_command_receipts_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_operation_audit_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          id: string
+          operation_id: string
+          reason: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          id?: string
+          operation_id: string
+          reason?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          id?: string
+          operation_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_operation_audit_events_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_operation_dependencies: {
+        Row: {
+          child_operation_id: string
+          created_at: string
+          dependency_type: string
+          parent_operation_id: string
+        }
+        Insert: {
+          child_operation_id: string
+          created_at?: string
+          dependency_type: string
+          parent_operation_id: string
+        }
+        Update: {
+          child_operation_id?: string
+          created_at?: string
+          dependency_type?: string
+          parent_operation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_operation_dependencies_child_operation_id_fkey"
+            columns: ["child_operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_operation_dependencies_parent_operation_id_fkey"
+            columns: ["parent_operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_operations: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mill_id: string
+          operation_type: string
+          reverses_operation_id: string | null
+          season_id: string
+          source_id: string | null
+          source_type: string
+          status: string
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mill_id: string
+          operation_type: string
+          reverses_operation_id?: string | null
+          season_id: string
+          source_id?: string | null
+          source_type: string
+          status?: string
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mill_id?: string
+          operation_type?: string
+          reverses_operation_id?: string | null
+          season_id?: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_operations_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_operations_reverses_operation_id_fkey"
+            columns: ["reverses_operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_operations_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_sessions: {
+        Row: {
+          actual_balance: number | null
+          closed_at: string | null
+          closed_by: string | null
+          closing_note: string | null
+          created_at: string
+          difference: number | null
+          expected_balance: number | null
+          id: string
+          mill_id: string
+          opened_at: string
+          opened_by: string
+          opening_balance: number
+          season_id: string
+          status: string
+          total_cash_in: number
+          total_cash_out: number
+        }
+        Insert: {
+          actual_balance?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_note?: string | null
+          created_at?: string
+          difference?: number | null
+          expected_balance?: number | null
+          id?: string
+          mill_id: string
+          opened_at?: string
+          opened_by: string
+          opening_balance?: number
+          season_id: string
+          status?: string
+          total_cash_in?: number
+          total_cash_out?: number
+        }
+        Update: {
+          actual_balance?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_note?: string | null
+          created_at?: string
+          difference?: number | null
+          expected_balance?: number | null
+          id?: string
+          mill_id?: string
+          opened_at?: string
+          opened_by?: string
+          opening_balance?: number
+          season_id?: string
+          status?: string
+          total_cash_in?: number
+          total_cash_out?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_sessions_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_sessions_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       container_types: {
         Row: {
           created_at: string
           id: string
+          mill_id: string | null
           name: string
           price: number
           season_id: string | null
@@ -50,6 +331,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          mill_id?: string | null
           name: string
           price?: number
           season_id?: string | null
@@ -58,6 +340,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          mill_id?: string | null
           name?: string
           price?: number
           season_id?: string | null
@@ -71,12 +354,145 @@ export type Database = {
             referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_container_types_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credential_reveal_events: {
+        Row: {
+          actor_user_id: string
+          created_at: string
+          credential_type: string
+          id: string
+          outcome: string
+          target_user_id: string
+        }
+        Insert: {
+          actor_user_id: string
+          created_at?: string
+          credential_type: string
+          id?: string
+          outcome: string
+          target_user_id: string
+        }
+        Update: {
+          actor_user_id?: string
+          created_at?: string
+          credential_type?: string
+          id?: string
+          outcome?: string
+          target_user_id?: string
+        }
+        Relationships: []
+      }
+      credential_vault: {
+        Row: {
+          created_at: string
+          encrypted_admin_pin: string | null
+          encrypted_password: string | null
+          encryption_version: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          encrypted_admin_pin?: string | null
+          encrypted_password?: string | null
+          encryption_version?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          encrypted_admin_pin?: string | null
+          encrypted_password?: string | null
+          encryption_version?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      customer_payments: {
+        Row: {
+          amount: number
+          cash_session_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          mill_id: string
+          notes: string | null
+          payment_method: string
+          season_id: string
+        }
+        Insert: {
+          amount: number
+          cash_session_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          mill_id: string
+          notes?: string | null
+          payment_method?: string
+          season_id: string
+        }
+        Update: {
+          amount?: number
+          cash_session_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          mill_id?: string
+          notes?: string | null
+          payment_method?: string
+          season_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_payments_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_payments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_payments_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
         ]
       }
       customers: {
         Row: {
           created_at: string
           id: string
+          mill_id: string | null
           name: string
           phone: string | null
           season_id: string | null
@@ -86,6 +502,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          mill_id?: string | null
           name: string
           phone?: string | null
           season_id?: string | null
@@ -95,6 +512,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          mill_id?: string | null
           name?: string
           phone?: string | null
           season_id?: string | null
@@ -109,12 +527,155 @@ export type Database = {
             referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_customers_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_closings: {
+        Row: {
+          actual_cash: number
+          cashier_name: string
+          closing_date: string
+          created_at: string
+          created_by: string | null
+          difference: number
+          expected_cash: number
+          expenses_cash: number | null
+          id: string
+          invoices_cash: number | null
+          invoices_count: number | null
+          mill_id: string
+          notes: string | null
+          oil_purchases_cash: number | null
+          oil_sales_cash: number | null
+          opening_cash: number
+          season_id: string
+          total_cash_in: number
+          total_cash_out: number
+          worker_payments_cash: number | null
+        }
+        Insert: {
+          actual_cash?: number
+          cashier_name: string
+          closing_date?: string
+          created_at?: string
+          created_by?: string | null
+          difference?: number
+          expected_cash?: number
+          expenses_cash?: number | null
+          id?: string
+          invoices_cash?: number | null
+          invoices_count?: number | null
+          mill_id: string
+          notes?: string | null
+          oil_purchases_cash?: number | null
+          oil_sales_cash?: number | null
+          opening_cash?: number
+          season_id: string
+          total_cash_in?: number
+          total_cash_out?: number
+          worker_payments_cash?: number | null
+        }
+        Update: {
+          actual_cash?: number
+          cashier_name?: string
+          closing_date?: string
+          created_at?: string
+          created_by?: string | null
+          difference?: number
+          expected_cash?: number
+          expenses_cash?: number | null
+          id?: string
+          invoices_cash?: number | null
+          invoices_count?: number | null
+          mill_id?: string
+          notes?: string | null
+          oil_purchases_cash?: number | null
+          oil_sales_cash?: number | null
+          opening_cash?: number
+          season_id?: string
+          total_cash_in?: number
+          total_cash_out?: number
+          worker_payments_cash?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_closings_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_daily_closings_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_inventory: {
+        Row: {
+          cash_amount: number
+          container_count: number
+          created_at: string
+          id: string
+          inventory_date: string
+          mill_id: string | null
+          oil_amount: number
+          season_id: string
+          user_id: string
+        }
+        Insert: {
+          cash_amount?: number
+          container_count?: number
+          created_at?: string
+          id?: string
+          inventory_date?: string
+          mill_id?: string | null
+          oil_amount?: number
+          season_id: string
+          user_id: string
+        }
+        Update: {
+          cash_amount?: number
+          container_count?: number
+          created_at?: string
+          id?: string
+          inventory_date?: string
+          mill_id?: string | null
+          oil_amount?: number
+          season_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_inventory_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_daily_inventory_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
         ]
       }
       expense_categories: {
         Row: {
           created_at: string
           id: string
+          mill_id: string | null
           name: string
           season_id: string
           user_id: string
@@ -122,6 +683,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          mill_id?: string | null
           name: string
           season_id: string
           user_id: string
@@ -129,6 +691,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          mill_id?: string | null
           name?: string
           season_id?: string
           user_id?: string
@@ -141,37 +704,92 @@ export type Database = {
             referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_expense_categories_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
         ]
       }
       expenses: {
         Row: {
           amount: number
+          cash_session_id: string | null
           category: string
           created_at: string
           description: string | null
           id: string
+          mill_id: string | null
+          partner_id: string | null
+          payable_id: string | null
+          payment_method: string | null
           season_id: string | null
+          supplier_id: string | null
           user_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         Insert: {
           amount: number
+          cash_session_id?: string | null
           category: string
           created_at?: string
           description?: string | null
           id?: string
+          mill_id?: string | null
+          partner_id?: string | null
+          payable_id?: string | null
+          payment_method?: string | null
           season_id?: string | null
+          supplier_id?: string | null
           user_id: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
           amount?: number
+          cash_session_id?: string | null
           category?: string
           created_at?: string
           description?: string | null
           id?: string
+          mill_id?: string | null
+          partner_id?: string | null
+          payable_id?: string | null
+          payment_method?: string | null
           season_id?: string | null
+          supplier_id?: string | null
           user_id?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "expenses_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "expenses_season_id_fkey"
             columns: ["season_id"]
@@ -179,11 +797,183 @@ export type Database = {
             referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "expenses_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_expenses_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_command_receipts: {
+        Row: {
+          actor_user_id: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          idempotency_key: string
+          operation: string
+          result: Json | null
+        }
+        Insert: {
+          actor_user_id: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          operation: string
+          result?: Json | null
+        }
+        Update: {
+          actor_user_id?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          operation?: string
+          result?: Json | null
+        }
+        Relationships: []
+      }
+      financial_transactions: {
+        Row: {
+          amount: number
+          cash_session_id: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          direction: Database["public"]["Enums"]["financial_direction"]
+          id: string
+          idempotency_key: string | null
+          mill_id: string
+          operation_id: string
+          party_id: string | null
+          party_name: string | null
+          party_type: string | null
+          payment_method: Database["public"]["Enums"]["financial_payment_method"]
+          reference_id: string | null
+          reference_type: string
+          reversal_of: string | null
+          reversal_reason: string | null
+          season_id: string
+          status: Database["public"]["Enums"]["financial_tx_status"]
+          type: Database["public"]["Enums"]["financial_tx_type"]
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount: number
+          cash_session_id?: string | null
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction: Database["public"]["Enums"]["financial_direction"]
+          id?: string
+          idempotency_key?: string | null
+          mill_id: string
+          operation_id: string
+          party_id?: string | null
+          party_name?: string | null
+          party_type?: string | null
+          payment_method?: Database["public"]["Enums"]["financial_payment_method"]
+          reference_id?: string | null
+          reference_type?: string
+          reversal_of?: string | null
+          reversal_reason?: string | null
+          season_id: string
+          status?: Database["public"]["Enums"]["financial_tx_status"]
+          type: Database["public"]["Enums"]["financial_tx_type"]
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount?: number
+          cash_session_id?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction?: Database["public"]["Enums"]["financial_direction"]
+          id?: string
+          idempotency_key?: string | null
+          mill_id?: string
+          operation_id?: string
+          party_id?: string | null
+          party_name?: string | null
+          party_type?: string | null
+          payment_method?: Database["public"]["Enums"]["financial_payment_method"]
+          reference_id?: string | null
+          reference_type?: string
+          reversal_of?: string | null
+          reversal_reason?: string | null
+          season_id?: string
+          status?: Database["public"]["Enums"]["financial_tx_status"]
+          type?: Database["public"]["Enums"]["financial_tx_type"]
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_transactions_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "financial_effective_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_financial_transactions_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
         ]
       }
       inventory: {
         Row: {
           id: string
+          mill_id: string | null
           season_id: string | null
           total_cash: number
           total_oil: number
@@ -192,6 +982,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          mill_id?: string | null
           season_id?: string | null
           total_cash?: number
           total_oil?: number
@@ -200,6 +991,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          mill_id?: string | null
           season_id?: string | null
           total_cash?: number
           total_oil?: number
@@ -207,6 +999,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_inventory_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_season_id_fkey"
             columns: ["season_id"]
@@ -219,50 +1018,73 @@ export type Database = {
       invoices: {
         Row: {
           cash_amount: number
+          cash_session_id: string | null
           container_count: number
           container_type: string
           created_at: string
           customer_id: string | null
           customer_name: string
           id: string
+          mill_id: string | null
           oil_amount: number
           oil_produced: number
           payment_type: string
           season_id: string | null
           total_display: string
+          unpaid_amount: number | null
           user_id: string
         }
         Insert: {
           cash_amount?: number
+          cash_session_id?: string | null
           container_count: number
           container_type?: string
           created_at?: string
           customer_id?: string | null
           customer_name: string
           id?: string
+          mill_id?: string | null
           oil_amount?: number
           oil_produced: number
           payment_type: string
           season_id?: string | null
           total_display: string
+          unpaid_amount?: number | null
           user_id: string
         }
         Update: {
           cash_amount?: number
+          cash_session_id?: string | null
           container_count?: number
           container_type?: string
           created_at?: string
           customer_id?: string | null
           customer_name?: string
           id?: string
+          mill_id?: string | null
           oil_amount?: number
           oil_produced?: number
           payment_type?: string
           season_id?: string | null
           total_display?: string
+          unpaid_amount?: number | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_invoices_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoices_customer_id_fkey"
             columns: ["customer_id"]
@@ -279,11 +1101,190 @@ export type Database = {
           },
         ]
       }
+      mill_memberships: {
+        Row: {
+          created_at: string | null
+          display_username: string | null
+          id: string
+          is_active: boolean
+          mill_id: string
+          role: string
+          updated_at: string | null
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_username?: string | null
+          id?: string
+          is_active?: boolean
+          mill_id: string
+          role: string
+          updated_at?: string | null
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_username?: string | null
+          id?: string
+          is_active?: boolean
+          mill_id?: string
+          role?: string
+          updated_at?: string | null
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_mill_memberships_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mills: {
+        Row: {
+          country: string | null
+          created_at: string | null
+          id: string
+          location: string | null
+          mill_code: string | null
+          monthly_fee: number | null
+          name: string
+          owner_user_id: string | null
+          phone: string | null
+          secondary_phone: string | null
+          subscription_notes: string | null
+          subscription_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          location?: string | null
+          mill_code?: string | null
+          monthly_fee?: number | null
+          name: string
+          owner_user_id?: string | null
+          phone?: string | null
+          secondary_phone?: string | null
+          subscription_notes?: string | null
+          subscription_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          location?: string | null
+          mill_code?: string | null
+          monthly_fee?: number | null
+          name?: string
+          owner_user_id?: string | null
+          phone?: string | null
+          secondary_phone?: string | null
+          subscription_notes?: string | null
+          subscription_status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      oil_movements: {
+        Row: {
+          amount: number
+          cash_session_id: string | null
+          created_at: string
+          created_by: string
+          direction: string
+          id: string
+          idempotency_key: string | null
+          mill_id: string
+          movement_type: string
+          notes: string | null
+          ownership: string
+          party_name: string | null
+          quantity: number
+          reference_id: string | null
+          reference_type: string | null
+          season_id: string
+          source_type: string
+          unit_price: number
+        }
+        Insert: {
+          amount: number
+          cash_session_id?: string | null
+          created_at?: string
+          created_by: string
+          direction: string
+          id?: string
+          idempotency_key?: string | null
+          mill_id: string
+          movement_type: string
+          notes?: string | null
+          ownership: string
+          party_name?: string | null
+          quantity: number
+          reference_id?: string | null
+          reference_type?: string | null
+          season_id: string
+          source_type: string
+          unit_price?: number
+        }
+        Update: {
+          amount?: number
+          cash_session_id?: string | null
+          created_at?: string
+          created_by?: string
+          direction?: string
+          id?: string
+          idempotency_key?: string | null
+          mill_id?: string
+          movement_type?: string
+          notes?: string | null
+          ownership?: string
+          party_name?: string | null
+          quantity?: number
+          reference_id?: string | null
+          reference_type?: string | null
+          season_id?: string
+          source_type?: string
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oil_movements_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oil_movements_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oil_movements_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       oil_transactions: {
         Row: {
           amount: number
+          cash_session_id: string | null
           created_at: string
           id: string
+          mill_id: string | null
           notes: string | null
           party_name: string | null
           price: number
@@ -294,8 +1295,10 @@ export type Database = {
         }
         Insert: {
           amount: number
+          cash_session_id?: string | null
           created_at?: string
           id?: string
+          mill_id?: string | null
           notes?: string | null
           party_name?: string | null
           price: number
@@ -306,8 +1309,10 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cash_session_id?: string | null
           created_at?: string
           id?: string
+          mill_id?: string | null
           notes?: string | null
           party_name?: string | null
           price?: number
@@ -318,6 +1323,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_oil_transactions_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oil_transactions_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "oil_transactions_season_id_fkey"
             columns: ["season_id"]
             isOneToOne: false
@@ -326,124 +1345,360 @@ export type Database = {
           },
         ]
       }
-      credential_vault: {
+      partners: {
         Row: {
-          encrypted_password: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          encrypted_password: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          encrypted_password?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      mill_memberships: {
-        Row: {
+          active: boolean
           created_at: string
-          display_username: string | null
           id: string
-          is_active: boolean
           mill_id: string
-          role: Database["public"]["Enums"]["app_role"] | string
-          user_id: string
-          username: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          share_percent: number | null
+          updated_at: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
-          display_username?: string | null
           id?: string
-          is_active?: boolean
           mill_id: string
-          role?: Database["public"]["Enums"]["app_role"] | string
-          user_id: string
-          username?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          share_percent?: number | null
+          updated_at?: string
         }
         Update: {
+          active?: boolean
           created_at?: string
-          display_username?: string | null
           id?: string
-          is_active?: boolean
           mill_id?: string
-          role?: Database["public"]["Enums"]["app_role"] | string
-          user_id?: string
-          username?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          share_percent?: number | null
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "mill_memberships_mill_id_fkey"
+            foreignKeyName: "partners_mill_id_fkey"
             columns: ["mill_id"]
             isOneToOne: false
             referencedRelation: "mills"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
-      mills: {
+      payables: {
         Row: {
-          country: string | null
           created_at: string
+          created_by: string | null
+          creditor_name: string
           id: string
-          location: string | null
-          mill_code: string | null
-          monthly_fee: number | null
-          name: string
-          owner_user_id: string | null
-          phone: string | null
-          secondary_phone: string | null
-          subscription_status:
-            | Database["public"]["Enums"]["subscription_status"]
-            | null
+          mill_id: string
+          notes: string | null
+          original_amount: number
+          paid_amount: number
+          partner_id: string | null
+          remaining_amount: number
+          season_id: string
+          source_id: string | null
+          source_type: string
+          status: string
+          supplier_id: string | null
+          type: string
           updated_at: string
         }
         Insert: {
-          country?: string | null
           created_at?: string
+          created_by?: string | null
+          creditor_name: string
           id?: string
-          location?: string | null
-          mill_code?: string | null
-          monthly_fee?: number | null
-          name: string
-          owner_user_id?: string | null
-          phone?: string | null
-          secondary_phone?: string | null
-          subscription_status?:
-            | Database["public"]["Enums"]["subscription_status"]
-            | null
+          mill_id: string
+          notes?: string | null
+          original_amount: number
+          paid_amount?: number
+          partner_id?: string | null
+          remaining_amount: number
+          season_id: string
+          source_id?: string | null
+          source_type: string
+          status?: string
+          supplier_id?: string | null
+          type: string
           updated_at?: string
         }
         Update: {
-          country?: string | null
           created_at?: string
+          created_by?: string | null
+          creditor_name?: string
           id?: string
-          location?: string | null
-          mill_code?: string | null
-          monthly_fee?: number | null
-          name?: string
-          owner_user_id?: string | null
-          phone?: string | null
-          secondary_phone?: string | null
-          subscription_status?:
-            | Database["public"]["Enums"]["subscription_status"]
-            | null
+          mill_id?: string
+          notes?: string | null
+          original_amount?: number
+          paid_amount?: number
+          partner_id?: string | null
+          remaining_amount?: number
+          season_id?: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          supplier_id?: string | null
+          type?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payables_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_purchases: {
+        Row: {
+          cash_session_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mill_id: string
+          notes: string | null
+          partner_id: string | null
+          payment_method: string
+          product_id: string
+          quantity: number
+          season_id: string
+          supplier_id: string | null
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          cash_session_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mill_id: string
+          notes?: string | null
+          partner_id?: string | null
+          payment_method: string
+          product_id: string
+          quantity: number
+          season_id: string
+          supplier_id?: string | null
+          total_price: number
+          unit_price: number
+        }
+        Update: {
+          cash_session_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mill_id?: string
+          notes?: string | null
+          partner_id?: string | null
+          payment_method?: string
+          product_id?: string
+          quantity?: number
+          season_id?: string
+          supplier_id?: string | null
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_purchases_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_purchases_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_purchases_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_purchases_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_purchases_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_purchases_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_stock_movements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string | null
+          mill_id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          reference_id: string | null
+          reference_type: string | null
+          season_id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string | null
+          mill_id: string
+          notes?: string | null
+          product_id: string
+          quantity: number
+          reference_id?: string | null
+          reference_type?: string | null
+          season_id: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string | null
+          mill_id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          reference_id?: string | null
+          reference_type?: string | null
+          season_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_stock_movements_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_stock_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_stock_movements_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          created_at: string
+          current_stock: number
+          default_purchase_price: number
+          default_sale_price: number
+          id: string
+          mill_id: string
+          name: string
+          sku: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          current_stock?: number
+          default_purchase_price?: number
+          default_sale_price?: number
+          id?: string
+          mill_id: string
+          name: string
+          sku?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          current_stock?: number
+          default_purchase_price?: number
+          default_sale_price?: number
+          id?: string
+          mill_id?: string
+          name?: string
+          sku?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
+          admin_pin_hash: string | null
           avatar_url: string | null
           country: string | null
           created_at: string
           display_name: string | null
+          employee_pin: string | null
           id: string
-          is_active: boolean | null
+          is_active: boolean
           mill_code: string | null
           mill_location: string | null
           mill_name: string | null
@@ -453,19 +1708,19 @@ export type Database = {
           report_pin: string | null
           secondary_phone: string | null
           subscription_notes: string | null
-          subscription_status:
-            | Database["public"]["Enums"]["subscription_status"]
-            | null
+          subscription_status: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          admin_pin_hash?: string | null
           avatar_url?: string | null
           country?: string | null
           created_at?: string
           display_name?: string | null
+          employee_pin?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           mill_code?: string | null
           mill_location?: string | null
           mill_name?: string | null
@@ -475,19 +1730,19 @@ export type Database = {
           report_pin?: string | null
           secondary_phone?: string | null
           subscription_notes?: string | null
-          subscription_status?:
-            | Database["public"]["Enums"]["subscription_status"]
-            | null
+          subscription_status?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          admin_pin_hash?: string | null
           avatar_url?: string | null
           country?: string | null
           created_at?: string
           display_name?: string | null
+          employee_pin?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           mill_code?: string | null
           mill_location?: string | null
           mill_name?: string | null
@@ -497,9 +1752,7 @@ export type Database = {
           report_pin?: string | null
           secondary_phone?: string | null
           subscription_notes?: string | null
-          subscription_status?:
-            | Database["public"]["Enums"]["subscription_status"]
-            | null
+          subscription_status?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -509,40 +1762,56 @@ export type Database = {
         Row: {
           bags: number
           created_at: string
+          estimated_minutes: number | null
           id: string
+          mill_id: string | null
           name: string
           notes: string | null
           phone: string | null
           position: number | null
           season_id: string | null
+          started_at: string | null
           status: string
           user_id: string
         }
         Insert: {
           bags: number
           created_at?: string
+          estimated_minutes?: number | null
           id?: string
+          mill_id?: string | null
           name: string
           notes?: string | null
           phone?: string | null
           position?: number | null
           season_id?: string | null
+          started_at?: string | null
           status?: string
           user_id: string
         }
         Update: {
           bags?: number
           created_at?: string
+          estimated_minutes?: number | null
           id?: string
+          mill_id?: string | null
           name?: string
           notes?: string | null
           phone?: string | null
           position?: number | null
           season_id?: string | null
+          started_at?: string | null
           status?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_queue_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "queue_season_id_fkey"
             columns: ["season_id"]
@@ -556,9 +1825,11 @@ export type Database = {
         Row: {
           cash_return_cost: number
           created_at: string
+          display_settings: Json | null
           end_date: string | null
           id: string
           metal_container_price: number
+          mill_id: string | null
           name: string
           oil_buy_price: number
           oil_sell_price: number
@@ -572,9 +1843,11 @@ export type Database = {
         Insert: {
           cash_return_cost?: number
           created_at?: string
+          display_settings?: Json | null
           end_date?: string | null
           id?: string
           metal_container_price?: number
+          mill_id?: string | null
           name: string
           oil_buy_price?: number
           oil_sell_price?: number
@@ -588,9 +1861,11 @@ export type Database = {
         Update: {
           cash_return_cost?: number
           created_at?: string
+          display_settings?: Json | null
           end_date?: string | null
           id?: string
           metal_container_price?: number
+          mill_id?: string | null
           name?: string
           oil_buy_price?: number
           oil_sell_price?: number
@@ -601,7 +1876,65 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_seasons_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          cash_return_cost: number
+          created_at: string
+          id: string
+          metal_container_price: number
+          mill_id: string | null
+          oil_buy_price: number
+          oil_sell_price: number
+          plastic_container_price: number
+          return_percent: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cash_return_cost?: number
+          created_at?: string
+          id?: string
+          metal_container_price?: number
+          mill_id?: string | null
+          oil_buy_price?: number
+          oil_sell_price?: number
+          plastic_container_price?: number
+          return_percent?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cash_return_cost?: number
+          created_at?: string
+          id?: string
+          metal_container_price?: number
+          mill_id?: string | null
+          oil_buy_price?: number
+          oil_sell_price?: number
+          plastic_container_price?: number
+          return_percent?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_settings_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: true
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscription_payments: {
         Row: {
@@ -622,7 +1955,7 @@ export type Database = {
           mill_user_id: string
           notes?: string | null
           payment_date?: string
-          recorded_by?: string
+          recorded_by: string
         }
         Update: {
           amount?: number
@@ -634,7 +1967,59 @@ export type Database = {
           payment_date?: string
           recorded_by?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_subscription_payments_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          active: boolean
+          address: string | null
+          created_at: string
+          id: string
+          mill_id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          address?: string | null
+          created_at?: string
+          id?: string
+          mill_id: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          address?: string | null
+          created_at?: string
+          id?: string
+          mill_id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_settings: {
         Row: {
@@ -661,19 +2046,19 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Insert: {
           created_at?: string | null
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           user_id?: string
         }
         Relationships: []
@@ -684,6 +2069,7 @@ export type Database = {
           created_at: string
           hours: number | null
           id: string
+          mill_id: string | null
           notes: string | null
           season_id: string | null
           shifts: number | null
@@ -695,6 +2081,7 @@ export type Database = {
           created_at?: string
           hours?: number | null
           id?: string
+          mill_id?: string | null
           notes?: string | null
           season_id?: string | null
           shifts?: number | null
@@ -706,6 +2093,7 @@ export type Database = {
           created_at?: string
           hours?: number | null
           id?: string
+          mill_id?: string | null
           notes?: string | null
           season_id?: string | null
           shifts?: number | null
@@ -713,6 +2101,13 @@ export type Database = {
           worker_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_work_records_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "work_records_season_id_fkey"
             columns: ["season_id"]
@@ -732,8 +2127,10 @@ export type Database = {
       worker_payments: {
         Row: {
           amount: number
+          cash_session_id: string | null
           created_at: string
           id: string
+          mill_id: string | null
           notes: string | null
           season_id: string | null
           user_id: string
@@ -741,8 +2138,10 @@ export type Database = {
         }
         Insert: {
           amount: number
+          cash_session_id?: string | null
           created_at?: string
           id?: string
+          mill_id?: string | null
           notes?: string | null
           season_id?: string | null
           user_id: string
@@ -750,14 +2149,30 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cash_session_id?: string | null
           created_at?: string
           id?: string
+          mill_id?: string | null
           notes?: string | null
           season_id?: string | null
           user_id?: string
           worker_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_worker_payments_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "worker_payments_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "worker_payments_season_id_fkey"
             columns: ["season_id"]
@@ -779,6 +2194,7 @@ export type Database = {
           created_at: string
           hourly_rate: number | null
           id: string
+          mill_id: string | null
           name: string
           phone: string | null
           season_id: string | null
@@ -793,6 +2209,7 @@ export type Database = {
           created_at?: string
           hourly_rate?: number | null
           id?: string
+          mill_id?: string | null
           name: string
           phone?: string | null
           season_id?: string | null
@@ -807,6 +2224,7 @@ export type Database = {
           created_at?: string
           hourly_rate?: number | null
           id?: string
+          mill_id?: string | null
           name?: string
           phone?: string | null
           season_id?: string | null
@@ -819,6 +2237,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_workers_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "workers_season_id_fkey"
             columns: ["season_id"]
             isOneToOne: false
@@ -829,9 +2254,172 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      financial_effective_events: {
+        Row: {
+          amount: number | null
+          cash_session_id: string | null
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          direction: Database["public"]["Enums"]["financial_direction"] | null
+          effect_status: string | null
+          id: string | null
+          idempotency_key: string | null
+          is_reversal: boolean | null
+          is_reversed: boolean | null
+          mill_id: string | null
+          operation_id: string | null
+          operation_source_type: string | null
+          operation_status: string | null
+          operation_type: string | null
+          party_id: string | null
+          party_name: string | null
+          party_type: string | null
+          payment_method:
+            | Database["public"]["Enums"]["financial_payment_method"]
+            | null
+          reference_id: string | null
+          reference_type: string | null
+          reversal_of: string | null
+          reversal_reason: string | null
+          season_id: string | null
+          signed_amount: number | null
+          status: Database["public"]["Enums"]["financial_tx_status"] | null
+          type: Database["public"]["Enums"]["financial_tx_type"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_transactions_cash_session_id_fkey"
+            columns: ["cash_session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "financial_effective_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_financial_transactions_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mill_oil_balance: {
+        Row: {
+          current_balance: number | null
+          mill_id: string | null
+          milling_settlements: number | null
+          oil_purchased: number | null
+          oil_sold: number | null
+          opening_and_adjustments: number | null
+          season_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oil_movements_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oil_movements_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      adjust_product_stock_command: {
+        Args: {
+          p_idempotency_key: string
+          p_notes: string
+          p_product_id: string
+          p_quantity: number
+          p_season_id: string
+        }
+        Returns: Json
+      }
+      admin_create_cashier: {
+        Args: {
+          p_display_name: string
+          p_mill_code?: string
+          p_parent_mill_id: string
+          p_password: string
+          p_username: string
+        }
+        Returns: Json
+      }
+      admin_create_mill: {
+        Args: {
+          p_country?: string
+          p_mill_name: string
+          p_owner_email?: string
+          p_owner_name?: string
+          p_owner_phone?: string
+          p_password?: string
+          p_username?: string
+        }
+        Returns: Json
+      }
+      admin_delete_mill: { Args: { p_mill_id: string }; Returns: Json }
+      admin_set_user_pin: {
+        Args: { new_pin: string; target_user_id: string }
+        Returns: boolean
+      }
+      can_access_mill_data: {
+        Args: { p_owner_user_id: string }
+        Returns: boolean
+      }
+      check_user_mill_access: { Args: { p_mill_id: string }; Returns: boolean }
+      claim_financial_command: {
+        Args: { p_idempotency_key: string; p_operation: string }
+        Returns: Json
+      }
+      close_cash_session: {
+        Args: {
+          p_actual_balance: number
+          p_closing_note?: string
+          p_session_id: string
+        }
+        Returns: Json
+      }
+      complete_financial_command: {
+        Args: { p_idempotency_key: string; p_result: Json }
+        Returns: undefined
+      }
       create_invoice_and_settle: {
         Args: {
           p_cash_amount: number
@@ -848,19 +2436,70 @@ export type Database = {
         }
         Returns: string
       }
+      create_invoice_command: {
+        Args: {
+          p_cash_amount: number
+          p_container_count: number
+          p_container_type: string
+          p_customer_id: string
+          p_customer_name: string
+          p_idempotency_key: string
+          p_oil_amount: number
+          p_oil_produced: number
+          p_payment_type: string
+          p_queue_id: string
+          p_season_id: string
+          p_total_display: string
+        }
+        Returns: string
+      }
+      create_invoice_with_containers_command: {
+        Args: {
+          p_cash_amount: number
+          p_container_count: number
+          p_container_lines: Json
+          p_container_type: string
+          p_customer_id: string
+          p_customer_name: string
+          p_idempotency_key: string
+          p_oil_amount: number
+          p_oil_produced: number
+          p_payment_type: string
+          p_queue_id: string
+          p_season_id: string
+          p_total_display: string
+        }
+        Returns: string
+      }
+      drop_all_policies_on_table: {
+        Args: { p_table_name: string }
+        Returns: undefined
+      }
+      get_active_cash_session: { Args: never; Returns: Json }
+      get_auth_user_accessible_user_ids: { Args: never; Returns: string[] }
+      get_auth_user_mill_ids: { Args: never; Returns: string[] }
+      get_auth_user_owned_mill_ids: { Args: never; Returns: string[] }
+      get_current_mill_id: { Args: never; Returns: string }
+      get_effective_mill_id: { Args: never; Returns: string }
+      get_my_effective_user_id: { Args: never; Returns: string }
+      get_my_mill_id: { Args: never; Returns: string }
       get_public_queue: {
         Args: { p_season_id: string }
         Returns: {
           bags: number
+          estimated_minutes: number
           id: string
           name: string
-          position: number
+          notes: string
+          queue_position: number
+          started_at: string
           status: string
         }[]
       }
       get_public_season_display: {
         Args: { p_season_id: string }
         Returns: {
+          display_settings: Json
           metal_container_price: number
           name: string
           oil_buy_price: number
@@ -869,41 +2508,21 @@ export type Database = {
           return_percent: number
         }[]
       }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
+      get_user_mill_id: { Args: { _user_id: string }; Returns: string }
+      has_active_mill_role: {
+        Args: { p_mill_id: string; p_roles?: string[] }
         Returns: boolean
       }
+      has_role: { Args: { _role: string; _user_id: string }; Returns: boolean }
+      is_cashier: { Args: never; Returns: boolean }
+      is_mill_owner_of: {
+        Args: { _mill_id: string; _uid?: string }
+        Returns: boolean
+      }
+      is_platform_admin: { Args: { _uid?: string }; Returns: boolean }
       log_admin_access: {
         Args: { admin_action: string; target_user_id: string }
         Returns: undefined
-      }
-      set_report_pin: { Args: { new_pin: string }; Returns: undefined }
-      verify_report_pin: { Args: { input_pin: string }; Returns: boolean }
-      admin_create_mill: {
-        Args: {
-          p_country: string
-          p_mill_name: string
-          p_owner_email?: string | null
-          p_owner_name: string
-          p_owner_phone: string
-          p_password: string
-          p_username: string
-        }
-        Returns: Json
-      }
-      admin_create_cashier: {
-        Args: {
-          p_country?: string
-          p_display_name: string
-          p_location?: string
-          p_parent_mill_id: string
-          p_password: string
-          p_username: string
-        }
-        Returns: Json
       }
       lookup_cashier_by_username: {
         Args: { p_username: string }
@@ -912,66 +2531,246 @@ export type Database = {
           found_email: string
         }[]
       }
+      open_cash_session: {
+        Args: { p_opening_balance?: number; p_season_id: string }
+        Returns: Json
+      }
+      pay_worker_and_settle: {
+        Args: {
+          p_amount: number
+          p_notes: string
+          p_season_id: string
+          p_user_id: string
+          p_worker_id: string
+        }
+        Returns: undefined
+      }
+      pay_worker_command: {
+        Args: {
+          p_amount: number
+          p_idempotency_key: string
+          p_notes: string
+          p_season_id: string
+          p_worker_id: string
+        }
+        Returns: Json
+      }
+      record_customer_payment_atomic: {
+        Args: {
+          p_amount: number
+          p_customer_id: string
+          p_notes?: string
+          p_season_id: string
+        }
+        Returns: string
+      }
+      record_customer_payment_command: {
+        Args: {
+          p_amount: number
+          p_customer_id: string
+          p_idempotency_key: string
+          p_notes: string
+          p_season_id: string
+        }
+        Returns: string
+      }
+      record_expense_atomic: {
+        Args: {
+          p_amount: number
+          p_category: string
+          p_description?: string
+          p_season_id: string
+        }
+        Returns: string
+      }
+      record_expense_command: {
+        Args: {
+          p_amount: number
+          p_category: string
+          p_creditor_name: string
+          p_description: string
+          p_idempotency_key: string
+          p_partner_id: string
+          p_partner_name: string
+          p_payment_method: string
+          p_season_id: string
+          p_supplier_id: string
+        }
+        Returns: Json
+      }
+      record_expense_v2: {
+        Args: {
+          p_amount: number
+          p_category: string
+          p_creditor_name?: string
+          p_description?: string
+          p_partner_id?: string
+          p_partner_name?: string
+          p_payment_method?: string
+          p_season_id: string
+          p_supplier_id?: string
+        }
+        Returns: Json
+      }
+      record_oil_movement_command: {
+        Args: {
+          p_amount: number
+          p_direction: string
+          p_idempotency_key?: string
+          p_notes?: string
+          p_ownership: string
+          p_party_name?: string
+          p_season_id: string
+          p_unit_price?: number
+        }
+        Returns: Json
+      }
+      record_oil_trade_atomic: {
+        Args: {
+          p_amount: number
+          p_notes?: string
+          p_price: number
+          p_season_id: string
+          p_type: string
+        }
+        Returns: string
+      }
+      record_oil_trade_command: {
+        Args: {
+          p_idempotency_key?: string
+          p_movement_type: string
+          p_notes?: string
+          p_party_name?: string
+          p_payment_method?: string
+          p_quantity: number
+          p_season_id: string
+          p_unit_price: number
+        }
+        Returns: Json
+      }
+      record_oil_transaction_atomic: {
+        Args: {
+          p_amount: number
+          p_notes?: string
+          p_party_name?: string
+          p_price: number
+          p_season_id: string
+          p_type: string
+        }
+        Returns: string
+      }
+      record_oil_transaction_command: {
+        Args: {
+          p_amount: number
+          p_idempotency_key: string
+          p_notes: string
+          p_party_name: string
+          p_price: number
+          p_season_id: string
+          p_type: string
+        }
+        Returns: string
+      }
+      record_partner_transaction_atomic: {
+        Args: {
+          p_amount: number
+          p_notes?: string
+          p_partner_id: string
+          p_season_id: string
+          p_type: string
+        }
+        Returns: Json
+      }
+      record_partner_transaction_command: {
+        Args: {
+          p_amount: number
+          p_idempotency_key: string
+          p_notes: string
+          p_partner_id: string
+          p_season_id: string
+          p_type: string
+        }
+        Returns: Json
+      }
+      record_product_purchase_atomic: {
+        Args: {
+          p_notes?: string
+          p_partner_id?: string
+          p_partner_name?: string
+          p_payment_method: string
+          p_product_id: string
+          p_quantity: number
+          p_sale_price?: number
+          p_season_id: string
+          p_supplier_id?: string
+          p_unit_price: number
+        }
+        Returns: Json
+      }
+      register_worker_session: {
+        Args: {
+          p_notes: string
+          p_season_id: string
+          p_user_id: string
+          p_val: number
+          p_worker_id: string
+        }
+        Returns: undefined
+      }
+      set_admin_pin: { Args: { new_pin: string }; Returns: boolean }
+      set_employee_pin: { Args: { new_pin: string }; Returns: undefined }
+      set_report_pin: { Args: { new_pin: string }; Returns: undefined }
+      settle_payable_atomic: {
+        Args: {
+          p_amount: number
+          p_notes?: string
+          p_payable_id: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
+      settle_payable_command: {
+        Args: {
+          p_amount: number
+          p_idempotency_key: string
+          p_notes: string
+          p_payable_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
+      verify_admin_pin: { Args: { input_pin: string }; Returns: boolean }
       verify_employee_pin: {
         Args: { input_pin: string; owner_id: string }
         Returns: boolean
       }
-      verify_admin_pin: {
-        Args: { p_pin: string }
-        Returns: boolean
-      }
-      set_admin_pin: {
-        Args: { p_new_pin: string; p_current_pin?: string }
-        Returns: boolean
-      }
-      is_platform_admin: {
-        Args: { _uid?: string }
-        Returns: boolean
-      }
-      admin_toggle_user_active: {
-        Args: { p_is_active: boolean; p_user_id: string }
+      verify_report_pin: { Args: { input_pin: string }; Returns: boolean }
+      void_expense_and_reverse: {
+        Args: { p_expense_id: string; p_reason?: string }
         Returns: Json
       }
-      admin_reveal_credential: {
-        Args: { p_user_id: string }
-        Returns: string | null
-      }
-      admin_store_credential: {
-        Args: { p_password: string; p_user_id: string }
-        Returns: undefined
-      }
-      admin_get_all_accounts: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          user_id: string
-          display_name: string
-          username: string
-          role: string
-          mill_id: string | null
-          mill_name: string
-          mill_code: string | null
-          status: string
-          is_active: boolean
-          has_vault_credential: boolean
-          created_at: string
-        }[]
-      }
-      admin_update_user_credentials: {
-        Args: {
-          p_display_name: string
-          p_password?: string | null
-          p_user_id: string
-          p_username: string
-        }
-        Returns: Json
-      }
-      admin_delete_user: {
-        Args: { p_user_id: string }
+      void_financial_transaction: {
+        Args: { p_reason: string; p_transaction_id: string }
         Returns: Json
       }
     }
     Enums: {
       app_role: "platform_admin" | "mill_owner" | "mill_employee"
+      financial_direction: "in" | "out" | "none"
+      financial_payment_method: "cash" | "oil" | "mixed" | "credit"
+      financial_tx_status: "active" | "voided"
+      financial_tx_type:
+        | "income"
+        | "expense"
+        | "stock_purchase"
+        | "stock_sale"
+        | "worker_payment"
+        | "customer_debt"
+        | "customer_payment"
+        | "supplier_payment"
+        | "owner_deposit"
+        | "owner_withdrawal"
+        | "adjustment"
       subscription_status: "pending" | "active" | "suspended"
     }
     CompositeTypes: {
@@ -988,12 +2787,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1017,11 +2816,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1042,11 +2841,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1067,11 +2866,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1084,11 +2883,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1100,7 +2899,23 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["platform_admin", "mill_owner"],
+      app_role: ["platform_admin", "mill_owner", "mill_employee"],
+      financial_direction: ["in", "out", "none"],
+      financial_payment_method: ["cash", "oil", "mixed", "credit"],
+      financial_tx_status: ["active", "voided"],
+      financial_tx_type: [
+        "income",
+        "expense",
+        "stock_purchase",
+        "stock_sale",
+        "worker_payment",
+        "customer_debt",
+        "customer_payment",
+        "supplier_payment",
+        "owner_deposit",
+        "owner_withdrawal",
+        "adjustment",
+      ],
       subscription_status: ["pending", "active", "suspended"],
     },
   },
