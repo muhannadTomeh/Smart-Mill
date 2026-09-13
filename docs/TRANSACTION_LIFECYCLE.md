@@ -304,6 +304,8 @@ The Arabic UI exposes cancellation from Expenses and settlement history/reversal
 
 ### Step C — Invoices and receivables
 
+The invoice source lifecycle is live: creation has exact effect links, cancellation reverses linked cash/oil/container effects, and invoice-specific collection/reversal is append-only. The remaining C scope is the product/UI decision for opening a new deferred invoice, which is required before receivables can be marked complete.
+
 Normalize invoice lines/settlements, implement receivables, allocations, payment reversal and full invoice cancellation.
 
 ### Step D — Product inventory, purchases and sales

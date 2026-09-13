@@ -309,7 +309,7 @@ export default function Invoices() {
         .filter((container) => (containerCounts[container.id] || 0) > 0)
         .map((container) => ({ name: container.name, quantity: containerCounts[container.id] }));
 
-      const { error } = await supabase.rpc("create_invoice_with_containers_command" as any, {
+      const { error } = await supabase.rpc("create_invoice_lifecycle_command" as any, {
         p_season_id: activeSeason!.id,
         p_customer_id: customerId,
         p_customer_name: invoiceData.customerName.trim(),

@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { DeletedInvoicesDialog } from "@/components/invoices/DeletedInvoicesDialog";
 import { useDeletedInvoices } from "@/hooks/useDeletedInvoices";
+import { useToast } from "@/hooks/use-toast";
+import { useRole } from "@/contexts/RoleContext";
 
 interface InvoiceRecord {
   id: string;
@@ -33,6 +35,16 @@ interface InvoiceRecord {
   total_display: string;
   created_at: string;
   notes?: string | null;
+  voided_at?: string | null;
+}
+
+interface ReceivableMovement {
+  id: string;
+  invoice_id: string;
+  amount: number;
+  movement_type: string;
+  reversal_of?: string | null;
+  created_at: string;
 }
 
 export default function InvoicesHistory() {
@@ -40,6 +52,8 @@ export default function InvoicesHistory() {
   const { activeSeason } = useSeason();
   const { currency } = useCurrency();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { isEmployee } = useRole();
 
   const [deletedDialogOpen, setDeletedDialogOpen] = useState(false);
   const { count: deletedCount } = useDeletedInvoices();
@@ -49,6 +63,30 @@ export default function InvoicesHistory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRecord | null>(null);
+  const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
+  const [receivableMovements, setReceivableMovements] = useState<ReceivableMovement[]>([]);
+  const [receivableHistoryInvoice, setReceivableHistoryInvoice] = useState<InvoiceRecord | null>(null);
+  const [collectingInvoiceId, setCollectingInvoiceId] = useState<string | null>(null);
+
+  const cancelInvoice = async (invoice: InvoiceRecord) => {
+    const reason = window.prompt("سبب إلغاء الفاتورة:");
+    if (!reason?.trim()) return;
+    setCancellingInvoiceId(invoice.id);
+    try {
+      const { error } = await supabase.rpc("cancel_invoice_lifecycle_command" as any, {
+        p_invoice_id: invoice.id,
+        p_reason: reason.trim(),
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) throw error;
+      toast({ title: "تم إلغاء الفاتورة", description: "عُكست آثار الكاش والزيت والعبوات من المصدر بأمان." });
+      await fetchInvoices();
+    } catch (err: any) {
+      toast({ title: "تعذر إلغاء الفاتورة", description: err.message || "تعذرت العملية", variant: "destructive" });
+    } finally {
+      setCancellingInvoiceId(null);
+    }
+  };
 
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
 
@@ -67,8 +105,13 @@ export default function InvoicesHistory() {
         query = query.eq("user_id", user.id);
       }
 
-      const { data } = await query.order("created_at", { ascending: false });
+      const [invoiceResult, receivableResult] = await Promise.all([
+        query.order("created_at", { ascending: false }),
+        supabase.from("receivable_movements" as any).select("id, invoice_id, amount, movement_type, reversal_of, created_at").eq("season_id", activeSeason.id).order("created_at", { ascending: false }),
+      ]);
+      const { data } = invoiceResult;
       setInvoices((data as InvoiceRecord[]) || []);
+      setReceivableMovements((receivableResult.data || []) as ReceivableMovement[]);
     } catch (err) {
       console.error("Error fetching invoices:", err);
     } finally {
@@ -81,6 +124,55 @@ export default function InvoicesHistory() {
       fetchInvoices();
     }
   }, [activeSeason?.id, millId, user?.id]);
+
+  const receivableBalance = (invoiceId: string) => receivableMovements
+    .filter((movement) => movement.invoice_id === invoiceId)
+    .reduce((sum, movement) => sum + Number(movement.amount || 0), 0);
+
+  const collectReceivable = async (invoice: InvoiceRecord) => {
+    const outstanding = receivableBalance(invoice.id);
+    const amountInput = window.prompt(`مبلغ التحصيل (المتبقي ${outstanding.toLocaleString()} ${currency}):`, String(outstanding));
+    if (!amountInput) return;
+    const amount = Number(amountInput);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > outstanding) {
+      toast({ title: "مبلغ غير صالح", description: "أدخل مبلغًا لا يتجاوز الرصيد المتبقي.", variant: "destructive" });
+      return;
+    }
+    const notes = window.prompt("ملاحظات التحصيل (اختياري):") || null;
+    setCollectingInvoiceId(invoice.id);
+    try {
+      const { error } = await supabase.rpc("collect_invoice_receivable_lifecycle_command" as any, {
+        p_invoice_id: invoice.id,
+        p_amount: amount,
+        p_notes: notes,
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) throw error;
+      toast({ title: "تم التحصيل", description: "سُجل القبض وربط بالفاتورة والذمة." });
+      await fetchInvoices();
+    } catch (err: any) {
+      toast({ title: "تعذر التحصيل", description: err.message || "تعذرت العملية", variant: "destructive" });
+    } finally {
+      setCollectingInvoiceId(null);
+    }
+  };
+
+  const reverseCollection = async (movement: ReceivableMovement) => {
+    const reason = window.prompt("سبب عكس التحصيل:");
+    if (!reason?.trim()) return;
+    try {
+      const { error } = await supabase.rpc("reverse_invoice_collection_lifecycle_command" as any, {
+        p_movement_id: movement.id,
+        p_reason: reason.trim(),
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) throw error;
+      toast({ title: "تم عكس التحصيل", description: "عاد الرصيد المستحق والكاش إلى حالتهما الصحيحة." });
+      await fetchInvoices();
+    } catch (err: any) {
+      toast({ title: "تعذر عكس التحصيل", description: err.message || "تعذرت العملية", variant: "destructive" });
+    }
+  };
 
 
   const filteredInvoices = useMemo(() => {
@@ -261,6 +353,27 @@ export default function InvoicesHistory() {
                             <Eye className="h-3.5 w-3.5" />
                             <span>معاينة</span>
                           </Button>
+                          {!isEmployee && !inv.voided_at && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={cancellingInvoiceId === inv.id}
+                              className="h-8 px-2.5 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                              onClick={() => cancelInvoice(inv)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>إلغاء</span>
+                            </Button>
+                          )}
+                          {!inv.voided_at && receivableBalance(inv.id) > 0 && (
+                            <Button size="sm" variant="outline" disabled={collectingInvoiceId === inv.id} className="h-8 px-2.5 text-xs gap-1" onClick={() => collectReceivable(inv)}>
+                              <Wallet className="h-3.5 w-3.5" />
+                              <span>تحصيل</span>
+                            </Button>
+                          )}
+                          {receivableMovements.some((movement) => movement.invoice_id === inv.id) && (
+                            <Button size="sm" variant="ghost" className="h-8 px-2.5 text-xs" onClick={() => setReceivableHistoryInvoice(inv)}>سجل الذمة</Button>
+                          )}
 
                           <Button
                             size="sm"
@@ -347,6 +460,23 @@ export default function InvoicesHistory() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!receivableHistoryInvoice} onOpenChange={(open) => !open && setReceivableHistoryInvoice(null)}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>سجل ذمة الفاتورة</DialogTitle>
+            <DialogDescription>{receivableHistoryInvoice?.customer_name} — الرصيد: {receivableHistoryInvoice ? receivableBalance(receivableHistoryInvoice.id).toLocaleString() : "0"} {currency}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {receivableMovements.filter((movement) => movement.invoice_id === receivableHistoryInvoice?.id).map((movement) => (
+              <div key={movement.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                <div><div className="font-medium">{Number(movement.amount).toLocaleString()} {currency}</div><div className="text-xs text-muted-foreground">{formatDate(movement.created_at)} · {movement.movement_type}</div></div>
+                {movement.movement_type === "collection" && !receivableMovements.some((item) => item.reversal_of === movement.id) && !isEmployee && <Button size="sm" variant="outline" onClick={() => reverseCollection(movement)}>عكس</Button>}
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
 

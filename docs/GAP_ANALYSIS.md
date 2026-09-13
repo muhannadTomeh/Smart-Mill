@@ -21,3 +21,7 @@
 ## Step B closure (2026-09-13)
 
 Expense creation, cancellation, payable settlement, and settlement reversal no longer use the old UI command paths. The generic `void_financial_transaction` remains transitional for modules outside Step B only; the Step B UI does not call it.
+
+## Step C live foundation (2026-09-14)
+
+Invoices now have immutable links to their cash and oil effects; source cancellation and invoice-specific collection reversal are tested. Creating a new invoice with an outstanding customer receivable still needs an explicit product/UI decision, so Step C remains in progress.
