@@ -34,7 +34,8 @@ import {
   AlertCircle,
   Phone,
   MapPin,
-  FileText
+  FileText,
+  RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,7 +57,7 @@ interface Payable {
   remaining_amount: number;
   source_type: string;
   source_id?: string | null;
-  status: "unpaid" | "partially_paid" | "paid";
+  status: "unpaid" | "partially_paid" | "paid" | "cancelled";
   notes?: string | null;
   created_at: string;
 }
@@ -69,6 +70,15 @@ interface Supplier {
   notes?: string | null;
   active: boolean;
   created_at: string;
+}
+
+interface SettlementHistoryItem {
+  id: string;
+  payable_id: string;
+  amount: number;
+  payment_method: string | null;
+  created_at: string;
+  reversed: boolean;
 }
 
 export default function Payables() {
@@ -89,6 +99,9 @@ export default function Payables() {
   const [settleMethod, setSettleMethod] = useState<"cash" | "other">("cash");
   const [settleNotes, setSettleNotes] = useState("");
   const [settleLoading, setSettleLoading] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<Payable | null>(null);
+  const [settlements, setSettlements] = useState<SettlementHistoryItem[]>([]);
+  const [reversingSettlement, setReversingSettlement] = useState<string | null>(null);
 
   // Add Supplier Dialog State
   const [addSupplierOpen, setAddSupplierOpen] = useState(false);
@@ -154,7 +167,7 @@ export default function Payables() {
 
     setSettleLoading(true);
     try {
-      const { data, error } = await supabase.rpc("settle_payable_command" as any, {
+      const { data, error } = await supabase.rpc("settle_payable_lifecycle_command" as any, {
         p_payable_id: settleTarget.id,
         p_amount: amount,
         p_payment_method: settleMethod,
@@ -182,6 +195,43 @@ export default function Payables() {
       });
     } finally {
       setSettleLoading(false);
+    }
+  };
+
+  const openSettlementHistory = async (payable: Payable) => {
+    setHistoryTarget(payable);
+    const { data, error } = await supabase
+      .from("payable_settlement_history" as any)
+      .select("id, payable_id, amount, payment_method, created_at, reversed")
+      .eq("payable_id", payable.id)
+      .eq("movement_type", "settlement")
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "تعذّر تحميل سجل السداد", description: error.message, variant: "destructive" });
+      return;
+    }
+    setSettlements((data || []) as SettlementHistoryItem[]);
+  };
+
+  const reverseSettlement = async (settlement: SettlementHistoryItem) => {
+    const reason = window.prompt("سبب عكس السداد:");
+    if (!reason?.trim()) return;
+    setReversingSettlement(settlement.id);
+    try {
+      const { error } = await supabase.rpc("reverse_payable_settlement_lifecycle_command" as any, {
+        p_movement_id: settlement.id,
+        p_reason: reason.trim(),
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) throw error;
+      toast({ title: "تم عكس السداد", description: "عادت الذمة ورصيد الكاش — إن وُجد — إلى حالتهما الصحيحة." });
+      if (historyTarget) await openSettlementHistory(historyTarget);
+      await fetchData();
+      await refreshCash();
+    } catch (err: any) {
+      toast({ title: "تعذّر عكس السداد", description: err.message || "تعذرت العملية", variant: "destructive" });
+    } finally {
+      setReversingSettlement(null);
     }
   };
 
@@ -412,7 +462,8 @@ export default function Payables() {
                             {formatDate(p.created_at)}
                           </TableCell>
                           <TableCell className="text-center">
-                            {p.status !== "paid" ? (
+                            <div className="flex justify-center gap-1">
+                            {p.status !== "paid" && p.status !== "cancelled" && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -425,11 +476,11 @@ export default function Payables() {
                                 <ArrowDownLeft className="h-3 w-3" />
                                 سداد دفعة
                               </Button>
-                            ) : (
-                              <span className="text-xs text-emerald-600 flex items-center justify-center gap-1">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> مسدد
-                              </span>
                             )}
+                              <Button size="sm" variant="ghost" onClick={() => openSettlementHistory(p)} className="h-7 text-xs gap-1">
+                                <RotateCcw className="h-3 w-3" /> سجل السداد
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -596,6 +647,23 @@ export default function Payables() {
               {settleLoading ? "جاري المعالجة..." : "تأكيد السداد"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(historyTarget)} onOpenChange={(open) => !open && setHistoryTarget(null)}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>سجل سداد الالتزام</DialogTitle>
+            <DialogDescription>{historyTarget?.creditor_name} — اعكس السداد من هنا فقط عند الحاجة.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {settlements.length === 0 ? <p className="text-sm text-muted-foreground py-4 text-center">لا توجد دفعات مسجلة عبر المسار الجديد.</p> : settlements.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                <div><div className="font-medium">{Math.abs(Number(s.amount)).toLocaleString()} ₪</div><div className="text-xs text-muted-foreground">{formatDate(s.created_at)} · {s.payment_method === "cash" ? "كاش" : "مصدر خارجي"}</div></div>
+                {s.reversed ? <Badge variant="secondary">معكوس</Badge> : <Button size="sm" variant="outline" disabled={reversingSettlement === s.id} onClick={() => reverseSettlement(s)} className="gap-1"><RotateCcw className="h-3 w-3" /> عكس</Button>}
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -24,7 +24,7 @@ This program supersedes incremental reversal patches. The earlier phase IDs rema
 | Step | Scope | Status | Exit condition |
 |---|---|---|---|
 | A | Operation envelope, command/audit foundation, financial effect linkage and effective read model | **COMPLETE — 2026-09-13** | all financial events linked; tenant RLS verified; role-only Platform Admin; build/typecheck pass |
-| B | Expenses, supplier payables and partner dues | NEXT | create/settle/reverse/cancel flows pass dependency matrix |
+| B | Expenses, supplier payables and partner dues | Complete | source commands, append-only obligation movements, and source UI |
 | C | Invoices, receivables and collections | Not started | normalized lines/allocations and full cancellation pass |
 | D | Product purchases, sales and returns | Not started | signed stock ledger and non-negative cancellation rules pass |
 | E | Oil purchases, sales and milling settlement | Not started | all sources use one movement/reversal model |

@@ -220,7 +220,7 @@ const Expenses = () => {
 
     try {
       // 1. Call Atomic RPC: record_expense_v2
-      const { data, error } = await supabase.rpc("record_expense_command" as any, {
+      const { data, error } = await supabase.rpc("record_expense_lifecycle_command" as any, {
         p_season_id: activeSeason.id,
         p_category: finalCategory,
         p_amount: amount,
@@ -287,9 +287,10 @@ const Expenses = () => {
     }
     if (!deleteTarget) return;
     const { id } = deleteTarget;
-    const { error } = await supabase.rpc("void_expense_and_reverse" as any, {
+    const { error } = await supabase.rpc("cancel_expense_lifecycle_command" as any, {
       p_expense_id: id,
       p_reason: "إلغاء من واجهة إدارة المصاريف",
+      p_idempotency_key: crypto.randomUUID(),
     });
     if (!error) {
       toast({ title: "تم الإلغاء", description: "أُلغي المصروف وعُكست حركته النقدية بأمان" });

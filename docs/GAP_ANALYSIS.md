@@ -18,3 +18,6 @@
 | Workers | payment atomic; create/edit/delete direct and no durable wage liability statement | Partial | historical/integrity risk | archive workers, derive earned/paid balance | P2 Important |
 | Mobile/RTL | RTL shell and responsive primitives exist; no visual/mobile test evidence | Partial | seasonal usability risk | test critical forms/receipt/display at phone widths | P2 Important |
 | Observability | immutable operation audit foundation is live; business-module details and application error monitoring are pending | Partial | incomplete source-level incident reconstruction | emit module lifecycle events in Steps B–F and add monitoring | P3 Improvement |
+## Step B closure (2026-09-13)
+
+Expense creation, cancellation, payable settlement, and settlement reversal no longer use the old UI command paths. The generic `void_financial_transaction` remains transitional for modules outside Step B only; the Step B UI does not call it.

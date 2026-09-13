@@ -296,9 +296,11 @@ Implemented `business_operations`, immutable dependencies/audit events, generali
 
 The legacy `financial_command_receipts` and public `void_financial_transaction` remain transitional until each source-aware module replacement is deployed. Their removal is deliberately coupled to Steps B–F so an intermediate migration cannot disable current expense/invoice/oil workflows.
 
-### Step B — Expenses and obligations
+### Step B — Expenses and obligations — COMPLETE (2026-09-13)
 
-Implement cash/credit/partner expense creation, obligation settlement and reversal, dependency-aware expense cancellation and Arabic UI actions.
+Cash, credit, and partner-funded expenses now use source-aware idempotent commands. `obligation_movements` is append-only: opening, settlement, settlement reversal, and cancellation are recorded separately. Cash settlements retain an exact `financial_transaction_id`, so a reversal can only reverse its own financial effect. Expense cancellation is allowed only after every settlement is reversed; it never calls the generic ledger reversal endpoint.
+
+The Arabic UI exposes cancellation from Expenses and settlement history/reversal from Payables. Legacy `payables` is retained as a compatible read projection; cancelled source obligations carry the explicit `cancelled` status.
 
 ### Step C — Invoices and receivables
 
