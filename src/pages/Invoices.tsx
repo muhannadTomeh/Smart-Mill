@@ -95,6 +95,7 @@ export default function Invoices() {
   // Custom mixed payment adjustments
   const [customMixedOil, setCustomMixedOil] = useState<number | null>(null);
   const [isCustomizingMixed, setIsCustomizingMixed] = useState(false);
+  const [deferCashSettlement, setDeferCashSettlement] = useState(false);
 
   // Preview Dialog Modal
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -192,6 +193,7 @@ export default function Invoices() {
       setSelectedPayment(null);
       setCustomMixedOil(null);
       setIsCustomizingMixed(false);
+      setDeferCashSettlement(false);
       return;
     }
     const totalContainerCost = getTotalContainerCost();
@@ -305,25 +307,29 @@ export default function Invoices() {
 
       const containerSummary = getContainerSummary() || "بدون تنكات";
 
-      const containerLines = containerTypes
+    const containerLines = containerTypes
         .filter((container) => (containerCounts[container.id] || 0) > 0)
         .map((container) => ({ name: container.name, quantity: containerCounts[container.id] }));
 
-      const { error } = await supabase.rpc("create_invoice_lifecycle_command" as any, {
+      const isDeferred = deferCashSettlement && selectedPayment.cashAmount > 0;
+      const commonInvoiceArgs = {
         p_season_id: activeSeason!.id,
         p_customer_id: customerId,
         p_customer_name: invoiceData.customerName.trim(),
         p_oil_produced: invoiceData.oilProduced,
         p_container_count: getTotalContainerCount(),
         p_container_type: containerSummary,
-        p_payment_type: selectedPayment.type,
         p_oil_amount: selectedPayment.oilAmount,
-        p_cash_amount: selectedPayment.cashAmount,
-        p_total_display: selectedPayment.total,
         p_queue_id: queueId && queueId !== "manual" ? queueId : null,
         p_container_lines: containerLines,
         p_idempotency_key: crypto.randomUUID(),
-      });
+      };
+      const { error } = await supabase.rpc(
+        (isDeferred ? "create_deferred_invoice_lifecycle_command" : "create_invoice_lifecycle_command") as any,
+        isDeferred
+          ? { ...commonInvoiceArgs, p_receivable_amount: selectedPayment.cashAmount, p_total_display: `${selectedPayment.total} (آجل)` }
+          : { ...commonInvoiceArgs, p_payment_type: selectedPayment.type, p_cash_amount: selectedPayment.cashAmount, p_total_display: selectedPayment.total },
+      );
 
       if (error) {
         console.error("create_invoice_and_settle error", error);
@@ -338,10 +344,10 @@ export default function Invoices() {
           oil_produced: invoiceData.oilProduced,
           container_count: getTotalContainerCount(),
           container_type: containerSummary,
-          payment_type: selectedPayment.type,
+          payment_type: isDeferred ? "credit" : selectedPayment.type,
           oil_amount: selectedPayment.oilAmount,
-          cash_amount: selectedPayment.cashAmount,
-          total_display: selectedPayment.total,
+          cash_amount: isDeferred ? 0 : selectedPayment.cashAmount,
+          total_display: isDeferred ? `${selectedPayment.total} (آجل)` : selectedPayment.total,
           notes: invoiceData.notes || undefined,
           season_name: activeSeason?.name,
         }, millName);
@@ -371,6 +377,7 @@ export default function Invoices() {
       setSelectedPayment(null);
       setCustomMixedOil(null);
       setIsCustomizingMixed(false);
+      setDeferCashSettlement(false);
       setShowPreviewModal(false);
       fetchQueueCustomers();
       refetchInventory();
@@ -694,6 +701,18 @@ export default function Invoices() {
                       );
                     })}
                   </div>
+
+                  {selectedPayment && selectedPayment.cashAmount > 0 && (
+                    <label className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={deferCashSettlement}
+                        onChange={(event) => setDeferCashSettlement(event.target.checked)}
+                        className="h-4 w-4 accent-primary"
+                      />
+                      <span><strong>تأجيل الجزء النقدي كذمة</strong> — لا يدخل {selectedPayment.cashAmount.toFixed(2)} {currency} إلى الكاش الآن، ويُحصّل لاحقًا من سجل الفواتير.</span>
+                    </label>
+                  )}
 
                   {/* Mixed Payment Customization if Mixed is selected */}
                   {selectedPayment?.type === "mixed" && (

@@ -25,7 +25,7 @@ This program supersedes incremental reversal patches. The earlier phase IDs rema
 |---|---|---|---|
 | A | Operation envelope, command/audit foundation, financial effect linkage and effective read model | **COMPLETE — 2026-09-13** | all financial events linked; tenant RLS verified; role-only Platform Admin; build/typecheck pass |
 | B | Expenses, supplier payables and partner dues | Complete | source commands, append-only obligation movements, and source UI |
-| C | Invoices, receivables and collections | In progress — invoice source lifecycle deployed | exact effects, cancellation, collection and reversal are live; deferred-invoice creation UI remains |
+| C | Invoices, receivables and collections | **COMPLETE — 2026-09-14** | exact effects, deferred issue, collection, reversal, and source cancellation verified |
 | D | Product purchases, sales and returns | Not started | signed stock ledger and non-negative cancellation rules pass |
 | E | Oil purchases, sales and milling settlement | Not started | all sources use one movement/reversal model |
 | F | Closed/open cash-session reversal semantics | Not started | closed sessions remain immutable and reversals post to current drawer |

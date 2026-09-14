@@ -302,9 +302,9 @@ Cash, credit, and partner-funded expenses now use source-aware idempotent comman
 
 The Arabic UI exposes cancellation from Expenses and settlement history/reversal from Payables. Legacy `payables` is retained as a compatible read projection; cancelled source obligations carry the explicit `cancelled` status.
 
-### Step C — Invoices and receivables
+### Step C — Invoices and receivables — COMPLETE (2026-09-14)
 
-The invoice source lifecycle is live: creation has exact effect links, cancellation reverses linked cash/oil/container effects, and invoice-specific collection/reversal is append-only. The remaining C scope is the product/UI decision for opening a new deferred invoice, which is required before receivables can be marked complete.
+Invoice creation has exact effect links; source cancellation reverses linked cash/oil/container effects; and invoice-specific collection/reversal is append-only. The «تأجيل الجزء النقدي كذمة» option issues a deferred invoice without booking cash, opens the corresponding receivable, and exposes collection/reversal from the invoice history.
 
 Normalize invoice lines/settlements, implement receivables, allocations, payment reversal and full invoice cancellation.
 
