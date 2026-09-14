@@ -1,5 +1,9 @@
 # Smart Mill Product Requirements Document
 
+> Foundation status (2026-09-14): Platform Admin is role-backed with no tenant; all owner/employee sessions require active `mill_memberships`. Ownership metadata is never a tenant fallback.
+
+> Foundation status (2026-09-14): `platform_admin` is role-backed and requires no tenant; every owner/employee tenant session requires an active `mill_memberships` row. `owner_user_id` is ownership metadata only.
+
 ## 1. Product overview
 
 Smart Mill is an Arabic-first, mobile-friendly operating and financial system for a small olive mill. It combines the queue and milling-service invoice flow with cash drawer control, oil trading, customers, workers, expenses, supplier/product purchasing, liabilities and owner/partner activity. It is a focused operational system, not a general ERP.

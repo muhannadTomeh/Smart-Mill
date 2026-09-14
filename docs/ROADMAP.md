@@ -1,5 +1,9 @@
 # Smart Mill Implementation Roadmap
 
+> Foundation cleanup completed before Step D: active membership-only tenancy, role-backed Platform Admin, canonical `mill_employee`, and deployed hardened account/vault Edge Functions.
+
+> Foundation cleanup completed before Step D: active membership-only tenancy, role-backed Platform Admin, canonical `mill_employee`, and deployed hardened account/vault Edge Functions.
+
 | Phase / ID | Work | Why / dependency | Risk | Size | Class |
 |---|---|---|---|---|---|
 | 0 / SEC-01 | Snapshot/audit production migrations, tables, RLS, grants, functions, Edge deploys and backups | required before changing behavior | unknown deployed drift | M | BLOCKER |

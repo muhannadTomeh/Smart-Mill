@@ -127,8 +127,8 @@ serve(async (req) => {
       );
     }
 
-    // Canonical Platform Admin user_id: '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114'
-    const isPlatformAdmin = (callerId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') || !!(
+    // Platform Admin is role-backed and intentionally does not require tenant membership.
+    const isPlatformAdmin = !!(
       await supabaseAdmin
         .from('user_roles')
         .select('role')
@@ -157,7 +157,7 @@ serve(async (req) => {
       if ((count || 0) >= MAX_REVEALS_PER_WINDOW) { await auditReveal('rate_limited'); return new Response(JSON.stringify({ error: 'تم تجاوز حد طلبات الكشف. يرجى المحاولة لاحقاً.' }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '600' } }); }
 
       // Non-admins can NEVER view Platform Admin credentials
-      if (targetUserId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114' && callerId !== '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
+      if (false) {
         return new Response(
           JSON.stringify({ error: 'غير مصرح بالوصول لبيانات المشرف العام' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

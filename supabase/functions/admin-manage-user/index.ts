@@ -66,11 +66,41 @@ serve(async (req) => {
     const { action } = body;
 
     // Platform Admin check (Canonical ID or platform_admin role)
-    const isPlatformAdmin = (callerId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') || !!(
+    const isPlatformAdmin = !!(
       await supabaseAdmin
         .from('user_roles')
         .select('role')
         .eq('user_id', callerId)
+        .eq('role', 'platform_admin')
+        .maybeSingle()
+    ).data;
+
+    const isActiveOwnerOfEmployee = async (targetUserId: string): Promise<boolean> => {
+      const { data: targetMembership } = await supabaseAdmin
+        .from('mill_memberships')
+        .select('mill_id')
+        .eq('user_id', targetUserId)
+        .eq('role', 'mill_employee')
+        .eq('is_active', true)
+        .maybeSingle();
+      if (!targetMembership) return false;
+
+      const { data: ownerMembership } = await supabaseAdmin
+        .from('mill_memberships')
+        .select('id')
+        .eq('user_id', callerId)
+        .eq('mill_id', targetMembership.mill_id)
+        .eq('role', 'mill_owner')
+        .eq('is_active', true)
+        .maybeSingle();
+      return !!ownerMembership;
+    };
+
+    const isPlatformAdminTarget = async (targetUserId: string): Promise<boolean> => !!(
+      await supabaseAdmin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', targetUserId)
         .eq('role', 'platform_admin')
         .maybeSingle()
     ).data;
@@ -248,10 +278,7 @@ serve(async (req) => {
             user_id: createdAuthUserId,
             mill_id: createdMillId,
             username: cleanUsername,
-            display_name: ownerName,
-            email: internalEmail,
-            password: cleanPassword,
-            admin_pin: cleanAdminPin
+            display_name: ownerName
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -301,8 +328,8 @@ serve(async (req) => {
       if (requestedMillId) {
         const { data: mData } = await supabaseAdmin
           .from('mills')
-          .select('id, name, mill_code, owner_user_id')
-          .or(`id.eq.${requestedMillId},owner_user_id.eq.${requestedMillId}`)
+          .select('id, name, mill_code')
+          .eq('id', requestedMillId)
           .maybeSingle();
         targetMill = mData;
       }
@@ -315,7 +342,15 @@ serve(async (req) => {
       }
 
       // Authorization check: Platform Admin or Mill Owner of this specific mill
-      const isOwnerOfMill = targetMill.owner_user_id === callerId;
+      const { data: ownerMembership } = await supabaseAdmin
+        .from('mill_memberships')
+        .select('id')
+        .eq('user_id', callerId)
+        .eq('mill_id', targetMill.id)
+        .eq('role', 'mill_owner')
+        .eq('is_active', true)
+        .maybeSingle();
+      const isOwnerOfMill = !!ownerMembership;
       if (!isPlatformAdmin && !isOwnerOfMill) {
         return new Response(
           JSON.stringify({ error: 'غير مصرح لك بإنشاء حساب موظف في هذه المعصرة' }),
@@ -464,26 +499,14 @@ serve(async (req) => {
       }
 
       // Safeguard: Platform Admin account can NEVER be disabled
-      if (targetUserId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
+      if (await isPlatformAdminTarget(targetUserId)) {
         return new Response(
           JSON.stringify({ error: 'لا يمكن تعطيل حساب المشرف العام' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      let isOwnerOfTarget = false;
-      if (!isPlatformAdmin) {
-        const { data: targetMem } = await supabaseAdmin
-          .from('mill_memberships')
-          .select('mill_id, role, mills!inner(owner_user_id)')
-          .eq('user_id', targetUserId)
-          .eq('role', 'mill_employee')
-          .maybeSingle();
-
-        if (targetMem && (targetMem.mills as any)?.owner_user_id === callerId) {
-          isOwnerOfTarget = true;
-        }
-      }
+      const isOwnerOfTarget = !isPlatformAdmin && await isActiveOwnerOfEmployee(targetUserId);
 
       if (!isPlatformAdmin && !isOwnerOfTarget) {
         return new Response(
@@ -524,26 +547,14 @@ serve(async (req) => {
       }
 
       // Safeguard: Platform Admin password cannot be reset by others
-      if (targetUserId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114' && callerId !== targetUserId) {
+      if (await isPlatformAdminTarget(targetUserId) && callerId !== targetUserId) {
         return new Response(
           JSON.stringify({ error: 'لا يمكن تعديل كلمة مرور المشرف العام إلا بواسطة المشرف نفسه' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      let isOwnerOfTarget = false;
-      if (!isPlatformAdmin) {
-        const { data: targetMem } = await supabaseAdmin
-          .from('mill_memberships')
-          .select('mill_id, role, mills!inner(owner_user_id)')
-          .eq('user_id', targetUserId)
-          .eq('role', 'mill_employee')
-          .maybeSingle();
-
-        if (targetMem && (targetMem.mills as any)?.owner_user_id === callerId) {
-          isOwnerOfTarget = true;
-        }
-      }
+      const isOwnerOfTarget = !isPlatformAdmin && await isActiveOwnerOfEmployee(targetUserId);
 
       if (!isPlatformAdmin && !isOwnerOfTarget) {
         return new Response(
@@ -594,19 +605,7 @@ serve(async (req) => {
         );
       }
 
-      let isOwnerOfTarget = false;
-      if (!isPlatformAdmin) {
-        const { data: targetMem } = await supabaseAdmin
-          .from('mill_memberships')
-          .select('mill_id, role, mills!inner(owner_user_id)')
-          .eq('user_id', targetUserId)
-          .eq('role', 'mill_employee')
-          .maybeSingle();
-
-        if (targetMem && (targetMem.mills as any)?.owner_user_id === callerId) {
-          isOwnerOfTarget = true;
-        }
-      }
+      const isOwnerOfTarget = !isPlatformAdmin && await isActiveOwnerOfEmployee(targetUserId);
 
       if (!isPlatformAdmin && !isOwnerOfTarget) {
         return new Response(

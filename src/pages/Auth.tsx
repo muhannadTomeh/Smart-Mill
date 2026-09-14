@@ -76,15 +76,11 @@ const Auth = () => {
         window.location.href = nextPath;
       } else if (data?.user) {
         // 1. Platform admin check
-        const isCanonicalAdmin = data.user.id === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114';
-        let isAdminRole = isCanonicalAdmin;
-        if (!isAdminRole) {
-          const { data: hasAdmin } = await supabase.rpc('has_role', {
-            _user_id: data.user.id,
-            _role: 'platform_admin'
-          });
-          isAdminRole = !!hasAdmin;
-        }
+        const { data: hasAdmin } = await supabase.rpc('has_role', {
+          _user_id: data.user.id,
+          _role: 'platform_admin'
+        });
+        const isAdminRole = !!hasAdmin;
 
         if (isAdminRole) {
           navigate("/admin");
@@ -96,9 +92,10 @@ const Auth = () => {
           .from('mill_memberships')
           .select('role, mill_id, is_active')
           .eq('user_id', data.user.id)
+          .eq('is_active', true)
           .maybeSingle();
 
-        if (memberRow && memberRow.is_active === false) {
+        if (!memberRow) {
           await supabase.auth.signOut();
           toast({
             title: "الحساب معطّل",
@@ -112,26 +109,14 @@ const Auth = () => {
           navigate("/queue");
         } else {
           // Check if an active season already exists for this mill or user
-          let millId = memberRow?.mill_id;
-          if (!millId) {
-            const { data: millRecord } = await supabase
-              .from('mills')
-              .select('id')
-              .eq('owner_user_id', data.user.id)
-              .maybeSingle();
-            millId = millRecord?.id;
-          }
+          const millId = memberRow.mill_id;
 
           let activeSeasonQuery = supabase
             .from('seasons')
             .select('id')
             .eq('status', 'active');
 
-          if (millId) {
-            activeSeasonQuery = activeSeasonQuery.eq('mill_id', millId);
-          } else {
-            activeSeasonQuery = activeSeasonQuery.eq('user_id', data.user.id);
-          }
+          activeSeasonQuery = activeSeasonQuery.eq('mill_id', millId);
 
           const { data: activeSeasonRow } = await activeSeasonQuery.maybeSingle();
 

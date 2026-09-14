@@ -111,16 +111,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .from('mill_memberships')
           .select('id, mill_id, role, username, display_username, is_active')
           .eq('user_id', currentUser.id)
+          .eq('is_active', true)
           .maybeSingle();
 
         if (membership) {
-          if (membership.is_active === false) {
-            isUserActive = false;
-          }
           if (membership.mill_id) {
             resolvedMillId = membership.mill_id;
-            resolvedRole = (membership.role as UserRole) || (userIsAdmin ? 'platform_admin' : 'mill_owner');
+            resolvedRole = membership.role as UserRole;
           }
+        } else if (!userIsAdmin) {
+          isUserActive = false;
         }
       } catch (memErr) {
         console.warn("Could not query mill_memberships:", memErr);
@@ -173,8 +173,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setMillId(resolvedMillId);
       setMill(resolvedMill);
       setRole(resolvedRole);
-      const isActualOwner = resolvedRole === 'mill_owner' || (!userIsAdmin && resolvedRole !== 'mill_employee');
-      setIsOwner(isActualOwner);
+      setIsOwner(resolvedRole === 'mill_owner');
       setIsEmployee(resolvedRole === 'mill_employee');
 
       // 3. Fetch Personal Profile (display name, phone, etc.)

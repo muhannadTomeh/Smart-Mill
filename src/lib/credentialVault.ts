@@ -109,8 +109,6 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
 
     // Fetch profiles for all unique user IDs
     const userIds = new Set<string>();
-    // Guarantee canonical Platform Admin ID is included
-    userIds.add('7e29b3ea-ce6e-4dab-b2d7-80fc04af1114');
     (adminRolesRes.data || []).forEach((r: any) => userIds.add(r.user_id));
     (millsRes.data || []).forEach((m: any) => { if (m.owner_user_id) userIds.add(m.owner_user_id); });
     (membershipsRes.data || []).forEach((mem: any) => { if (mem.user_id) userIds.add(mem.user_id); });
@@ -132,7 +130,6 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
 
     // 1) Platform Admins (never tied to a mill)
     const adminIds = new Set<string>();
-    adminIds.add('7e29b3ea-ce6e-4dab-b2d7-80fc04af1114');
     (adminRolesRes.data || []).forEach((ar: any) => adminIds.add(ar.user_id));
 
     adminIds.forEach(adminId => {
@@ -340,7 +337,7 @@ export async function createEmployeeAccount(params: {
 export async function toggleUserAccountActive(userId: string, isActive: boolean): Promise<void> {
   if (!userId) return;
 
-  if (userId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
+  if (false) {
     throw new Error("لا يمكن تعطيل حساب المشرف العام");
   }
 
@@ -450,7 +447,7 @@ export async function updateUserAccount(
  * historical financial and queue records, it disables/archives the account safely.
  */
 export async function deleteUserAccount(userId: string): Promise<void> {
-  if (userId === '7e29b3ea-ce6e-4dab-b2d7-80fc04af1114') {
+  if (false) {
     throw new Error("لا يمكن حذف أو تعطيل حساب المشرف العام");
   }
 

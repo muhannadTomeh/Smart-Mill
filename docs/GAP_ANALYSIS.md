@@ -1,5 +1,9 @@
 # Smart Mill Gap Analysis
 
+> Foundation update (2026-09-14): canonical membership authorization and the `mill_employee` role are implemented. Keep cross-mill/RLS regression tests in release checks.
+
+> Foundation update (2026-09-14): canonical membership authorization and the `mill_employee` role are implemented; retain automated cross-mill/RLS regression tests as the remaining control.
+
 | Requirement | Expected vs current behavior | Status | Impact | Recommendation | Priority |
 |---|---|---|---|---|---|
 | Canonical tenancy | `mills.id` + membership; client still has owner/user fallbacks and old schema policies | Partial | cross-tenant risk | complete backfill, remove fallbacks after telemetry | P0 Critical |

@@ -1,5 +1,7 @@
 # Smart Mill Transaction Lifecycle & Reversal Model
 
+> Authorization invariant: tenant lifecycle commands accept only an active membership for the command mill. Canonical operator role is `mill_employee`; ownership fields are never tenant authorization fallbacks.
+
 ## 1. Purpose and invariant
 
 This document is the canonical lifecycle contract for business mutations. The invariant is:

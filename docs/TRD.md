@@ -1,5 +1,9 @@
 # Smart Mill Technical Requirements Document
 
+> Foundation status (2026-09-14): active membership is the only non-platform tenant authority; Platform Admin is role-backed server-side; runtime UUID and owner/user tenant fallbacks are removed.
+
+> Foundation status (2026-09-14): production authorization resolves non-platform users only through active `mill_memberships`; platform access is role-backed server-side. Runtime UUID checks and owner/user tenant fallbacks are removed.
+
 ## 1. System overview and current architecture
 
 React 18 + TypeScript + Vite + Tailwind/shadcn UI is deployed as a Vercel SPA. Supabase supplies Auth, PostgreSQL/RLS, Realtime and Edge Functions. TanStack Query is configured globally but most pages issue local effects/direct queries. The browser Supabase client carries a publishable key; no service-role key was found in client code.

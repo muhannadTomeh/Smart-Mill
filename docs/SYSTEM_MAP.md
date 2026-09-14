@@ -1,5 +1,9 @@
 # Smart Mill System Map
 
+> Current authorization boundary: `auth.uid() → active mill_memberships → mill_id`; Platform Admin comes from `user_roles` and is intentionally outside tenant membership. Ownership fields are not authorization fallbacks.
+
+> Current authorization boundary: `auth.uid() → active mill_memberships → mill_id`; Platform Admin is resolved from `user_roles` and is intentionally outside tenant membership. Ownership fields are not authorization fallbacks.
+
 ```text
 Supabase Auth user
   ├─ platform_admin → user_roles → Platform Admin UI (no tenant required)
