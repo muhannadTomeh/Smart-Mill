@@ -32,8 +32,6 @@ import { useAdminWorkspace } from "@/contexts/AdminWorkspaceContext"
 import { useCashSession } from "@/contexts/CashSessionContext"
 import { useSeason } from "@/contexts/SeasonContext"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -196,7 +194,6 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed"
 
   const [showOpenCashDialog, setShowOpenCashDialog] = useState(false)
-  const [openingBalance, setOpeningBalance] = useState("0")
   const [openingLoading, setOpeningLoading] = useState(false)
 
   const handleOpenCash = async () => {
@@ -206,7 +203,6 @@ export function AppSidebar() {
     setOpeningLoading(false)
     if (ok) {
       setShowOpenCashDialog(false)
-      setOpeningBalance("0")
     }
   }
 
@@ -446,22 +442,8 @@ export function AppSidebar() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
-              أدخل الرصيد الافتتاحي (المبلغ الموجود في الدرج لحظة الفتح):
+              تفتح جلسة الجارور برصيد صفر. أودع المال في الخزنة ثم حوّله إلى الجارور من صفحة الإجراءات والخزنة.
             </p>
-            <div className="space-y-1.5">
-              <Label>الرصيد الافتتاحي (شيكل)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value="0"
-                disabled
-                placeholder="0"
-                className="text-right"
-                autoFocus
-                onKeyDown={(e) => e.key === "Enter" && handleOpenCash()}
-              />
-            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowOpenCashDialog(false)} disabled={openingLoading}>

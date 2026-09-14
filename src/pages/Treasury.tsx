@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowLeftRight, Landmark, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 type Partner = { id: string; name: string };
 
 export default function Treasury() {
+  const navigate = useNavigate();
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
   const { session, isOpen, refreshSession } = useCashSession();
@@ -74,7 +76,8 @@ export default function Treasury() {
   };
 
   return <div className="space-y-6" dir="rtl">
-    <div><h1 className="text-3xl font-bold">الخزنة والجارور</h1><p className="text-muted-foreground mt-1">الخزنة مستقلة عن جلسة الكاشير؛ التحويل بينهما فقط هو الذي يغيّر رصيد الجارور.</p></div>
+    <div><h1 className="text-3xl font-bold">الإجراءات والخزنة</h1><p className="text-muted-foreground mt-1">الخزنة مستقلة عن جلسة الكاشير؛ التحويل بينهما فقط هو الذي يغيّر رصيد الجارور.</p></div>
+    <Card><CardHeader><CardTitle>إجراءات الإدارة</CardTitle><CardDescription>هذه الإجراءات تخص الخزنة ولا تحتاج جلسة جارور.</CardDescription></CardHeader><CardContent><Button variant="outline" className="justify-start gap-2" onClick={() => navigate("/expenses?cash=vault")}><Wallet className="h-4 w-4" />تسجيل مصروف من الخزنة</Button></CardContent></Card>
     <div className="grid gap-4 md:grid-cols-2">
       <Card className="border-emerald-200"><CardHeader className="pb-2"><CardDescription>رصيد الخزنة العام</CardDescription><CardTitle className="flex gap-2 text-3xl"><Landmark className="h-7 w-7 text-emerald-700" />{vaultBalance.toLocaleString()} ₪</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">لا يحتاج فتح جارور.</CardContent></Card>
       <Card className="border-blue-200"><CardHeader className="pb-2"><CardDescription>رصيد الجارور الحالي</CardDescription><CardTitle className="flex gap-2 text-3xl"><Wallet className="h-7 w-7 text-blue-700" />{isOpen ? Number(session?.expected_balance || 0).toLocaleString() : "مغلق"}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">يُطابق عند إغلاق جلسة الجارور فقط.</CardContent></Card>

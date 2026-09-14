@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,8 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 const Expenses = () => {
+  const [searchParams] = useSearchParams();
+  const isVaultMode = searchParams.get("cash") === "vault";
   const { user, millId } = useAuth();
   const { isEmployee } = useRole();
   const { activeSeason } = useSeason();
@@ -220,7 +223,7 @@ const Expenses = () => {
 
     try {
       // 1. Call Atomic RPC: record_expense_v2
-      const { data, error } = await supabase.rpc("record_expense_lifecycle_command" as any, {
+      const { data, error } = await supabase.rpc((isVaultMode ? "record_vault_expense_lifecycle_command" : "record_expense_lifecycle_command") as any, {
         p_season_id: activeSeason.id,
         p_category: finalCategory,
         p_amount: amount,
@@ -287,7 +290,7 @@ const Expenses = () => {
     }
     if (!deleteTarget) return;
     const { id } = deleteTarget;
-    const { error } = await supabase.rpc("cancel_expense_lifecycle_command" as any, {
+    const { error } = await supabase.rpc((isVaultMode ? "cancel_vault_expense_lifecycle_command" : "cancel_expense_lifecycle_command") as any, {
       p_expense_id: id,
       p_reason: "إلغاء من واجهة إدارة المصاريف",
       p_idempotency_key: crypto.randomUUID(),
@@ -333,8 +336,7 @@ const Expenses = () => {
     setFilter({ category: "", dateFrom: "", dateTo: "" });
   };
 
-  return (
-    <CashSessionGuard>
+  const page = (
     <div className="space-y-6 text-right" dir="rtl">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -343,8 +345,8 @@ const Expenses = () => {
             <Receipt className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">إدارة المصاريف</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">تسجيل ومتابعة مصاريف المعصرة اليومية والتشغيلية والالتزامات</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{isVaultMode ? "مصروف من الخزنة" : "إدارة المصاريف"}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">{isVaultMode ? "هذا المسار الإداري لا يسجل أي حركة داخل جلسة الجارور." : "تسجيل ومتابعة مصاريف المعصرة اليومية والتشغيلية والالتزامات"}</p>
           </div>
         </div>
 
@@ -921,8 +923,8 @@ const Expenses = () => {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-    </CashSessionGuard>
   );
+  return isVaultMode ? page : <CashSessionGuard>{page}</CashSessionGuard>;
 };
 
 export default Expenses;

@@ -115,7 +115,7 @@ const HeaderBar = () => {
 
       <div className="flex items-center gap-2">
         {/* Cash Session Banner - only for non-admin mill users */}
-        {!isAdmin && <CashSessionBanner />}
+        {!isAdmin && !isAdminWorkspace && <CashSessionBanner />}
 
         {/* Quick Add - Only for Mill Owners/Employees */}
         {!isAdmin && (

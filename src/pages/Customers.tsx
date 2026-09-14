@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Users, Search, FileText, Phone, Calendar, UserPlus, Plus,
-  Printer, Eye, Pencil, Star, CheckCircle, Receipt
+  Printer, Eye, Pencil, Star, CheckCircle, Receipt, BookOpen
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,6 +50,7 @@ const paymentLabel = (type: string) => {
 };
 
 const Customers = () => {
+  const navigate = useNavigate();
   const { user, millId, profile } = useAuth();
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
   const { activeSeason } = useSeason();
@@ -319,6 +321,10 @@ const Customers = () => {
           </div>
         </div>
 
+        <Button variant="outline" onClick={() => navigate("/financial-ledger")} className="gap-2">
+          <BookOpen className="h-4 w-4" />
+          الدفتر المالي
+        </Button>
         <Button
           onClick={() => setAddDialogOpen(true)}
           className="gap-2 bg-primary text-primary-foreground font-bold shadow-sm"
