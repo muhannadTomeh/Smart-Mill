@@ -94,7 +94,11 @@ export default function Partners() {
     try {
       const [partnersRes, payablesRes, txsRes] = await Promise.all([
         supabase.from("partners" as any).select("*").order("name", { ascending: true }),
-        supabase.from("payables" as any).select("partner_id, remaining_amount").eq("status", "unpaid").or("status.eq.partially_paid"),
+        supabase
+          .from("payables" as any)
+          .select("partner_id, remaining_amount")
+          .eq("type", "due_to_partner")
+          .in("status", ["unpaid", "partially_paid"]),
         supabase.from("financial_transactions" as any).select("*").eq("party_type", "partner").order("created_at", { ascending: false }).limit(20)
       ]);
 
