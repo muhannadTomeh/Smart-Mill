@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
+import { useCashBalance } from "@/hooks/useCashBalance";
 import { useNavigate } from "react-router-dom";
 import { useRole } from "@/contexts/RoleContext";
 import { Navigate } from "react-router-dom";
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const { user, millId } = useAuth();
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
+  const { cashBalance } = useCashBalance();
   const navigate = useNavigate();
 
   const [stats, setStats] = useState({
@@ -109,7 +111,7 @@ export default function Dashboard() {
 
 
   const statCards = [
-    { label: "الرصيد", hint: "نقداً", value: `${(Number(inventory?.total_cash) || 0).toFixed(0)} ₪`, icon: DollarSign, tone: "text-primary", bg: "bg-primary/10", sensitive: true },
+    { label: "الرصيد النقدي للمعصرة", hint: "من الدفتر المالي", value: `${cashBalance.toFixed(0)} ₪`, icon: DollarSign, tone: "text-primary", bg: "bg-primary/10", sensitive: true },
     { label: "الزيت", hint: `${((Number(inventory?.total_oil) || 0) / 16).toFixed(1)} تنكة`, value: `${(Number(inventory?.total_oil) || 0).toFixed(1)} كغم`, icon: Droplets, tone: "text-[hsl(var(--primary-glow))]", bg: "bg-[hsl(var(--primary-glow))]/12" },
     { label: "في الطابور", hint: "زبون بانتظار العصر", value: stats.waitingCount, icon: Clock, tone: "text-[hsl(var(--warning))]", bg: "bg-[hsl(var(--warning))]/12" },
     { label: "تم الإنجاز", hint: "اليوم", value: stats.doneCount, icon: CheckCircle, tone: "text-[hsl(var(--success))]", bg: "bg-[hsl(var(--success))]/12" },

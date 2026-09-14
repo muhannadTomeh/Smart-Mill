@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, Calendar, Plus, Users, Receipt, Wallet, User, ChevronDown, Menu, Lock, Phone, ShieldCheck, Undo2 } from "lucide-react";
 import { ReAuthDialog } from "@/components/auth/ReAuthDialog";
-import { CashSessionBanner } from "@/components/CashSessionBanner";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -114,9 +113,6 @@ const HeaderBar = () => {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Cash Session Banner - only for non-admin mill users */}
-        {!isAdmin && !isAdminWorkspace && <CashSessionBanner />}
-
         {/* Quick Add - Only for Mill Owners/Employees */}
         {!isAdmin && (
           <DropdownMenu>

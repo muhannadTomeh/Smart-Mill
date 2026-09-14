@@ -36,3 +36,8 @@ This program supersedes incremental reversal patches. The earlier phase IDs rema
 | G | Lifecycle-aware Arabic UI cleanup | Not started | no generic delete/reversal or raw database errors |
 | H | Effective reports and reconciliation views | Not started | no source/ledger double counting and zero reconciliation drift |
 | I | Full E2E A–N, permissions and concurrency regression | Not started | production-like evidence for every matrix scenario |
+# Cash session simplification
+
+- [x] Make cash sessions optional metadata for canonical financial events.
+- [x] Add an effective-financial-ledger cash balance and reconciliation view.
+- [ ] Retire remaining legacy RPC-level open-session checks after their individual lifecycle tests are migrated.

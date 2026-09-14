@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
+import { useCashBalance } from "@/hooks/useCashBalance";
 import { useRole } from "@/contexts/RoleContext";
 import { useToast } from "@/hooks/use-toast";
 import { Navigate } from "react-router-dom";
@@ -83,6 +84,7 @@ const Inventory = () => {
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
   const { inventory, loading: invLoading, refetch: refetchInventory } = useInventory();
+  const { cashBalance, loading: cashBalanceLoading } = useCashBalance();
   const { toast } = useToast();
 
   const [activeMainTab, setActiveMainTab] = useState<"oil" | "products">("oil");
@@ -640,7 +642,7 @@ const Inventory = () => {
                   <div className="flex-1">
                     <p className="text-xs text-muted-foreground font-medium">رصيد كاش المعصرة الكلي</p>
                     <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
-                      {invLoading ? "—" : Number(inventory.total_cash).toFixed(2)}{" "}
+                      {cashBalanceLoading ? "—" : cashBalance.toFixed(2)}{" "}
                       <span className="text-xs font-normal text-muted-foreground">₪</span>
                     </p>
                   </div>

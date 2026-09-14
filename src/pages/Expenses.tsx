@@ -24,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
+import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatDate, formatNumber } from "@/lib/formatters";
 import { CashSessionGuard } from "@/components/CashSessionGuard";
@@ -74,6 +75,7 @@ const Expenses = () => {
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, refetch: refetchInventory } = useInventory();
+  const { cashBalance } = useCashBalance();
   const { currency } = useCurrency();
   const activeCurrency = currency || "₪";
 
@@ -412,9 +414,9 @@ const Expenses = () => {
         <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground font-medium">رصيد الكاش بالصندوق</p>
+              <p className="text-xs text-muted-foreground font-medium">الرصيد النقدي للمعصرة</p>
               <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
-                {inventory.total_cash.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{activeCurrency}</span>
+                {cashBalance.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{activeCurrency}</span>
               </h3>
             </div>
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -696,7 +698,7 @@ const Expenses = () => {
               />
               {newExpense.payment_method === "cash" && (
                 <p className="text-[11px] text-muted-foreground">
-                  رصيد الصندوق المتوفر: <strong>{inventory.total_cash.toLocaleString()} {activeCurrency}</strong> (يشترط جلسة صندوق مفتوحة)
+                  الرصيد النقدي المسجل: <strong>{cashBalance.toLocaleString()} {activeCurrency}</strong>
                 </p>
               )}
             </div>

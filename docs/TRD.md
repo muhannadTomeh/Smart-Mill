@@ -52,7 +52,9 @@ Collection → validate receivable → customer payment + cash IN + financial ev
 
 ## 6. Cash session architecture
 
-Current migrations create `cash_sessions`, one open row per mill, active-session RPCs, a close RPC, timestamps and a closing record. Later triggers stamp/enforce sessions on invoices, expenses, oil, wage/customer/financial records and prevent modification after close. Sessions are date-independent.
+Cash Session is optional operational metadata. The mill cash balance is derived from effective cash `financial_transactions` and does not require an open session. `cash_session_id` is nullable: existing sessions and their historical reconciliation remain readable, while a new cash event may be recorded with no session.
+
+Physical drawer reconciliation is deferred/optional. The current MVP tracks total mill cash, not physical cash location; moving physical cash inside the mill does not change total mill cash and is outside the current accounting scope.
 
 Target expected balance = opening balance + active cash-in financial events − active cash-out financial events for the session. Avoid double counting source tables and financial events. Reconciliation is an immutable close event with actual count, variance/reason, closer and time. Decide owner/employee permissions in database policy, not sidebar visibility.
 

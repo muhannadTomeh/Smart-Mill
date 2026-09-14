@@ -8,6 +8,7 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useInventory } from "@/hooks/useInventory";
+import { useCashBalance } from "@/hooks/useCashBalance";
 import { Navigate } from "react-router-dom";
 
 
@@ -49,6 +50,7 @@ export default function Reports() {
   const { isEmployee } = useRole();
   const { activeSeason } = useSeason();
   const { inventory } = useInventory();
+  const { cashBalance } = useCashBalance();
   const [period, setPeriod] = useState<Period>("daily");
 
   const [stats, setStats] = useState({
@@ -250,8 +252,8 @@ export default function Reports() {
               <div className="flex items-center gap-3">
                 <Banknote className="h-8 w-8 text-green-600" />
                 <div>
-                  <p className="text-sm text-muted-foreground">مخزون الكاش</p>
-                  <p className="text-2xl font-bold">{inventory.total_cash} ش</p>
+                  <p className="text-sm text-muted-foreground">الرصيد النقدي للمعصرة</p>
+                  <p className="text-2xl font-bold">{cashBalance} ش</p>
                 </div>
               </div>
             </div>

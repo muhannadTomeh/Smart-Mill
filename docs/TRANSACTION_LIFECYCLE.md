@@ -71,7 +71,7 @@ Every command requires a client-generated UUID. `business_command_receipts` has 
 
 ### 3.3 Financial effects
 
-`financial_transactions` remains an immutable event ledger. A correction is another row with `reversal_of` pointing to the original. A unique partial index on `reversal_of` prevents two effective reversals of the same event. Source lifecycle commands, not the frontend, create reversals.
+`financial_transactions` remains an immutable event ledger. A correction is another row with `reversal_of` pointing to the original. A unique partial index on `reversal_of` prevents two effective reversals of the same event. Source lifecycle commands, not the frontend, create reversals. Cash Session is optional operational metadata: the mill cash balance is the net of effective cash financial events, whether `cash_session_id` is present or `NULL`.
 
 Financial events describe monetary value and payment method. Physical drawer effects require `payment_method=cash` and a verified `cash_session_id`. Credit and partner-funded recognition uses no cash direction/session.
 

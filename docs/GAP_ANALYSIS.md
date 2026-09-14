@@ -29,3 +29,6 @@ Expense creation, cancellation, payable settlement, and settlement reversal no l
 ## Step C closure (2026-09-14)
 
 Invoices have immutable links to their cash and oil effects; source cancellation and invoice-specific collection reversal are tested. Deferred invoice issuance is now explicit in the invoice UI and creates a receivable without booking cash.
+# Cash session decision (2026-09-15)
+
+Cash sessions are optional operational metadata, not an accounting prerequisite. Total mill cash is derived from effective cash `financial_transactions`; `inventory.total_cash` is a compatibility cache and must be reconciled against the ledger. Historical sessions remain available for physical-drawer review.
