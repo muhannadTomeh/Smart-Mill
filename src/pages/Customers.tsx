@@ -314,7 +314,7 @@ const Customers = () => {
         <div className="flex items-center gap-3">
           <Users className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">إدارة الزبائن</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">الزبائن والفواتير</h1>
             <p className="text-xs text-muted-foreground mt-0.5">عرض سجلات الزبائن وفواتيرهم وإدارتها</p>
           </div>
         </div>

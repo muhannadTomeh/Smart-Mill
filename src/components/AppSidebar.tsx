@@ -22,6 +22,7 @@ import {
   HandCoins,
   Users2,
   BookOpen,
+  Landmark,
 } from "lucide-react"
 import { useState } from "react"
 import { NavLink, useLocation } from "react-router-dom"
@@ -71,6 +72,7 @@ const operationalItems = [
 
 // Management & Admin workspace navigation items (Owner only, shown underneath operational items when admin is opened)
 const adminManagementItems = [
+  { title: "الإجراءات والخزنة", url: "/treasury", icon: Landmark },
   { title: "الرئيسية والإحصاءات", url: "/dashboard", icon: LayoutDashboard },
   { title: "المصاريف", url: "/expenses", icon: Wallet },
   { title: "الموردين والالتزامات", url: "/payables", icon: HandCoins },
@@ -200,7 +202,7 @@ export function AppSidebar() {
   const handleOpenCash = async () => {
     if (!activeSeason) return
     setOpeningLoading(true)
-    const ok = await openSession(parseFloat(openingBalance) || 0)
+    const ok = await openSession(0)
     setOpeningLoading(false)
     if (ok) {
       setShowOpenCashDialog(false)
@@ -452,8 +454,8 @@ export function AppSidebar() {
                 type="number"
                 min="0"
                 step="0.01"
-                value={openingBalance}
-                onChange={(e) => setOpeningBalance(e.target.value)}
+                value="0"
+                disabled
                 placeholder="0"
                 className="text-right"
                 autoFocus
