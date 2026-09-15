@@ -9,7 +9,7 @@ export interface Inventory {
 }
 
 export function useInventory() {
-  const { user, millId } = useAuth();
+  const { millId } = useAuth();
   const { activeSeason } = useSeason();
   const [inventory, setInventory] = useState<Inventory>({ total_oil: 0, total_cash: 0 });
   const [loading, setLoading] = useState(true);
@@ -21,46 +21,23 @@ export function useInventory() {
       return;
     }
     const effectiveMillId = millId || activeSeason.mill_id;
-    let query = supabase
-      .from("inventory")
-      .select("*")
-      .eq("season_id", activeSeason.id);
+    const { data } = effectiveMillId
+      ? await supabase
+          .from("mill_oil_balance" as any)
+          .select("current_balance")
+          .eq("season_id", activeSeason.id)
+          .eq("mill_id", effectiveMillId)
+          .maybeSingle()
+      : { data: null };
 
-    if (effectiveMillId) {
-      query = (query as any).eq("mill_id", effectiveMillId);
-    }
-
-    const [invRes, oilRes] = await Promise.all([
-      query.maybeSingle(),
-      effectiveMillId
-        ? supabase
-            .from("mill_oil_balance" as any)
-            .select("current_balance, oil_balance")
-            .eq("season_id", activeSeason.id)
-            .eq("mill_id", effectiveMillId)
-            .maybeSingle()
-        : Promise.resolve({ data: null })
-    ]);
-
-    const canonicalOil = (oilRes as any)?.data?.current_balance ?? (oilRes as any)?.data?.oil_balance ?? (invRes as any)?.data?.total_oil ?? 0;
-
-    if (invRes.data) {
-      setInventory({
-        total_oil: Number(canonicalOil),
-        total_cash: Number((invRes.data as any).total_cash ?? 0),
-      });
-    } else if (user) {
-      await supabase.from("inventory").insert({
-        user_id: user.id,
-        mill_id: effectiveMillId || null,
-        season_id: activeSeason.id,
-        total_oil: Number(canonicalOil),
-        total_cash: 0,
-      } as any);
-      setInventory({ total_oil: Number(canonicalOil), total_cash: 0 });
-    }
+    // Oil is derived from oil_movements. The legacy inventory row is neither
+    // created nor used as a fallback for canonical read models.
+    setInventory({
+      total_oil: Number((data as any)?.current_balance ?? 0),
+      total_cash: 0,
+    });
     setLoading(false);
-  }, [activeSeason?.id, activeSeason?.mill_id, millId, user]);
+  }, [activeSeason?.id, activeSeason?.mill_id, millId]);
 
   useEffect(() => {
     void fetchInventory();

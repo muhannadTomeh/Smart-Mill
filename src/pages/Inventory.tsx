@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Warehouse, Droplets, Wallet, ArrowUp, ArrowDown,
-  Receipt, ShoppingCart, Sprout, UserCheck, Calendar, Eye,
-  Activity, Package, Plus, RefreshCw, Layers, Tag,
-  CheckCircle2, Handshake, Users, ArrowUpRight, ArrowDownLeft
+  ShoppingCart, Calendar,
+  Package, Plus, RefreshCw, Layers, Tag,
+  Handshake, Users, ArrowUpRight, ArrowDownLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,20 +21,30 @@ import { useCashBalance } from "@/hooks/useCashBalance";
 import { useRole } from "@/contexts/RoleContext";
 import { useToast } from "@/hooks/use-toast";
 import { Navigate } from "react-router-dom";
-import { InvoicePreview, InvoicePreviewData } from "@/components/invoices/InvoicePreview";
 import { formatDate, formatNumber } from "@/lib/formatters";
 
-type MovementKind = "invoice" | "oil_buy" | "oil_sell" | "expense" | "worker_payment";
-
-interface Movement {
+interface CashMovement {
   id: string;
-  kind: MovementKind;
-  date: string;
-  label: string;
-  detail: string;
-  oil_delta: number; // + means oil added to mill
-  cash_delta: number; // + means cash added to mill
-  invoice?: InvoicePreviewData;
+  created_at: string;
+  type: string;
+  category: string;
+  description: string | null;
+  party_name: string | null;
+  amount: number;
+  direction: "in" | "out" | "none";
+  reversal_of: string | null;
+  reversal_reason: string | null;
+}
+
+interface OilMovement {
+  id: string;
+  created_at: string;
+  source_type: "milling_settlement" | "oil_purchase" | "oil_sale" | "opening_balance" | "adjustment" | string;
+  direction: "in" | "out";
+  quantity: number;
+  party_name: string | null;
+  notes: string | null;
+  reference_type: string | null;
 }
 
 interface Product {
@@ -73,12 +82,12 @@ interface PartnerOption {
   name: string;
 }
 
-const kindMeta: Record<MovementKind, { label: string; icon: any; color: string }> = {
-  invoice: { label: "فاتورة عصر", icon: Receipt, color: "text-primary" },
-  oil_buy: { label: "شراء زيت", icon: ShoppingCart, color: "text-blue-600" },
-  oil_sell: { label: "بيع زيت", icon: ShoppingCart, color: "text-emerald-600" },
-  expense: { label: "مصروف", icon: Sprout, color: "text-destructive" },
-  worker_payment: { label: "دفع للعامل", icon: UserCheck, color: "text-amber-600" },
+const oilSourceLabel: Record<string, string> = {
+  milling_settlement: "ردّ العصر",
+  oil_purchase: "شراء زيت",
+  oil_sale: "بيع زيت",
+  opening_balance: "رصيد افتتاحي",
+  adjustment: "تسوية / عكس",
 };
 
 const Inventory = () => {
@@ -89,15 +98,12 @@ const Inventory = () => {
   const { cashBalance, loading: cashBalanceLoading, refetch: refetchCashBalance } = useCashBalance();
   const { toast } = useToast();
 
-  const todayStr = new Date().toISOString().split("T")[0];
-
   const [activeMainTab, setActiveMainTab] = useState<"oil" | "products" | "definitions">("oil");
 
-  // Oil & Cash movements state
-  const [movements, setMovements] = useState<Movement[]>([]);
+  // Canonical read models only: financial_effective_events and oil_movements.
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [oilMovements, setOilMovements] = useState<OilMovement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | MovementKind>("all");
-  const [preview, setPreview] = useState<InvoicePreviewData | null>(null);
 
   // Operational Products state
   const [products, setProducts] = useState<Product[]>([]);
@@ -138,81 +144,62 @@ const Inventory = () => {
 
   useEffect(() => {
     if (activeSeason) {
-      fetchAll();
+      fetchReadModels();
       fetchProductsData();
       supabase.from("financial_transactions").select("id").eq("season_id", activeSeason.id).eq("reference_type", "cash_opening_balance").eq("status", "active").limit(1).then(({ data }) => setOpeningBalanceExists(Boolean(data?.length)));
     }
   }, [activeSeason?.id]);
 
-  const fetchAll = async () => {
-    if (!activeSeason) return;
+  useEffect(() => {
+    const effectiveMillId = millId || activeSeason?.mill_id;
+    if (!activeSeason || !effectiveMillId) return;
+    const channel = supabase
+      .channel(`inventory-read-models-${effectiveMillId}-${activeSeason.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "financial_transactions", filter: `season_id=eq.${activeSeason.id}` }, () => {
+        void fetchReadModels();
+        void refetchCashBalance();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "oil_movements", filter: `season_id=eq.${activeSeason.id}` }, () => {
+        void fetchReadModels();
+        void refetchInventory();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_stock_movements", filter: `season_id=eq.${activeSeason.id}` }, () => {
+        void fetchProductsData();
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [activeSeason?.id, activeSeason?.mill_id, millId, refetchCashBalance, refetchInventory]);
+
+  const fetchReadModels = async () => {
+    const effectiveMillId = millId || activeSeason?.mill_id;
+    if (!activeSeason || !effectiveMillId) return;
     setLoading(true);
 
-    const [invoicesRes, oilTxRes, expensesRes, workerPayRes] = await Promise.all([
-      supabase.from("invoices").select("*").eq("season_id", activeSeason.id).is("voided_at", null),
-      supabase.from("oil_transactions").select("*").eq("season_id", activeSeason.id),
-      supabase.from("expenses").select("*").eq("season_id", activeSeason.id).is("voided_at", null),
+    const [cashRes, oilRes] = await Promise.all([
       supabase
-        .from("worker_payments")
-        .select("*, workers(name)")
-        .eq("season_id", activeSeason.id),
+        .from("financial_effective_events" as any)
+        .select("id, created_at, type, category, description, party_name, amount, direction, reversal_of, reversal_reason")
+        .eq("season_id", activeSeason.id)
+        .eq("mill_id", effectiveMillId)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("oil_movements")
+        .select("id, created_at, source_type, direction, quantity, party_name, notes, reference_type")
+        .eq("season_id", activeSeason.id)
+        .eq("mill_id", effectiveMillId)
+        .order("created_at", { ascending: false })
+        .limit(100),
     ]);
 
-    const list: Movement[] = [];
-
-    (invoicesRes.data || []).forEach((inv: any) => {
-      const oilDelta = Number(inv.oil_produced) - Number(inv.oil_amount);
-      list.push({
-        id: `inv-${inv.id}`,
-        kind: "invoice",
-        date: inv.created_at,
-        label: `فاتورة ${inv.customer_name}`,
-        detail: `${inv.oil_produced} كغم منتج • ${inv.total_display}`,
-        oil_delta: oilDelta,
-        cash_delta: Number(inv.cash_amount),
-        invoice: inv as InvoicePreviewData,
-      });
-    });
-
-    (oilTxRes.data || []).forEach((tx: any) => {
-      const isBuy = tx.type === "buy";
-      list.push({
-        id: `tx-${tx.id}`,
-        kind: isBuy ? "oil_buy" : "oil_sell",
-        date: tx.created_at,
-        label: isBuy ? `شراء زيت من ${tx.party_name || "—"}` : `بيع زيت إلى ${tx.party_name || "—"}`,
-        detail: `${tx.amount} كغم بسعر ${tx.price} ₪/كغم`,
-        oil_delta: isBuy ? Number(tx.amount) : -Number(tx.amount),
-        cash_delta: isBuy ? -Number(tx.total_price) : Number(tx.total_price),
-      });
-    });
-
-    (expensesRes.data || []).forEach((ex: any) => {
-      list.push({
-        id: `ex-${ex.id}`,
-        kind: "expense",
-        date: ex.created_at,
-        label: ex.category,
-        detail: ex.description || "—",
-        oil_delta: 0,
-        cash_delta: -Number(ex.amount),
-      });
-    });
-
-    (workerPayRes.data || []).forEach((wp: any) => {
-      list.push({
-        id: `wp-${wp.id}`,
-        kind: "worker_payment",
-        date: wp.created_at,
-        label: `دفع للعامل ${wp.workers?.name || "—"}`,
-        detail: wp.notes || "—",
-        oil_delta: 0,
-        cash_delta: -Number(wp.amount),
-      });
-    });
-
-    list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    setMovements(list);
+    setCashMovements(((cashRes.data || []) as CashMovement[]).map((movement) => ({
+      ...movement,
+      amount: Number(movement.amount),
+    })));
+    setOilMovements(((oilRes.data || []) as OilMovement[]).map((movement) => ({
+      ...movement,
+      quantity: Number(movement.quantity),
+    })));
     setLoading(false);
   };
 
@@ -342,7 +329,7 @@ const Inventory = () => {
         fetchProductsData(),
         refetchInventory(),
         refetchCashBalance(),
-        fetchAll(),
+        fetchReadModels(),
       ]);
     } catch (err: any) {
       const errorMessage = String(err?.message || "");
@@ -413,26 +400,20 @@ const Inventory = () => {
     }
     setOpeningBalanceExists(true);
     toast({ title: "تم تسجيل الرصيد النقدي الافتتاحي" });
-    fetchAll();
+    fetchReadModels();
   };
 
-  const filtered = useMemo(
-    () => (filter === "all" ? movements : movements.filter((m) => m.kind === filter)),
-    [movements, filter]
-  );
+  const cashTotals = useMemo(() => cashMovements.reduce((totals, movement) => {
+    if (movement.direction === "in") totals.in += movement.amount;
+    if (movement.direction === "out") totals.out += movement.amount;
+    return totals;
+  }, { in: 0, out: 0 }), [cashMovements]);
 
-  const totals = useMemo(() => {
-    return movements.reduce(
-      (acc, m) => {
-        if (m.oil_delta > 0) acc.oilIn += m.oil_delta;
-        else acc.oilOut += -m.oil_delta;
-        if (m.cash_delta > 0) acc.cashIn += m.cash_delta;
-        else acc.cashOut += -m.cash_delta;
-        return acc;
-      },
-      { oilIn: 0, oilOut: 0, cashIn: 0, cashOut: 0 }
-    );
-  }, [movements]);
+  const oilTotals = useMemo(() => oilMovements.reduce((totals, movement) => {
+    if (movement.direction === "in") totals.in += movement.quantity;
+    if (movement.direction === "out") totals.out += movement.quantity;
+    return totals;
+  }, { in: 0, out: 0 }), [oilMovements]);
 
 
   if (isEmployee) {
@@ -458,7 +439,7 @@ const Inventory = () => {
             variant="outline"
             size="sm"
             onClick={() => {
-              fetchAll();
+              fetchReadModels();
               fetchProductsData();
               refetchInventory();
             }}
@@ -507,7 +488,7 @@ const Inventory = () => {
           }`}
         >
           <Droplets className="h-4 w-4" />
-          <span>مخزون الزيت وحركات الصندوق</span>
+          <span>الزيت والكاش</span>
         </button>
 
         <button
@@ -581,43 +562,33 @@ const Inventory = () => {
 
           {/* Aggregated season flows */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatTile icon={ArrowDown} title="زيت داخل (الموسم)" value={`${totals.oilIn.toFixed(2)} كغم`} />
-            <StatTile icon={ArrowUp} title="زيت خارج (الموسم)" value={`${totals.oilOut.toFixed(2)} كغم`} />
-            <StatTile icon={ArrowDown} title="كاش داخل (الموسم)" value={`${totals.cashIn.toFixed(2)} ₪`} />
-            <StatTile icon={ArrowUp} title="كاش خارج (الموسم)" value={`${totals.cashOut.toFixed(2)} ₪`} />
+            <StatTile icon={ArrowDown} title="زيت داخل (الموسم)" value={`${oilTotals.in.toFixed(2)} كغم`} />
+            <StatTile icon={ArrowUp} title="زيت خارج (الموسم)" value={`${oilTotals.out.toFixed(2)} كغم`} />
+            <StatTile icon={ArrowDown} title="كاش داخل (الموسم)" value={`${cashTotals.in.toFixed(2)} ₪`} />
+            <StatTile icon={ArrowUp} title="كاش خارج (الموسم)" value={`${cashTotals.out.toFixed(2)} ₪`} />
           </div>
 
           {/* Movements log */}
           <Card className="border-border/60 rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="border-b border-border/70 bg-card/60 p-4 sm:p-5">
               <CardTitle className="text-base font-bold flex items-center gap-2">
-                <Activity className="h-4 w-4 text-primary" />
-                <span>سجل الحركات الشامل للزيت والكاش</span>
+                <Droplets className="h-4 w-4 text-primary" />
+                <span>حركة الزيت</span>
               </CardTitle>
               <CardDescription className="text-xs">
-                كل ما يؤثر على مخزون الزيت وكاش المعصرة: فواتير، بيع/شراء، مصاريف، وأجور
+                من سجل oil_movements فقط؛ لا تُستنتج كمية الزيت من الفواتير.
               </CardDescription>
-              <Tabs value={filter} onValueChange={(v) => setFilter(v as any)} className="pt-2">
-                <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/40 p-1 rounded-xl">
-                  <TabsTrigger value="all" className="text-xs rounded-lg">الكل</TabsTrigger>
-                  <TabsTrigger value="invoice" className="text-xs rounded-lg">فواتير العصر</TabsTrigger>
-                  <TabsTrigger value="oil_buy" className="text-xs rounded-lg">شراء زيت</TabsTrigger>
-                  <TabsTrigger value="oil_sell" className="text-xs rounded-lg">بيع زيت</TabsTrigger>
-                  <TabsTrigger value="expense" className="text-xs rounded-lg">مصاريف</TabsTrigger>
-                  <TabsTrigger value="worker_payment" className="text-xs rounded-lg">أجور عمال</TabsTrigger>
-                </TabsList>
-              </Tabs>
             </CardHeader>
             <CardContent className="p-0">
               {loading ? (
                 <div className="text-center py-12 text-muted-foreground flex flex-col items-center gap-2">
                   <RefreshCw className="h-6 w-6 animate-spin text-primary" />
-                  <p className="text-xs">جارٍ تحميل سجل الحركات...</p>
+                  <p className="text-xs">جارٍ تحميل حركة الزيت...</p>
                 </div>
-              ) : filtered.length === 0 ? (
+              ) : oilMovements.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <Warehouse className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm font-semibold">لا توجد حركات مسجلة</p>
+                  <Droplets className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm font-semibold">لا توجد حركات زيت مسجلة</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -625,62 +596,95 @@ const Inventory = () => {
                     <TableHeader className="bg-muted/40">
                       <TableRow>
                         <TableHead className="text-right text-xs font-bold">التاريخ</TableHead>
-                        <TableHead className="text-right text-xs font-bold">نوع الحركة</TableHead>
-                        <TableHead className="text-right text-xs font-bold">البيان والتفاصيل</TableHead>
-                        <TableHead className="text-right text-xs font-bold">حركة الزيت</TableHead>
-                        <TableHead className="text-right text-xs font-bold">حركة الكاش</TableHead>
-                        <TableHead className="text-left text-xs font-bold"></TableHead>
+                        <TableHead className="text-right text-xs font-bold">المصدر</TableHead>
+                        <TableHead className="text-right text-xs font-bold">الطرف / البيان</TableHead>
+                        <TableHead className="text-right text-xs font-bold">الاتجاه</TableHead>
+                        <TableHead className="text-right text-xs font-bold">الكمية</TableHead>
+                        <TableHead className="text-right text-xs font-bold">الحالة</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((m) => {
-                        const meta = kindMeta[m.kind];
-                        const Icon = meta.icon;
-                        const isToday = m.date.startsWith(todayStr);
+                      {oilMovements.map((movement) => {
+                        const isReversal = Boolean(movement.reference_type?.includes("reversal"));
                         return (
-                          <TableRow key={m.id} className={isToday ? "bg-primary/[0.03] hover:bg-muted/40" : "hover:bg-muted/30"}>
+                          <TableRow key={movement.id} className="hover:bg-muted/30">
                             <TableCell className="text-right whitespace-nowrap text-xs font-mono">
                               <div className="flex items-center gap-1">
                                 <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                {formatDate(m.date)}
-                                {isToday && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 border-primary/40 text-primary ml-1">
-                                    اليوم
-                                  </Badge>
-                                )}
+                                {formatDate(movement.created_at)}
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
-                              <Badge variant="outline" className="gap-1 text-xs font-semibold">
-                                <Icon className={`h-3.5 w-3.5 ${meta.color}`} />
-                                {meta.label}
+                              <Badge variant="outline" className="text-xs font-semibold">
+                                {oilSourceLabel[movement.source_type] || movement.source_type}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="font-semibold text-xs text-foreground">{m.label}</div>
-                              <div className="text-[11px] text-muted-foreground">{m.detail}</div>
+                              <div className="font-semibold text-xs text-foreground">{movement.party_name || "—"}</div>
+                              <div className="text-[11px] text-muted-foreground">{movement.notes || "—"}</div>
                             </TableCell>
-                            <TableCell
-                              className={`text-right font-bold text-xs font-mono ${
-                                m.oil_delta > 0 ? "text-primary" : m.oil_delta < 0 ? "text-destructive" : "text-muted-foreground"
-                              }`}
-                            >
-                              {m.oil_delta === 0 ? "—" : `${m.oil_delta > 0 ? "+" : ""}${m.oil_delta.toFixed(2)} كغم`}
+                            <TableCell className={movement.direction === "in" ? "text-right text-xs font-bold text-emerald-600" : "text-right text-xs font-bold text-destructive"}>
+                              {movement.direction === "in" ? "IN" : "OUT"}
                             </TableCell>
-                            <TableCell
-                              className={`text-right font-bold text-xs font-mono ${
-                                m.cash_delta > 0 ? "text-emerald-600" : m.cash_delta < 0 ? "text-destructive" : "text-muted-foreground"
-                              }`}
-                            >
-                              {m.cash_delta === 0 ? "—" : `${m.cash_delta > 0 ? "+" : ""}${m.cash_delta.toFixed(2)} ₪`}
+                            <TableCell className={movement.direction === "in" ? "text-right font-bold text-xs font-mono text-emerald-600" : "text-right font-bold text-xs font-mono text-destructive"}>
+                              {movement.direction === "in" ? "+" : "-"}{movement.quantity.toFixed(2)} كغم
                             </TableCell>
-                            <TableCell className="text-left">
-                              {m.invoice && (
-                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setPreview(m.invoice!)}>
-                                  <Eye className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
+                            <TableCell className="text-right">
+                              {isReversal ? <Badge variant="outline" className="text-[11px]">عكس</Badge> : <Badge variant="secondary" className="text-[11px]">فعال</Badge>}
                             </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 rounded-2xl shadow-xs overflow-hidden">
+            <CardHeader className="border-b border-border/70 bg-card/60 p-4 sm:p-5">
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-emerald-600" />
+                <span>حركة الكاش</span>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                من financial_effective_events؛ الدين أو تمويل الشريك يظهران بلا أثر نقدي.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="text-center py-12 text-muted-foreground">جارٍ تحميل حركة الكاش...</div>
+              ) : cashMovements.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">لا توجد حركات كاش مسجلة</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead className="text-right text-xs font-bold">التاريخ</TableHead>
+                        <TableHead className="text-right text-xs font-bold">النوع</TableHead>
+                        <TableHead className="text-right text-xs font-bold">الوصف</TableHead>
+                        <TableHead className="text-right text-xs font-bold">الطرف</TableHead>
+                        <TableHead className="text-right text-xs font-bold">الاتجاه</TableHead>
+                        <TableHead className="text-right text-xs font-bold">المبلغ</TableHead>
+                        <TableHead className="text-right text-xs font-bold">الحالة</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cashMovements.map((movement) => {
+                        const directionLabel = movement.direction === "in" ? "IN" : movement.direction === "out" ? "OUT" : "لا أثر نقدي";
+                        const directionClass = movement.direction === "in" ? "text-emerald-600" : movement.direction === "out" ? "text-destructive" : "text-muted-foreground";
+                        const sign = movement.direction === "in" ? "+" : movement.direction === "out" ? "-" : "";
+                        return (
+                          <TableRow key={movement.id} className="hover:bg-muted/30">
+                            <TableCell className="text-right text-xs font-mono">{formatDate(movement.created_at)}</TableCell>
+                            <TableCell className="text-right"><Badge variant="outline" className="text-[11px]">{movement.category || movement.type}</Badge></TableCell>
+                            <TableCell className="text-right text-xs">{movement.description || "—"}</TableCell>
+                            <TableCell className="text-right text-xs">{movement.party_name || "—"}</TableCell>
+                            <TableCell className={`text-right text-xs font-bold ${directionClass}`}>{directionLabel}</TableCell>
+                            <TableCell className={`text-right text-xs font-bold font-mono ${directionClass}`}>{sign}{movement.amount.toFixed(2)} ₪</TableCell>
+                            <TableCell className="text-right">{movement.reversal_of ? <Badge variant="outline" className="text-[11px]">عكس</Badge> : <Badge variant="secondary" className="text-[11px]">فعال</Badge>}</TableCell>
                           </TableRow>
                         );
                       })}
@@ -1246,15 +1250,6 @@ const Inventory = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Invoice preview modal */}
-      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
-        <DialogContent dir="rtl" className="max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>معاينة الفاتورة</DialogTitle>
-          </DialogHeader>
-          {preview && <InvoicePreview data={preview} />}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
