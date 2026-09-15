@@ -110,6 +110,7 @@ const Inventory = () => {
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [stockMovements, setStockMovements] = useState<ProductMovement[]>([]);
+  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [cashOpeningBalanceExists, setCashOpeningBalanceExists] = useState(false);
   const [oilOpeningBalanceExists, setOilOpeningBalanceExists] = useState(false);
@@ -213,12 +214,17 @@ const Inventory = () => {
   const fetchProductsData = async () => {
     setLoadingProducts(true);
     try {
-      const [prodsRes, supsRes, partsRes, movesRes] = await Promise.all([
+      const [prodsRes, supsRes, partsRes, movesRes, purchasesRes] = await Promise.all([
         supabase.from("products" as any).select("*").order("name"),
         supabase.from("suppliers" as any).select("id, name").eq("active", true).order("name"),
         supabase.from("partners" as any).select("id, name").eq("active", true).order("name"),
         supabase.from("product_stock_movements" as any)
           .select("*, products(name, unit)")
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase.from("product_purchases" as any)
+          .select("*, products(name, unit), suppliers(name), partners(name)")
+          .eq("season_id", activeSeason?.id ?? "00000000-0000-0000-0000-000000000000")
           .order("created_at", { ascending: false })
           .limit(50),
       ]);
@@ -227,11 +233,39 @@ const Inventory = () => {
       if (supsRes.data) setSuppliers(supsRes.data as any);
       if (partsRes.data) setPartners(partsRes.data as any);
       if (movesRes.data) setStockMovements(movesRes.data as any);
+      if (purchasesRes.data) setPurchaseHistory(purchasesRes.data as any[]);
     } catch (e) {
       console.error("fetchProductsData error:", e);
     } finally {
       setLoadingProducts(false);
     }
+  };
+
+  const cancelPurchase = async (purchase: any) => {
+    const reason = window.prompt("سبب إلغاء عملية الشراء:");
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast({ title: "سبب الإلغاء مطلوب", variant: "destructive" });
+      return;
+    }
+    const { error } = await supabase.rpc("cancel_product_purchase_command" as any, {
+      p_purchase_id: purchase.id,
+      p_reason: reason.trim(),
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) {
+      const message = error.message.includes("DEPENDENT_SETTLEMENT_EXISTS")
+        ? "اعكس دفعات الالتزام المرتبطة أولاً."
+        : error.message.includes("INSUFFICIENT_STOCK_FOR_CANCELLATION")
+          ? "لا يمكن الإلغاء لأن المخزون الحالي لا يكفي لعكس الشراء."
+          : error.message.includes("PRODUCT_PURCHASE_ALREADY_CANCELLED")
+            ? "هذه العملية ملغاة بالفعل."
+            : "تعذر إلغاء عملية الشراء.";
+      toast({ title: "تعذر الإلغاء", description: message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "تم إلغاء عملية الشراء", description: "سُجلت حركات عكسية للكاش والمخزون دون حذف التاريخ." });
+    await Promise.all([fetchProductsData(), refetchInventory(), refetchCashBalance(), fetchReadModels()]);
   };
 
   const adjustProductStock = async (product: Product) => {
@@ -736,6 +770,26 @@ const Inventory = () => {
                   </Table>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 rounded-2xl shadow-xs overflow-hidden">
+            <CardHeader className="p-4 sm:p-5"><CardTitle className="text-base">سجل عمليات الشراء</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto"><Table>
+                <TableHeader className="bg-muted/40"><TableRow>
+                  <TableHead className="text-right">التاريخ</TableHead><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">المورد</TableHead><TableHead className="text-right">التمويل</TableHead><TableHead className="text-right">المبلغ</TableHead><TableHead className="text-right">الحالة</TableHead><TableHead className="text-right">إجراء</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>{purchaseHistory.map((purchase) => <TableRow key={purchase.id}>
+                  <TableCell className="text-xs">{formatDate(purchase.created_at)}</TableCell>
+                  <TableCell>{purchase.products?.name || "صنف"}</TableCell>
+                  <TableCell>{purchase.suppliers?.name || purchase.partners?.name || "—"}</TableCell>
+                  <TableCell>{purchase.payment_method === "cash" ? "نقدي" : purchase.payment_method === "credit" ? "آجل" : "دفع شريك"}</TableCell>
+                  <TableCell>{Number(purchase.total_price).toLocaleString()} ₪</TableCell>
+                  <TableCell><Badge variant="outline" className={purchase.status === "cancelled" ? "text-rose-700 border-rose-300" : "text-emerald-700 border-emerald-300"}>{purchase.status === "cancelled" ? "ملغاة" : "فعالة"}</Badge></TableCell>
+                  <TableCell>{purchase.status !== "cancelled" && <Button size="sm" variant="outline" className="text-rose-700 border-rose-300" onClick={() => void cancelPurchase(purchase)}>إلغاء عملية الشراء</Button>}</TableCell>
+                </TableRow>)}</TableBody>
+              </Table></div>
             </CardContent>
           </Card>
         </div>
