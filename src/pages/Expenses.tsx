@@ -74,7 +74,7 @@ const Expenses = () => {
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory, refetch: refetchInventory } = useInventory();
-  const { cashBalance } = useCashBalance();
+  const { cashBalance, refetch: refetchCashBalance } = useCashBalance();
   const { currency } = useCurrency();
   const activeCurrency = currency || "₪";
 
@@ -105,6 +105,12 @@ const Expenses = () => {
   // Filter state
   const [filter, setFilter] = useState({ category: "", dateFrom: "", dateTo: "" });
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+
+  useEffect(() => {
+    if (addDialogOpen) {
+      void refetchCashBalance();
+    }
+  }, [addDialogOpen, refetchCashBalance]);
 
   useEffect(() => {
     if (activeSeason) {
@@ -270,8 +276,11 @@ const Expenses = () => {
       resetForm();
       setAddDialogOpen(false);
 
-      await fetchExpenses();
-      await refetchInventory();
+      await Promise.all([
+        fetchExpenses(),
+        refetchInventory(),
+        refetchCashBalance(),
+      ]);
     } catch (err: any) {
       toast({
         title: "خطأ في تسجيل المصروف",
@@ -297,8 +306,11 @@ const Expenses = () => {
     if (!error) {
       toast({ title: "تم الإلغاء", description: "أُلغي المصروف وعُكست حركته النقدية بأمان" });
       setDeleteTarget(null);
-      await fetchExpenses();
-      await refetchInventory();
+      await Promise.all([
+        fetchExpenses(),
+        refetchInventory(),
+        refetchCashBalance(),
+      ]);
     } else {
       toast({ title: "خطأ", description: error.message || "تعذر حذف المصروف", variant: "destructive" });
     }

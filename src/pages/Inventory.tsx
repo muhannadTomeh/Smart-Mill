@@ -86,7 +86,7 @@ const Inventory = () => {
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
   const { inventory, loading: invLoading, refetch: refetchInventory } = useInventory();
-  const { cashBalance, loading: cashBalanceLoading } = useCashBalance();
+  const { cashBalance, loading: cashBalanceLoading, refetch: refetchCashBalance } = useCashBalance();
   const { toast } = useToast();
 
   const [activeMainTab, setActiveMainTab] = useState<"oil" | "products" | "definitions">("oil");
@@ -147,7 +147,7 @@ const Inventory = () => {
     setLoading(true);
 
     const [invoicesRes, oilTxRes, expensesRes, workerPayRes] = await Promise.all([
-      supabase.from("invoices").select("*").eq("season_id", activeSeason.id),
+      supabase.from("invoices").select("*").eq("season_id", activeSeason.id).is("voided_at", null),
       supabase.from("oil_transactions").select("*").eq("season_id", activeSeason.id),
       supabase.from("expenses").select("*").eq("season_id", activeSeason.id).is("voided_at", null),
       supabase
@@ -336,9 +336,12 @@ const Inventory = () => {
         notes: "",
       });
 
-      await fetchProductsData();
-      await refetchInventory();
-      await fetchAll();
+      await Promise.all([
+        fetchProductsData(),
+        refetchInventory(),
+        refetchCashBalance(),
+        fetchAll(),
+      ]);
     } catch (err: any) {
       const errorMessage = String(err?.message || "");
       const purchaseErrorMessage = errorMessage.includes("PRODUCT_PURCHASE_INVALID")
@@ -429,23 +432,6 @@ const Inventory = () => {
     );
   }, [movements]);
 
-  // Today's movements — auto-calculated from the main movements list
-  const todayStr = new Date().toISOString().split("T")[0];
-  const todayMovements = useMemo(
-    () => movements.filter((m) => m.date.startsWith(todayStr)),
-    [movements, todayStr]
-  );
-  const todayTotals = useMemo(() => {
-    return todayMovements.reduce(
-      (acc, m) => {
-        acc.oilDelta += m.oil_delta;
-        acc.cashDelta += m.cash_delta;
-        acc.count += 1;
-        return acc;
-      },
-      { oilDelta: 0, cashDelta: 0, count: 0 }
-    );
-  }, [todayMovements]);
 
   if (isEmployee) {
     return <Navigate to="/queue" replace />;
@@ -553,118 +539,6 @@ const Inventory = () => {
       {activeMainTab === "oil" && (
         <div className="space-y-6">
           {!openingBalanceExists && <Card className="border-amber-300 bg-amber-50/50 rounded-2xl"><CardContent className="py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">الرصيد النقدي الافتتاحي</p><p className="text-sm text-muted-foreground">يُسجّل مرة واحدة كبداية للرصيد وليس كإيراد أو ربح.</p></div><Button onClick={setOpeningCashBalance}>تعيين الرصيد النقدي الافتتاحي</Button></CardContent></Card>}
-          {/* Today's Movement — auto-calculated from today's transactions */}
-          <Card className="border-primary/20 bg-primary/5 rounded-2xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-bold flex items-center gap-2">
-                <Activity className="h-5 w-5 text-primary" />
-                <span>حركة اليوم</span>
-              </CardTitle>
-              <CardDescription className="text-xs">
-                محسوبة تلقائياً من العمليات المسجلة اليوم — {todayStr}
-                {todayTotals.count > 0
-                  ? ` • ${todayTotals.count} عملية`
-                  : " • لا توجد حركات اليوم"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div
-                  className={`rounded-xl p-4 border flex items-center gap-4 ${
-                    todayTotals.oilDelta > 0
-                      ? "bg-primary/10 border-primary/20"
-                      : todayTotals.oilDelta < 0
-                      ? "bg-destructive/10 border-destructive/20"
-                      : "bg-background/50 border-border"
-                  }`}
-                >
-                  <div className="h-10 w-10 rounded-lg bg-background/60 flex items-center justify-center shrink-0">
-                    <Droplets className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">صافي زيت اليوم</p>
-                    <p
-                      className={`text-2xl font-bold font-mono ${
-                        todayTotals.oilDelta > 0
-                          ? "text-primary"
-                          : todayTotals.oilDelta < 0
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {todayTotals.oilDelta > 0 ? "+" : ""}
-                      {todayTotals.oilDelta.toFixed(2)}{" "}
-                      <span className="text-sm font-normal text-muted-foreground">كغم</span>
-                    </p>
-                  </div>
-                </div>
-
-                <div
-                  className={`rounded-xl p-4 border flex items-center gap-4 ${
-                    todayTotals.cashDelta > 0
-                      ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
-                      : todayTotals.cashDelta < 0
-                      ? "bg-destructive/10 border-destructive/20"
-                      : "bg-background/50 border-border"
-                  }`}
-                >
-                  <div className="h-10 w-10 rounded-lg bg-background/60 flex items-center justify-center shrink-0">
-                    <Wallet className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">صافي كاش اليوم</p>
-                    <p
-                      className={`text-2xl font-bold font-mono ${
-                        todayTotals.cashDelta > 0
-                          ? "text-emerald-600"
-                          : todayTotals.cashDelta < 0
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {todayTotals.cashDelta > 0 ? "+" : ""}
-                      {todayTotals.cashDelta.toFixed(2)}{" "}
-                      <span className="text-sm font-normal text-muted-foreground">₪</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {todayMovements.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <p className="text-xs text-muted-foreground font-medium">تفاصيل حركات اليوم:</p>
-                  {todayMovements.map((m) => {
-                    const meta = kindMeta[m.kind];
-                    const Icon = meta.icon;
-                    return (
-                      <div
-                        key={m.id}
-                        className="flex items-center justify-between bg-background/60 rounded-xl px-3 py-2 text-sm border border-border/50"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Icon className={`h-3.5 w-3.5 ${meta.color}`} />
-                          <span className="font-medium text-xs">{m.label}</span>
-                          <span className="text-muted-foreground text-xs hidden sm:inline">— {m.detail}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs font-semibold shrink-0 font-mono">
-                          {m.oil_delta !== 0 && (
-                            <span className={m.oil_delta > 0 ? "text-primary" : "text-destructive"}>
-                              {m.oil_delta > 0 ? "+" : ""}{m.oil_delta.toFixed(1)} كغم
-                            </span>
-                          )}
-                          {m.cash_delta !== 0 && (
-                            <span className={m.cash_delta > 0 ? "text-emerald-600" : "text-destructive"}>
-                              {m.cash_delta > 0 ? "+" : ""}{m.cash_delta.toFixed(0)} ₪
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
           {/* Live balances */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

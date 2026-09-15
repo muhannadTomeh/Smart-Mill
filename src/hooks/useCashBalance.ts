@@ -35,7 +35,9 @@ export function useCashBalance() {
     if (!activeSeason || !effectiveMillId) return;
     const channel = supabase
       .channel(`cash_ledger_${effectiveMillId}_${activeSeason.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "financial_transactions", filter: `mill_id=eq.${effectiveMillId}` }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "financial_transactions" }, () => {
+        void refresh();
+      })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [activeSeason?.id, activeSeason?.mill_id, millId, refresh]);

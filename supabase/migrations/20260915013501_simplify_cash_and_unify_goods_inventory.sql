@@ -311,7 +311,7 @@ BEGIN
   SELECT mill_id INTO v_mill FROM public.seasons WHERE id=p_season_id;
   IF v_mill IS NULL OR NOT public.has_active_mill_role(v_mill,ARRAY['mill_owner','mill_employee']) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='OIL_TRADE_FORBIDDEN'; END IF;
   IF p_movement_type NOT IN ('IN','OUT') OR p_quantity<=0 OR p_unit_price<0 OR p_payment_method NOT IN ('cash','credit') THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='OIL_TRADE_INVALID'; END IF;
-  IF p_movement_type='OUT' AND coalesce((SELECT oil_balance FROM public.mill_oil_balance WHERE mill_id=v_mill AND season_id=p_season_id),0)<p_quantity THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='INSUFFICIENT_OIL_STOCK'; END IF;
+  IF p_movement_type='OUT' AND coalesce((SELECT coalesce(current_balance, oil_balance) FROM public.mill_oil_balance WHERE mill_id=v_mill AND season_id=p_season_id),0)<p_quantity THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='INSUFFICIENT_OIL_STOCK'; END IF;
   v_previous:=private.claim_business_command(p_idempotency_key,'oil_trade',v_mill,p_season_id); IF v_previous IS NOT NULL THEN RETURN v_previous; END IF;
   v_total:=p_quantity*p_unit_price;
   INSERT INTO public.business_operations(mill_id,season_id,operation_type,source_type,created_by) VALUES(v_mill,p_season_id,'oil_trade','oil_trade',v_actor) RETURNING id INTO v_operation;
@@ -319,9 +319,23 @@ BEGIN
   INSERT INTO public.oil_movements(mill_id,season_id,ownership,direction,movement_type,source_type,quantity,amount,unit_price,party_name,notes,reference_type,reference_id,created_by,idempotency_key)
   VALUES(v_mill,p_season_id,'mill',lower(p_movement_type),p_movement_type,CASE WHEN p_movement_type='IN' THEN 'oil_purchase' ELSE 'oil_sale' END,p_quantity,p_quantity,p_unit_price,p_party_name,p_notes,'oil_transaction',v_trade,v_actor,p_idempotency_key) RETURNING id INTO v_oil;
   INSERT INTO public.financial_transactions(created_by,mill_id,season_id,type,category,amount,direction,payment_method,reference_type,reference_id,party_name,description,status,operation_id,idempotency_key)
-  VALUES(v_actor,v_mill,p_season_id,CASE WHEN p_movement_type='IN' THEN 'expense' ELSE 'income' END,CASE WHEN p_movement_type='IN' THEN 'oil_purchase' ELSE 'oil_sale' END,v_total,CASE WHEN p_payment_method='cash' AND p_movement_type='IN' THEN 'out' WHEN p_payment_method='cash' THEN 'in' ELSE 'none' END,CASE WHEN p_payment_method='cash' THEN 'cash' ELSE 'credit' END,'oil_transaction',v_trade,p_party_name,coalesce(p_notes,'تجارة زيت'),'active',v_operation,p_idempotency_key) RETURNING id INTO v_fin;
-  PERFORM private.complete_business_command(p_idempotency_key,'oil_trade',jsonb_build_object('success',true,'oil_movement_id',v_oil,'financial_transaction_id',v_fin),v_operation);
-  RETURN jsonb_build_object('success',true,'oil_movement_id',v_oil,'financial_transaction_id',v_fin);
+  VALUES(
+    v_actor,v_mill,p_season_id,
+    (CASE WHEN p_movement_type='IN' THEN 'expense' ELSE 'income' END)::public.financial_tx_type,
+    (CASE WHEN p_movement_type='IN' THEN 'شراء زيت' ELSE 'بيع زيت' END),
+    v_total,
+    (CASE WHEN p_payment_method='cash' AND p_movement_type='IN' THEN 'out' WHEN p_payment_method='cash' THEN 'in' ELSE 'none' END)::public.financial_direction,
+    (CASE WHEN p_payment_method='cash' THEN 'cash' ELSE 'credit' END)::public.financial_payment_method,
+    'oil_transaction',
+    v_trade,
+    p_party_name,
+    CASE WHEN p_movement_type='IN' THEN 'شراء زيت (' || p_quantity || ' كغم)' ELSE 'بيع زيت (' || p_quantity || ' كغم)' END || CASE WHEN p_notes IS NOT NULL AND TRIM(p_notes) <> '' THEN ' — ' || TRIM(p_notes) ELSE '' END,
+    'active'::public.financial_tx_status,
+    v_operation,
+    p_idempotency_key
+  ) RETURNING id INTO v_fin;
+  PERFORM private.complete_business_command(p_idempotency_key,'oil_trade',jsonb_build_object('success',true,'oil_movement_id',v_oil,'financial_transaction_id',v_fin,'oil_transaction_id',v_trade),v_operation);
+  RETURN jsonb_build_object('success',true,'oil_movement_id',v_oil,'financial_transaction_id',v_fin,'oil_transaction_id',v_trade);
 END $$;
 
 REVOKE ALL ON FUNCTION public.record_cash_opening_balance_command(uuid,numeric,text,uuid) FROM PUBLIC, anon;

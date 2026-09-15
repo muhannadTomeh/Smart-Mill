@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +13,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useCashBalance } from "@/hooks/useCashBalance";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { useRole } from "@/contexts/RoleContext";
-import { Navigate } from "react-router-dom";
 import {
   parseEstimatedMinutes,
   getRemainingSeconds,
@@ -47,17 +46,10 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (activeSeason) {
-      fetchStats();
-      fetchQueueData();
-    }
-  }, [activeSeason?.id]);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     if (!activeSeason) return;
     const today = new Date().toISOString().split("T")[0];
-    const [waitingRes, doneRes, expenseRes] = await Promise.all([
+    const [waitingRes, doneQueueRes, doneInvoiceRes, expenseRes] = await Promise.all([
       supabase
         .from("queue")
         .select("id", { count: "exact", head: true })
@@ -67,7 +59,13 @@ export default function Dashboard() {
         .from("queue")
         .select("id", { count: "exact", head: true })
         .eq("season_id", activeSeason.id)
-        .eq("status", "completed")
+        .in("status", ["completed", "done"])
+        .gte("created_at", today),
+      supabase
+        .from("invoices")
+        .select("id", { count: "exact", head: true })
+        .eq("season_id", activeSeason.id)
+        .is("voided_at", null)
         .gte("created_at", today),
       supabase
         .from("expenses")
@@ -77,14 +75,16 @@ export default function Dashboard() {
         .gte("created_at", today),
     ]);
 
+    const doneCount = Math.max(doneQueueRes.count || 0, doneInvoiceRes.count || 0);
+
     setStats({
       waitingCount: waitingRes.count || 0,
-      doneCount: doneRes.count || 0,
+      doneCount,
       todayExpenses: (expenseRes.data || []).reduce((s: number, e: any) => s + Number(e.amount), 0),
     });
-  };
+  }, [activeSeason?.id]);
 
-  const fetchQueueData = async () => {
+  const fetchQueueData = useCallback(async () => {
     if (!activeSeason) return;
     // 1. Get current active processing customer
     const { data: procData } = await supabase
@@ -107,7 +107,35 @@ export default function Dashboard() {
       .limit(5);
 
     setQueuePreview((waitData as QueueItem[]) || []);
-  };
+  }, [activeSeason?.id]);
+
+  useEffect(() => {
+    if (activeSeason) {
+      void fetchStats();
+      void fetchQueueData();
+    }
+  }, [activeSeason?.id, fetchStats, fetchQueueData]);
+
+  // Realtime subscription for Queue, Invoices, and Expenses
+  useEffect(() => {
+    const effectiveMillId = millId || activeSeason?.mill_id;
+    if (!activeSeason) return;
+    const channel = supabase
+      .channel(`dashboard_realtime_${effectiveMillId || "all"}_${activeSeason.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "queue" }, () => {
+        void fetchStats();
+        void fetchQueueData();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => {
+        void fetchStats();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => {
+        void fetchStats();
+      })
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [activeSeason?.id, activeSeason?.mill_id, millId, fetchStats, fetchQueueData]);
 
 
   const statCards = [

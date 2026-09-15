@@ -79,7 +79,7 @@ export default function Reports() {
     const dateFrom = getDateRange(period);
 
     const [invoicesRes, expensesRes, salesRes, purchasesRes, workerPaymentsRes, oilMovementsRes] = await Promise.all([
-      supabase.from("invoices").select("*").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
+      supabase.from("invoices").select("*").eq("season_id", activeSeason.id).is("voided_at", null).gte("created_at", dateFrom),
       supabase.from("expenses").select("amount").eq("season_id", activeSeason.id).is("voided_at", null).gte("created_at", dateFrom),
       supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "sell").gte("created_at", dateFrom),
       supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),

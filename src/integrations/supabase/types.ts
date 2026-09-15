@@ -2582,6 +2582,7 @@ export type Database = {
           current_balance: number | null
           mill_id: string | null
           milling_settlements: number | null
+          oil_balance: number | null
           oil_purchased: number | null
           oil_sold: number | null
           opening_and_adjustments: number | null

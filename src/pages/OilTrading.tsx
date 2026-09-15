@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
+import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatDate } from "@/lib/formatters";
 
@@ -39,6 +40,7 @@ const OilTrading = () => {
   const { currency } = useCurrency();
   const selectedCurrency = currency || "₪";
   const { inventory, refetch: refetchInventory } = useInventory();
+  const { cashBalance, refetch: refetchCashBalance } = useCashBalance();
   
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,29 +68,48 @@ const OilTrading = () => {
     }
   }, [activeSeason?.id]);
 
+  // Realtime updates for oil transactions
+  useEffect(() => {
+    const effectiveMillId = millId || activeSeason?.mill_id;
+    if (!activeSeason) return;
+    const channel = supabase
+      .channel(`oil_trading_${effectiveMillId || "all"}_${activeSeason.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "oil_transactions" }, () => {
+        void fetchTransactions();
+      })
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [activeSeason?.id, millId]);
+
   const fetchTransactions = async () => {
     if (!activeSeason) return;
     setLoading(true);
     try {
       let query = supabase
-        .from("oil_movements" as any)
+        .from("oil_transactions")
         .select("*")
         .eq("season_id", activeSeason.id);
 
       const effectiveMillId = millId || activeSeason.mill_id;
       if (effectiveMillId) {
-        query = (query as any).eq("mill_id", effectiveMillId);
+        query = query.eq("mill_id", effectiveMillId);
       }
 
       const { data, error } = await query.order("created_at", { ascending: false });
       if (error) {
         console.error("fetchTransactions error:", error);
       }
-      setTransactions(((data ?? []) as any[]).map((tx) => ({
-        ...tx,
-        type: tx.movement_type === "IN" ? "buy" : "sell",
-        price: Number(tx.unit_price ?? 0),
-        total_price: Number(tx.amount) * Number(tx.unit_price ?? 0),
+      setTransactions(((data || []) as any[]).map((tx) => ({
+        id: tx.id,
+        type: tx.type,
+        amount: Number(tx.amount),
+        price: Number(tx.price),
+        total_price: Number(tx.total_price),
+        party_name: tx.party_name,
+        notes: tx.notes,
+        created_at: tx.created_at,
+        source_type: tx.type === 'buy' ? 'oil_purchase' : 'oil_sale',
       })) as Transaction[]);
     } catch (err) {
       console.error("Error fetching transactions:", err);
@@ -152,10 +173,10 @@ const OilTrading = () => {
       return;
     }
 
-    if (newTransaction.type === 'buy' && newTransaction.paymentMethod === 'cash' && totalPrice > inventory.total_cash) {
+    if (newTransaction.type === 'buy' && newTransaction.paymentMethod === 'cash' && totalPrice > cashBalance) {
       toast({
         title: "الرصيد النقدي لا يكفي",
-        description: `الكاش المتوفر بالصندوق: ${inventory.total_cash.toLocaleString()} ${selectedCurrency} فقط`,
+        description: `الكاش المتوفر بالصندوق: ${cashBalance.toLocaleString()} ${selectedCurrency} فقط`,
         variant: "destructive"
       });
       return;
@@ -194,6 +215,7 @@ const OilTrading = () => {
 
       await fetchTransactions();
       await refetchInventory();
+      await refetchCashBalance();
     } catch (err: any) {
       console.error("addTransaction error:", err);
       toast({
@@ -234,6 +256,7 @@ const OilTrading = () => {
             onClick={() => {
               fetchTransactions();
               refetchInventory();
+              refetchCashBalance();
             }}
             className="gap-2 rounded-xl text-xs h-9"
           >
@@ -275,7 +298,7 @@ const OilTrading = () => {
             <div>
               <p className="text-xs text-muted-foreground font-medium">الكاش المتوفر بالصندوق</p>
               <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                {inventory.total_cash.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{selectedCurrency}</span>
+                {cashBalance.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{selectedCurrency}</span>
               </h3>
             </div>
             <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -509,7 +532,7 @@ const OilTrading = () => {
                 />
                 {newTransaction.type === 'buy' && (
                   <p className="text-[11px] text-muted-foreground">
-                    الكاش المتوفر: <strong>{inventory.total_cash.toLocaleString()} {selectedCurrency}</strong>
+                    الكاش المتوفر: <strong>{cashBalance.toLocaleString()} {selectedCurrency}</strong>
                   </p>
                 )}
               </div>
