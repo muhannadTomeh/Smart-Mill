@@ -1,5 +1,7 @@
 # Smart Mill Transaction Lifecycle & Reversal Model
 
+> Cash effects are ledger entries only. An opening balance is one `cash_opening_balance` cash-IN event. Invoice oil settlement creates one `oil_movements` IN event with `source_type=milling_settlement`; it never creates an oil purchase.
+
 > Authorization invariant: tenant lifecycle commands accept only an active membership for the command mill. Canonical operator role is `mill_employee`; ownership fields are never tenant authorization fallbacks.
 
 ## 1. Purpose and invariant

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCashSession } from "@/contexts/CashSessionContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,7 +24,6 @@ type LedgerEvent = {
   created_at: string;
   reversal_of: string | null;
   reversal_reason: string | null;
-  cash_session_id: string | null;
   reference_type: string;
   reference_id: string | null;
   effect_status: "effective" | "reversed" | "reversal" | "legacy_voided";
@@ -38,7 +36,6 @@ const dateTime = new Intl.DateTimeFormat("ar-PS", { dateStyle: "medium", timeSty
 export default function FinancialLedger() {
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
-  const { session, isOpen } = useCashSession();
   const { toast } = useToast();
   const [events, setEvents] = useState<LedgerEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +47,7 @@ export default function FinancialLedger() {
     setLoading(true);
     const { data, error } = await supabase
       .from("financial_effective_events")
-      .select("id, operation_id, amount, signed_amount, direction, type, category, description, party_name, payment_method, status, effect_status, created_at, reversal_of, reversal_reason, cash_session_id, reference_type, reference_id")
+      .select("id, operation_id, amount, direction, type, category, description, party_name, payment_method, status, created_at, reversal_of, reversal_reason, reference_type, reference_id")
       .eq("mill_id", millId)
       .eq("season_id", activeSeason.id)
       .order("created_at", { ascending: false })
@@ -58,7 +55,11 @@ export default function FinancialLedger() {
     if (error) {
       toast({ title: "تعذر تحميل الدفتر المالي", description: error.message, variant: "destructive" });
     } else {
-      setEvents((data ?? []) as LedgerEvent[]);
+      setEvents((data ?? []).map((event: any) => ({
+        ...event,
+        signed_amount: event.direction === "in" ? Number(event.amount) : event.direction === "out" ? -Number(event.amount) : 0,
+        effect_status: event.reversal_of ? "reversal" : "effective",
+      })) as LedgerEvent[]);
     }
     setLoading(false);
   }, [activeSeason, millId, toast]);
@@ -90,7 +91,7 @@ export default function FinancialLedger() {
         <Card><CardHeader className="pb-2"><CardDescription>إجمالي الداخل</CardDescription><CardTitle className="text-2xl text-emerald-600">{money.format(totals.incoming)}</CardTitle></CardHeader></Card>
         <Card><CardHeader className="pb-2"><CardDescription>إجمالي الخارج</CardDescription><CardTitle className="text-2xl text-rose-600">{money.format(totals.outgoing)}</CardTitle></CardHeader></Card>
         <Card><CardHeader className="pb-2"><CardDescription>الصافي بعد القيود العكسية</CardDescription><CardTitle className="text-2xl">{money.format(totals.net)}</CardTitle></CardHeader></Card>
-        <Card><CardHeader className="pb-2"><CardDescription>حالة الصندوق</CardDescription><CardTitle className="flex items-center gap-2 text-xl"><Wallet className="h-5 w-5 text-primary" /> {isOpen ? "صندوق مفتوح" : "الصندوق مغلق"}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{session ? `الرصيد الافتتاحي: ${money.format(Number(session.opening_balance))}` : "لا توجد جلسة نقدية مفتوحة"}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>الرصيد النقدي للمعصرة</CardDescription><CardTitle className="flex items-center gap-2 text-xl"><Wallet className="h-5 w-5 text-primary" /> {money.format(totals.net)}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">الرصيد مشتق من الحركات المالية الفعالة.</CardContent></Card>
       </div>
 
       <Card>

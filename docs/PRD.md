@@ -1,5 +1,7 @@
 # Smart Mill Product Requirements Document
 
+> Final simplification (2026-09-15): Smart Mill tracks total mill cash from the effective financial ledger, not physical drawers. Cash sessions and daily drawer closing are removed. Products is the single catalogue for containers and goods; milling oil settlement is `milling_settlement`, never `oil_purchase`.
+
 > Foundation status (2026-09-14): Platform Admin is role-backed with no tenant; all owner/employee sessions require active `mill_memberships`. Ownership metadata is never a tenant fallback.
 
 > Foundation status (2026-09-14): `platform_admin` is role-backed and requires no tenant; every owner/employee tenant session requires an active `mill_memberships` row. `owner_user_id` is ownership metadata only.

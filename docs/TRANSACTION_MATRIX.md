@@ -1,5 +1,7 @@
 # Smart Mill Canonical Transaction Matrix
 
+> Product purchase: stock IN plus cash OUT / payable / partner due. Invoice container use: stock OUT with immutable product/price snapshots. Cancellations append opposite effects; they do not delete accepted history.
+
 `+` increases a balance, `-` decreases it, and `—` means no effect. Every row represents one atomic, idempotent business command. Monetary recognition and physical cash are distinct effects.
 
 | Operation | Source Document | Financial Effect | Cash Effect | Receivable | Payable | Partner Due | Product Stock | Oil Stock | Cash Session | Cancellation Rule |

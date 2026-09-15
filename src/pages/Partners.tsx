@@ -36,7 +36,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCashSession } from "@/contexts/CashSessionContext";
 import { formatDate } from "@/lib/formatters";
 
 interface Partner {
@@ -64,7 +63,6 @@ export default function Partners() {
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
-  const { isOpen: isCashOpen, refresh: refreshCash } = useCashSession();
 
   const [partners, setPartners] = useState<Partner[]>([]);
   const [partnerTxs, setPartnerTxs] = useState<PartnerTx[]>([]);
@@ -165,15 +163,6 @@ export default function Partners() {
       return;
     }
 
-    if (!isCashOpen) {
-      toast({
-        title: "الصندوق مغلق",
-        description: "يجب فتح الصندوق أولاً لإجراء الإيداعات أو المسحوبات النقدية للشركاء",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setTxLoading(true);
     try {
       const { data, error } = await supabase.rpc("record_partner_transaction_command" as any, {
@@ -196,7 +185,6 @@ export default function Partners() {
       setTxAmount("");
       setTxNotes("");
       await fetchPartners();
-      await refreshCash();
     } catch (err: any) {
       toast({
         title: "فشل العملية",
@@ -487,11 +475,6 @@ export default function Partners() {
               />
             </div>
 
-            {!isCashOpen && (
-              <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1">
-                <AlertCircle className="h-3.5 w-3.5" /> الصندوق مغلق؛ يتطلب إجراء الحركة النقدية فتح الصندوق أولاً.
-              </p>
-            )}
 
             <div className="space-y-1.5">
               <Label>البيان / ملاحظات الحركة</Label>
@@ -508,7 +491,7 @@ export default function Partners() {
             </Button>
             <Button
               onClick={handlePartnerTx}
-              disabled={txLoading || !isCashOpen}
+              disabled={txLoading}
               className={txType === "deposit" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-rose-600 hover:bg-rose-700 text-white"}
             >
               {txLoading ? "جاري المعالجة..." : "تأكيد الحركة"}

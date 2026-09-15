@@ -14,7 +14,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { formatDate } from "@/lib/formatters";
-import { CashSessionGuard } from "@/components/CashSessionGuard";
 
 interface Worker {
   id: string;
@@ -326,7 +325,6 @@ const Workers = () => {
   });
 
   return (
-    <CashSessionGuard>
     <div className="space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -781,7 +779,6 @@ const Workers = () => {
         </DialogContent>
       </Dialog>
     </div>
-    </CashSessionGuard>
   );
 };
 

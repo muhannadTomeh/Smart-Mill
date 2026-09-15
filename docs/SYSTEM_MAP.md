@@ -1,5 +1,7 @@
 # Smart Mill System Map
 
+> Cash model: financial_transactions → mill_cash_balance. There is no drawer/session subsystem. Products → purchases and stock movements; suppliers are attached to purchases only.
+
 > Current authorization boundary: `auth.uid() → active mill_memberships → mill_id`; Platform Admin comes from `user_roles` and is intentionally outside tenant membership. Ownership fields are not authorization fallbacks.
 
 > Current authorization boundary: `auth.uid() → active mill_memberships → mill_id`; Platform Admin is resolved from `user_roles` and is intentionally outside tenant membership. Ownership fields are not authorization fallbacks.

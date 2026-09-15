@@ -1,5 +1,7 @@
 # Smart Mill Gap Analysis
 
+> Closed on 2026-09-15: operational cash-session, drawer and legacy container-type dependencies were removed from the active model. Remaining validation is fresh-mill role and workflow regression testing.
+
 > Foundation update (2026-09-14): canonical membership authorization and the `mill_employee` role are implemented. Keep cross-mill/RLS regression tests in release checks.
 
 > Foundation update (2026-09-14): canonical membership authorization and the `mill_employee` role are implemented; retain automated cross-mill/RLS regression tests as the remaining control.

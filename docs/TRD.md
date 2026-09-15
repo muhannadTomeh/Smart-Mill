@@ -1,5 +1,7 @@
 # Smart Mill Technical Requirements Document
 
+> Final simplification (2026-09-15): `mill_cash_balance` derives cash solely from active cash financial transactions. No business command requires `cash_sessions`. `products.product_type` (`container` or `goods`) and `product_stock_movements` are the canonical goods model.
+
 > Foundation status (2026-09-14): active membership is the only non-platform tenant authority; Platform Admin is role-backed server-side; runtime UUID and owner/user tenant fallbacks are removed.
 
 > Foundation status (2026-09-14): production authorization resolves non-platform users only through active `mill_memberships`; platform access is role-backed server-side. Runtime UUID checks and owner/user tenant fallbacks are removed.

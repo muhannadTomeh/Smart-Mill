@@ -42,6 +42,8 @@ interface Product {
   id: string;
   name: string;
   unit: string;
+  product_type: "container" | "goods";
+  description?: string | null;
   default_purchase_price?: number;
   default_sale_price?: number;
   purchase_price?: number;
@@ -87,7 +89,7 @@ const Inventory = () => {
   const { cashBalance, loading: cashBalanceLoading } = useCashBalance();
   const { toast } = useToast();
 
-  const [activeMainTab, setActiveMainTab] = useState<"oil" | "products">("oil");
+  const [activeMainTab, setActiveMainTab] = useState<"oil" | "products" | "definitions">("oil");
 
   // Oil & Cash movements state
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -101,6 +103,7 @@ const Inventory = () => {
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [stockMovements, setStockMovements] = useState<ProductMovement[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [openingBalanceExists, setOpeningBalanceExists] = useState(false);
 
   // Modals state
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
@@ -124,6 +127,8 @@ const Inventory = () => {
   // Form: New Product
   const [newProductForm, setNewProductForm] = useState({
     name: "",
+    product_type: "goods" as "container" | "goods",
+    description: "",
     unit: "قطعة",
     purchase_price: "0",
     sale_price: "0",
@@ -133,6 +138,7 @@ const Inventory = () => {
     if (activeSeason) {
       fetchAll();
       fetchProductsData();
+      supabase.from("financial_transactions").select("id").eq("season_id", activeSeason.id).eq("reference_type", "cash_opening_balance").eq("status", "active").limit(1).then(({ data }) => setOpeningBalanceExists(Boolean(data?.length)));
     }
   }, [activeSeason?.id]);
 
@@ -277,6 +283,10 @@ const Inventory = () => {
       toast({ title: "تنبيه", description: "يرجى اختيار المنتج المطلوب شراؤه", variant: "destructive" });
       return;
     }
+    if (!purchaseForm.supplier_id) {
+      toast({ title: "تنبيه", description: "يرجى اختيار المورد", variant: "destructive" });
+      return;
+    }
     if (isNaN(qty) || qty <= 0) {
       toast({ title: "تنبيه", description: "يرجى إدخال كمية صحيحة", variant: "destructive" });
       return;
@@ -303,6 +313,7 @@ const Inventory = () => {
         p_notes: purchaseForm.notes.trim() || null,
         p_sale_price: sellPrice > 0 ? sellPrice : null,
         p_partner_name: purchaseForm.payment_method === "partner" ? (purchaseForm.partner_name.trim() || null) : null,
+        p_idempotency_key: crypto.randomUUID(),
       });
 
       if (error) throw error;
@@ -352,8 +363,10 @@ const Inventory = () => {
         mill_id: effectiveMillId,
         name: newProductForm.name.trim(),
         unit: newProductForm.unit.trim() || "قطعة",
-        purchase_price: parseFloat(newProductForm.purchase_price) || 0,
-        sale_price: parseFloat(newProductForm.sale_price) || 0,
+        product_type: newProductForm.product_type,
+        description: newProductForm.description.trim() || null,
+        default_purchase_price: parseFloat(newProductForm.purchase_price) || 0,
+        default_sale_price: parseFloat(newProductForm.sale_price) || 0,
         current_stock: 0,
         active: true,
       });
@@ -362,13 +375,28 @@ const Inventory = () => {
 
       toast({ title: "تمت الإضافة", description: `تمت إضافة الصنف "${newProductForm.name}" بنجاح.` });
       setAddProductModalOpen(false);
-      setNewProductForm({ name: "", unit: "قطعة", purchase_price: "0", sale_price: "0" });
+      setNewProductForm({ name: "", product_type: "goods", description: "", unit: "قطعة", purchase_price: "0", sale_price: "0" });
       await fetchProductsData();
     } catch (err: any) {
       toast({ title: "خطأ", description: err.message || "تعذر حفظ الصنف", variant: "destructive" });
     } finally {
       setSavingNewProduct(false);
     }
+  };
+
+  const setOpeningCashBalance = async () => {
+    if (!activeSeason) return;
+    const raw = window.prompt("الرصيد النقدي الافتتاحي للمعصرة");
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const { error } = await supabase.rpc("record_cash_opening_balance_command" as any, { p_season_id: activeSeason.id, p_amount: amount, p_notes: null, p_idempotency_key: crypto.randomUUID() });
+    if (error) {
+      toast({ title: "تعذر تسجيل الرصيد الافتتاحي", description: error.message === "DUPLICATE_OPENING_BALANCE" ? "تم تسجيل الرصيد الافتتاحي مسبقاً" : error.message, variant: "destructive" });
+      return;
+    }
+    setOpeningBalanceExists(true);
+    toast({ title: "تم تسجيل الرصيد النقدي الافتتاحي" });
+    fetchAll();
   };
 
   const filtered = useMemo(
@@ -420,8 +448,8 @@ const Inventory = () => {
             <Warehouse className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">إدارة المخزون والمستودع</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">متابعة أرصدة الزيت والكاش والمنتجات التشغيلية وحركات التوريد</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">المخزون والبضائع</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">رصيد الزيت والكاش، البضائع، والتعريف والتوريد</p>
           </div>
         </div>
 
@@ -440,12 +468,15 @@ const Inventory = () => {
             <span>تحديث</span>
           </Button>
 
-          {activeMainTab === "products" && (
+          {(activeMainTab === "products" || activeMainTab === "definitions") && (
             <>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setAddProductModalOpen(true)}
+                onClick={() => {
+                  setNewProductForm((p) => ({ ...p, product_type: "goods" }));
+                  setAddProductModalOpen(true);
+                }}
                 className="gap-1.5 rounded-xl text-xs h-9 font-semibold"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -489,10 +520,18 @@ const Inventory = () => {
           }`}
         >
           <Package className="h-4 w-4" />
-          <span>المنتجات التشغيلية والتنك والمشتريات</span>
+          <span>مخزون البضائع</span>
           <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
             {products.length}
           </Badge>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("definitions")}
+          className={`pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeMainTab === "definitions" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+        >
+          <Tag className="h-4 w-4" />
+          <span>التعريف والتوريد</span>
         </button>
       </div>
 
@@ -501,6 +540,7 @@ const Inventory = () => {
       ───────────────────────────────────────────────────────────── */}
       {activeMainTab === "oil" && (
         <div className="space-y-6">
+          {!openingBalanceExists && <Card className="border-amber-300 bg-amber-50/50 rounded-2xl"><CardContent className="py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">الرصيد النقدي الافتتاحي</p><p className="text-sm text-muted-foreground">يُسجّل مرة واحدة كبداية للرصيد وليس كإيراد أو ربح.</p></div><Button onClick={setOpeningCashBalance}>تعيين الرصيد النقدي الافتتاحي</Button></CardContent></Card>}
           {/* Today's Movement — auto-calculated from today's transactions */}
           <Card className="border-primary/20 bg-primary/5 rounded-2xl">
             <CardHeader className="pb-3">
@@ -1193,6 +1233,43 @@ const Inventory = () => {
         </DialogContent>
       </Dialog>
 
+      {activeMainTab === "definitions" && (
+        <div className="space-y-5">
+          <Card className="rounded-2xl border-border/70">
+            <CardHeader>
+              <CardTitle>التعريف والتوريد</CardTitle>
+              <CardDescription>تعريف الصنف لا يغيّر المخزون. الشراء وحده ينشئ حركة توريد ومخزوناً.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Button variant="outline" className="h-auto min-h-20 flex-col gap-2" onClick={() => { setNewProductForm((p) => ({ ...p, product_type: "container", unit: "قطعة" })); setAddProductModalOpen(true); }}>
+                <Package className="h-5 w-5" /> + تعريف نوع تنك
+              </Button>
+              <Button variant="outline" className="h-auto min-h-20 flex-col gap-2" onClick={() => { setNewProductForm((p) => ({ ...p, product_type: "goods", unit: "قطعة" })); setAddProductModalOpen(true); }}>
+                <Tag className="h-5 w-5" /> + تعريف بضاعة أخرى
+              </Button>
+              <Button variant="outline" className="h-auto min-h-20 flex-col gap-2" onClick={async () => {
+                const name = window.prompt("اسم المورد الجديد");
+                if (!name?.trim() || !millId) return;
+                const { error } = await supabase.from("suppliers" as any).insert({ mill_id: millId, name: name.trim(), active: true });
+                if (error) toast({ title: "تعذرت إضافة المورد", description: error.message, variant: "destructive" }); else { toast({ title: "تمت إضافة المورد" }); fetchProductsData(); }
+              }}>
+                <Users className="h-5 w-5" /> + تعريف مورد
+              </Button>
+              <Button className="h-auto min-h-20 flex-col gap-2" onClick={() => setPurchaseModalOpen(true)}>
+                <ShoppingCart className="h-5 w-5" /> + شراء بضاعة
+              </Button>
+            </CardContent>
+          </Card>
+          <Card className="rounded-2xl border-border/70">
+            <CardHeader><CardTitle className="text-base">آخر عمليات التوريد</CardTitle></CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              {stockMovements.filter((m) => m.type === "purchase").slice(0, 8).map((movement) => <div key={movement.id} className="flex justify-between border-b pb-2"><span>{movement.products?.name || "بضاعة"}</span><span>+{movement.quantity}</span></div>)}
+              {!stockMovements.some((m) => m.type === "purchase") && <p>لا توجد عمليات توريد بعد.</p>}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* ─────────────────────────────────────────────────────────────
           ADD NEW PRODUCT MODAL
       ───────────────────────────────────────────────────────────── */}
@@ -1210,13 +1287,17 @@ const Inventory = () => {
 
           <div className="space-y-3.5 py-2">
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">اسم الصنف *</Label>
+              <Label className="text-xs font-semibold">{newProductForm.product_type === "container" ? "اسم نوع التنك *" : "اسم البضاعة *"}</Label>
               <Input
                 value={newProductForm.name}
                 onChange={(e) => setNewProductForm((p) => ({ ...p, name: e.target.value }))}
                 className="h-10 text-sm rounded-xl"
               />
             </div>
+            {newProductForm.product_type === "goods" && <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">الوصف (اختياري)</Label>
+              <Textarea value={newProductForm.description} onChange={(e) => setNewProductForm((p) => ({ ...p, description: e.target.value }))} className="rounded-xl" />
+            </div>}
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">الوحدة</Label>

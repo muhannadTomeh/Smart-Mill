@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       admin_audit_log: {
@@ -246,123 +271,6 @@ export type Database = {
           },
         ]
       }
-      cash_sessions: {
-        Row: {
-          actual_balance: number | null
-          closed_at: string | null
-          closed_by: string | null
-          closing_note: string | null
-          created_at: string
-          difference: number | null
-          expected_balance: number | null
-          id: string
-          mill_id: string
-          opened_at: string
-          opened_by: string
-          opening_balance: number
-          season_id: string
-          status: string
-          total_cash_in: number
-          total_cash_out: number
-        }
-        Insert: {
-          actual_balance?: number | null
-          closed_at?: string | null
-          closed_by?: string | null
-          closing_note?: string | null
-          created_at?: string
-          difference?: number | null
-          expected_balance?: number | null
-          id?: string
-          mill_id: string
-          opened_at?: string
-          opened_by: string
-          opening_balance?: number
-          season_id: string
-          status?: string
-          total_cash_in?: number
-          total_cash_out?: number
-        }
-        Update: {
-          actual_balance?: number | null
-          closed_at?: string | null
-          closed_by?: string | null
-          closing_note?: string | null
-          created_at?: string
-          difference?: number | null
-          expected_balance?: number | null
-          id?: string
-          mill_id?: string
-          opened_at?: string
-          opened_by?: string
-          opening_balance?: number
-          season_id?: string
-          status?: string
-          total_cash_in?: number
-          total_cash_out?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cash_sessions_mill_id_fkey"
-            columns: ["mill_id"]
-            isOneToOne: false
-            referencedRelation: "mills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cash_sessions_season_id_fkey"
-            columns: ["season_id"]
-            isOneToOne: false
-            referencedRelation: "seasons"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      container_types: {
-        Row: {
-          created_at: string
-          id: string
-          mill_id: string | null
-          name: string
-          price: number
-          season_id: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          mill_id?: string | null
-          name: string
-          price?: number
-          season_id?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          mill_id?: string | null
-          name?: string
-          price?: number
-          season_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "container_types_season_id_fkey"
-            columns: ["season_id"]
-            isOneToOne: false
-            referencedRelation: "seasons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_container_types_mill_id"
-            columns: ["mill_id"]
-            isOneToOne: false
-            referencedRelation: "mills"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       credential_reveal_events: {
         Row: {
           actor_user_id: string
@@ -423,7 +331,6 @@ export type Database = {
       customer_payments: {
         Row: {
           amount: number
-          cash_session_id: string | null
           created_at: string
           created_by: string | null
           customer_id: string
@@ -435,7 +342,6 @@ export type Database = {
         }
         Insert: {
           amount: number
-          cash_session_id?: string | null
           created_at?: string
           created_by?: string | null
           customer_id: string
@@ -447,7 +353,6 @@ export type Database = {
         }
         Update: {
           amount?: number
-          cash_session_id?: string | null
           created_at?: string
           created_by?: string | null
           customer_id?: string
@@ -458,13 +363,6 @@ export type Database = {
           season_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "customer_payments_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "customer_payments_customer_id_fkey"
             columns: ["customer_id"]
@@ -529,90 +427,6 @@ export type Database = {
           },
           {
             foreignKeyName: "fk_customers_mill_id"
-            columns: ["mill_id"]
-            isOneToOne: false
-            referencedRelation: "mills"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      daily_closings: {
-        Row: {
-          actual_cash: number
-          cashier_name: string
-          closing_date: string
-          created_at: string
-          created_by: string | null
-          difference: number
-          expected_cash: number
-          expenses_cash: number | null
-          id: string
-          invoices_cash: number | null
-          invoices_count: number | null
-          mill_id: string
-          notes: string | null
-          oil_purchases_cash: number | null
-          oil_sales_cash: number | null
-          opening_cash: number
-          season_id: string
-          total_cash_in: number
-          total_cash_out: number
-          worker_payments_cash: number | null
-        }
-        Insert: {
-          actual_cash?: number
-          cashier_name: string
-          closing_date?: string
-          created_at?: string
-          created_by?: string | null
-          difference?: number
-          expected_cash?: number
-          expenses_cash?: number | null
-          id?: string
-          invoices_cash?: number | null
-          invoices_count?: number | null
-          mill_id: string
-          notes?: string | null
-          oil_purchases_cash?: number | null
-          oil_sales_cash?: number | null
-          opening_cash?: number
-          season_id: string
-          total_cash_in?: number
-          total_cash_out?: number
-          worker_payments_cash?: number | null
-        }
-        Update: {
-          actual_cash?: number
-          cashier_name?: string
-          closing_date?: string
-          created_at?: string
-          created_by?: string | null
-          difference?: number
-          expected_cash?: number
-          expenses_cash?: number | null
-          id?: string
-          invoices_cash?: number | null
-          invoices_count?: number | null
-          mill_id?: string
-          notes?: string | null
-          oil_purchases_cash?: number | null
-          oil_sales_cash?: number | null
-          opening_cash?: number
-          season_id?: string
-          total_cash_in?: number
-          total_cash_out?: number
-          worker_payments_cash?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "daily_closings_season_id_fkey"
-            columns: ["season_id"]
-            isOneToOne: false
-            referencedRelation: "seasons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_daily_closings_mill_id"
             columns: ["mill_id"]
             isOneToOne: false
             referencedRelation: "mills"
@@ -716,7 +530,7 @@ export type Database = {
       expenses: {
         Row: {
           amount: number
-          cash_session_id: string | null
+          cash_location: string | null
           category: string
           created_at: string
           description: string | null
@@ -734,7 +548,7 @@ export type Database = {
         }
         Insert: {
           amount: number
-          cash_session_id?: string | null
+          cash_location?: string | null
           category: string
           created_at?: string
           description?: string | null
@@ -752,7 +566,7 @@ export type Database = {
         }
         Update: {
           amount?: number
-          cash_session_id?: string | null
+          cash_location?: string | null
           category?: string
           created_at?: string
           description?: string | null
@@ -769,13 +583,6 @@ export type Database = {
           voided_by?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "expenses_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "expenses_partner_id_fkey"
             columns: ["partner_id"]
@@ -846,7 +653,6 @@ export type Database = {
       financial_transactions: {
         Row: {
           amount: number
-          cash_session_id: string | null
           category: string
           created_at: string
           created_by: string | null
@@ -873,7 +679,6 @@ export type Database = {
         }
         Insert: {
           amount: number
-          cash_session_id?: string | null
           category: string
           created_at?: string
           created_by?: string | null
@@ -900,7 +705,6 @@ export type Database = {
         }
         Update: {
           amount?: number
-          cash_session_id?: string | null
           category?: string
           created_at?: string
           created_by?: string | null
@@ -926,13 +730,6 @@ export type Database = {
           voided_by?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "financial_transactions_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "financial_transactions_operation_id_fkey"
             columns: ["operation_id"]
@@ -1015,10 +812,157 @@ export type Database = {
           },
         ]
       }
+      invoice_effect_links: {
+        Row: {
+          cash_financial_transaction_id: string | null
+          created_at: string
+          invoice_id: string
+          mill_id: string
+          operation_id: string
+          season_id: string
+          settlement_oil_movement_id: string | null
+        }
+        Insert: {
+          cash_financial_transaction_id?: string | null
+          created_at?: string
+          invoice_id: string
+          mill_id: string
+          operation_id: string
+          season_id: string
+          settlement_oil_movement_id?: string | null
+        }
+        Update: {
+          cash_financial_transaction_id?: string | null
+          created_at?: string
+          invoice_id?: string
+          mill_id?: string
+          operation_id?: string
+          season_id?: string
+          settlement_oil_movement_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_effect_links_cash_financial_transaction_id_fkey"
+            columns: ["cash_financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_effective_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_effect_links_cash_financial_transaction_id_fkey"
+            columns: ["cash_financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_effect_links_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: true
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_effect_links_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_effect_links_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_effect_links_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_effect_links_settlement_oil_movement_id_fkey"
+            columns: ["settlement_oil_movement_id"]
+            isOneToOne: false
+            referencedRelation: "oil_movements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_product_lines: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          line_total: number
+          mill_id: string
+          product_id: string
+          product_name_snapshot: string
+          quantity: number
+          season_id: string
+          unit_price_snapshot: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          line_total?: number
+          mill_id: string
+          product_id: string
+          product_name_snapshot: string
+          quantity: number
+          season_id: string
+          unit_price_snapshot?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          line_total?: number
+          mill_id?: string
+          product_id?: string
+          product_name_snapshot?: string
+          quantity?: number
+          season_id?: string
+          unit_price_snapshot?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_product_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_product_lines_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_product_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_product_lines_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           cash_amount: number
-          cash_session_id: string | null
           container_count: number
           container_type: string
           created_at: string
@@ -1033,10 +977,12 @@ export type Database = {
           total_display: string
           unpaid_amount: number | null
           user_id: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         Insert: {
           cash_amount?: number
-          cash_session_id?: string | null
           container_count: number
           container_type?: string
           created_at?: string
@@ -1051,10 +997,12 @@ export type Database = {
           total_display: string
           unpaid_amount?: number | null
           user_id: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
           cash_amount?: number
-          cash_session_id?: string | null
           container_count?: number
           container_type?: string
           created_at?: string
@@ -1069,6 +1017,9 @@ export type Database = {
           total_display?: string
           unpaid_amount?: number | null
           user_id?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
           {
@@ -1076,13 +1027,6 @@ export type Database = {
             columns: ["mill_id"]
             isOneToOne: false
             referencedRelation: "mills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoices_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
             referencedColumns: ["id"]
           },
           {
@@ -1193,10 +1137,107 @@ export type Database = {
         }
         Relationships: []
       }
+      obligation_movements: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          financial_transaction_id: string | null
+          id: string
+          mill_id: string
+          movement_type: string
+          operation_id: string | null
+          payable_id: string
+          payment_method: string | null
+          reason: string | null
+          reversal_of: string | null
+          season_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by: string
+          financial_transaction_id?: string | null
+          id?: string
+          mill_id: string
+          movement_type: string
+          operation_id?: string | null
+          payable_id: string
+          payment_method?: string | null
+          reason?: string | null
+          reversal_of?: string | null
+          season_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          financial_transaction_id?: string | null
+          id?: string
+          mill_id?: string
+          movement_type?: string
+          operation_id?: string | null
+          payable_id?: string
+          payment_method?: string | null
+          reason?: string | null
+          reversal_of?: string | null
+          season_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obligation_movements_financial_transaction_id_fkey"
+            columns: ["financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_effective_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_financial_transaction_id_fkey"
+            columns: ["financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "obligation_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       oil_movements: {
         Row: {
           amount: number
-          cash_session_id: string | null
           created_at: string
           created_by: string
           direction: string
@@ -1216,7 +1257,6 @@ export type Database = {
         }
         Insert: {
           amount: number
-          cash_session_id?: string | null
           created_at?: string
           created_by: string
           direction: string
@@ -1236,7 +1276,6 @@ export type Database = {
         }
         Update: {
           amount?: number
-          cash_session_id?: string | null
           created_at?: string
           created_by?: string
           direction?: string
@@ -1256,13 +1295,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "oil_movements_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "oil_movements_mill_id_fkey"
             columns: ["mill_id"]
             isOneToOne: false
@@ -1281,7 +1313,6 @@ export type Database = {
       oil_transactions: {
         Row: {
           amount: number
-          cash_session_id: string | null
           created_at: string
           id: string
           mill_id: string | null
@@ -1295,7 +1326,6 @@ export type Database = {
         }
         Insert: {
           amount: number
-          cash_session_id?: string | null
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -1309,7 +1339,6 @@ export type Database = {
         }
         Update: {
           amount?: number
-          cash_session_id?: string | null
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -1327,13 +1356,6 @@ export type Database = {
             columns: ["mill_id"]
             isOneToOne: false
             referencedRelation: "mills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "oil_transactions_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
             referencedColumns: ["id"]
           },
           {
@@ -1480,7 +1502,6 @@ export type Database = {
       }
       product_purchases: {
         Row: {
-          cash_session_id: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -1496,7 +1517,6 @@ export type Database = {
           unit_price: number
         }
         Insert: {
-          cash_session_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1512,7 +1532,6 @@ export type Database = {
           unit_price: number
         }
         Update: {
-          cash_session_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1528,13 +1547,6 @@ export type Database = {
           unit_price?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "product_purchases_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_purchases_mill_id_fkey"
             columns: ["mill_id"]
@@ -1646,9 +1658,11 @@ export type Database = {
           current_stock: number
           default_purchase_price: number
           default_sale_price: number
+          description: string | null
           id: string
           mill_id: string
           name: string
+          product_type: string
           sku: string | null
           unit: string
           updated_at: string
@@ -1659,9 +1673,11 @@ export type Database = {
           current_stock?: number
           default_purchase_price?: number
           default_sale_price?: number
+          description?: string | null
           id?: string
           mill_id: string
           name: string
+          product_type?: string
           sku?: string | null
           unit?: string
           updated_at?: string
@@ -1672,9 +1688,11 @@ export type Database = {
           current_stock?: number
           default_purchase_price?: number
           default_sale_price?: number
+          description?: string | null
           id?: string
           mill_id?: string
           name?: string
+          product_type?: string
           sku?: string | null
           unit?: string
           updated_at?: string
@@ -1814,6 +1832,121 @@ export type Database = {
           },
           {
             foreignKeyName: "queue_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receivable_movements: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          customer_id: string
+          customer_payment_id: string | null
+          financial_transaction_id: string | null
+          id: string
+          invoice_id: string | null
+          mill_id: string
+          movement_type: string
+          operation_id: string | null
+          reason: string | null
+          reversal_of: string | null
+          season_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by: string
+          customer_id: string
+          customer_payment_id?: string | null
+          financial_transaction_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          mill_id: string
+          movement_type: string
+          operation_id?: string | null
+          reason?: string | null
+          reversal_of?: string | null
+          season_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          customer_id?: string
+          customer_payment_id?: string | null
+          financial_transaction_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          mill_id?: string
+          movement_type?: string
+          operation_id?: string | null
+          reason?: string | null
+          reversal_of?: string | null
+          season_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receivable_movements_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_customer_payment_id_fkey"
+            columns: ["customer_payment_id"]
+            isOneToOne: false
+            referencedRelation: "customer_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_financial_transaction_id_fkey"
+            columns: ["financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_effective_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_financial_transaction_id_fkey"
+            columns: ["financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "receivable_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_season_id_fkey"
             columns: ["season_id"]
             isOneToOne: false
             referencedRelation: "seasons"
@@ -2127,7 +2260,6 @@ export type Database = {
       worker_payments: {
         Row: {
           amount: number
-          cash_session_id: string | null
           created_at: string
           id: string
           mill_id: string | null
@@ -2138,7 +2270,6 @@ export type Database = {
         }
         Insert: {
           amount: number
-          cash_session_id?: string | null
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -2149,7 +2280,6 @@ export type Database = {
         }
         Update: {
           amount?: number
-          cash_session_id?: string | null
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -2164,13 +2294,6 @@ export type Database = {
             columns: ["mill_id"]
             isOneToOne: false
             referencedRelation: "mills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "worker_payments_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
             referencedColumns: ["id"]
           },
           {
@@ -2254,25 +2377,49 @@ export type Database = {
       }
     }
     Views: {
+      customer_receivable_balances: {
+        Row: {
+          customer_id: string | null
+          mill_id: string | null
+          outstanding_amount: number | null
+          season_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receivable_movements_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_movements_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_effective_events: {
         Row: {
           amount: number | null
-          cash_session_id: string | null
           category: string | null
           created_at: string | null
           created_by: string | null
           description: string | null
           direction: Database["public"]["Enums"]["financial_direction"] | null
-          effect_status: string | null
           id: string | null
           idempotency_key: string | null
-          is_reversal: boolean | null
-          is_reversed: boolean | null
           mill_id: string | null
           operation_id: string | null
-          operation_source_type: string | null
-          operation_status: string | null
-          operation_type: string | null
           party_id: string | null
           party_name: string | null
           party_type: string | null
@@ -2284,18 +2431,69 @@ export type Database = {
           reversal_of: string | null
           reversal_reason: string | null
           season_id: string | null
-          signed_amount: number | null
           status: Database["public"]["Enums"]["financial_tx_status"] | null
           type: Database["public"]["Enums"]["financial_tx_type"] | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount?: number | null
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          direction?: Database["public"]["Enums"]["financial_direction"] | null
+          id?: string | null
+          idempotency_key?: string | null
+          mill_id?: string | null
+          operation_id?: string | null
+          party_id?: string | null
+          party_name?: string | null
+          party_type?: string | null
+          payment_method?:
+            | Database["public"]["Enums"]["financial_payment_method"]
+            | null
+          reference_id?: string | null
+          reference_type?: string | null
+          reversal_of?: string | null
+          reversal_reason?: string | null
+          season_id?: string | null
+          status?: Database["public"]["Enums"]["financial_tx_status"] | null
+          type?: Database["public"]["Enums"]["financial_tx_type"] | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount?: number | null
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          direction?: Database["public"]["Enums"]["financial_direction"] | null
+          id?: string | null
+          idempotency_key?: string | null
+          mill_id?: string | null
+          operation_id?: string | null
+          party_id?: string | null
+          party_name?: string | null
+          party_type?: string | null
+          payment_method?:
+            | Database["public"]["Enums"]["financial_payment_method"]
+            | null
+          reference_id?: string | null
+          reference_type?: string | null
+          reversal_of?: string | null
+          reversal_reason?: string | null
+          season_id?: string | null
+          status?: Database["public"]["Enums"]["financial_tx_status"] | null
+          type?: Database["public"]["Enums"]["financial_tx_type"] | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "financial_transactions_cash_session_id_fkey"
-            columns: ["cash_session_id"]
-            isOneToOne: false
-            referencedRelation: "cash_sessions"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "financial_transactions_operation_id_fkey"
             columns: ["operation_id"]
@@ -2317,6 +2515,52 @@ export type Database = {
             referencedRelation: "financial_transactions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "financial_transactions_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_financial_transactions_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mill_cash_balance: {
+        Row: {
+          cash_balance: number | null
+          mill_id: string | null
+          season_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_transactions_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_financial_transactions_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mill_cash_reconciliation: {
+        Row: {
+          ledger_cash: number | null
+          mill_id: string | null
+          season_id: string | null
+        }
+        Relationships: [
           {
             foreignKeyName: "financial_transactions_season_id_fkey"
             columns: ["season_id"]
@@ -2408,11 +2652,12 @@ export type Database = {
         Args: { p_idempotency_key: string; p_operation: string }
         Returns: Json
       }
-      close_cash_session: {
+      collect_invoice_receivable_lifecycle_command: {
         Args: {
-          p_actual_balance: number
-          p_closing_note?: string
-          p_session_id: string
+          p_amount: number
+          p_idempotency_key: string
+          p_invoice_id: string
+          p_notes: string
         }
         Returns: Json
       }
@@ -2420,21 +2665,22 @@ export type Database = {
         Args: { p_idempotency_key: string; p_result: Json }
         Returns: undefined
       }
-      create_invoice_and_settle: {
+      create_deferred_invoice_lifecycle_command: {
         Args: {
-          p_cash_amount: number
           p_container_count: number
+          p_container_lines: Json
           p_container_type: string
-          p_customer_id?: string
+          p_customer_id: string
           p_customer_name: string
+          p_idempotency_key: string
           p_oil_amount: number
           p_oil_produced: number
-          p_payment_type: string
-          p_queue_id?: string
+          p_queue_id: string
+          p_receivable_amount: number
           p_season_id: string
           p_total_display: string
         }
-        Returns: string
+        Returns: Json
       }
       create_invoice_command: {
         Args: {
@@ -2453,15 +2699,15 @@ export type Database = {
         }
         Returns: string
       }
-      create_invoice_with_containers_command: {
+      create_invoice_lifecycle_command: {
         Args: {
           p_cash_amount: number
           p_container_count: number
-          p_container_lines: Json
+          p_container_lines?: Json
           p_container_type: string
           p_customer_id: string
           p_customer_name: string
-          p_idempotency_key: string
+          p_idempotency_key?: string
           p_oil_amount: number
           p_oil_produced: number
           p_payment_type: string
@@ -2469,13 +2715,12 @@ export type Database = {
           p_season_id: string
           p_total_display: string
         }
-        Returns: string
+        Returns: Json
       }
       drop_all_policies_on_table: {
         Args: { p_table_name: string }
         Returns: undefined
       }
-      get_active_cash_session: { Args: never; Returns: Json }
       get_auth_user_accessible_user_ids: { Args: never; Returns: string[] }
       get_auth_user_mill_ids: { Args: never; Returns: string[] }
       get_auth_user_owned_mill_ids: { Args: never; Returns: string[] }
@@ -2531,10 +2776,6 @@ export type Database = {
           found_email: string
         }[]
       }
-      open_cash_session: {
-        Args: { p_opening_balance?: number; p_season_id: string }
-        Returns: Json
-      }
       pay_worker_and_settle: {
         Args: {
           p_amount: number
@@ -2555,11 +2796,20 @@ export type Database = {
         }
         Returns: Json
       }
+      record_cash_opening_balance_command: {
+        Args: {
+          p_amount: number
+          p_idempotency_key: string
+          p_notes: string
+          p_season_id: string
+        }
+        Returns: Json
+      }
       record_customer_payment_atomic: {
         Args: {
           p_amount: number
           p_customer_id: string
-          p_notes?: string
+          p_notes: string
           p_season_id: string
         }
         Returns: string
@@ -2602,26 +2852,13 @@ export type Database = {
         Args: {
           p_amount: number
           p_category: string
-          p_creditor_name?: string
-          p_description?: string
-          p_partner_id?: string
-          p_partner_name?: string
-          p_payment_method?: string
+          p_creditor_name: string
+          p_description: string
+          p_partner_id: string
+          p_partner_name: string
+          p_payment_method: string
           p_season_id: string
-          p_supplier_id?: string
-        }
-        Returns: Json
-      }
-      record_oil_movement_command: {
-        Args: {
-          p_amount: number
-          p_direction: string
-          p_idempotency_key?: string
-          p_notes?: string
-          p_ownership: string
-          p_party_name?: string
-          p_season_id: string
-          p_unit_price?: number
+          p_supplier_id: string
         }
         Returns: Json
       }
@@ -2648,17 +2885,6 @@ export type Database = {
         }
         Returns: Json
       }
-      record_oil_transaction_atomic: {
-        Args: {
-          p_amount: number
-          p_notes?: string
-          p_party_name?: string
-          p_price: number
-          p_season_id: string
-          p_type: string
-        }
-        Returns: string
-      }
       record_oil_transaction_command: {
         Args: {
           p_amount: number
@@ -2674,7 +2900,7 @@ export type Database = {
       record_partner_transaction_atomic: {
         Args: {
           p_amount: number
-          p_notes?: string
+          p_notes: string
           p_partner_id: string
           p_season_id: string
           p_type: string
@@ -2694,6 +2920,7 @@ export type Database = {
       }
       record_product_purchase_atomic: {
         Args: {
+          p_idempotency_key?: string
           p_notes?: string
           p_partner_id?: string
           p_partner_name?: string
@@ -2704,6 +2931,17 @@ export type Database = {
           p_season_id: string
           p_supplier_id?: string
           p_unit_price: number
+        }
+        Returns: Json
+      }
+      record_vault_deposit_command: {
+        Args: {
+          p_amount: number
+          p_idempotency_key?: string
+          p_notes?: string
+          p_partner_id?: string
+          p_partner_name?: string
+          p_season_id: string
         }
         Returns: Json
       }
@@ -2723,9 +2961,9 @@ export type Database = {
       settle_payable_atomic: {
         Args: {
           p_amount: number
-          p_notes?: string
+          p_notes: string
           p_payable_id: string
-          p_payment_method?: string
+          p_payment_method: string
         }
         Returns: Json
       }
@@ -2747,10 +2985,6 @@ export type Database = {
       verify_report_pin: { Args: { input_pin: string }; Returns: boolean }
       void_expense_and_reverse: {
         Args: { p_expense_id: string; p_reason?: string }
-        Returns: Json
-      }
-      void_financial_transaction: {
-        Args: { p_reason: string; p_transaction_id: string }
         Returns: Json
       }
     }
@@ -2897,6 +3131,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["platform_admin", "mill_owner", "mill_employee"],

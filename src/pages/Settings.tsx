@@ -69,7 +69,6 @@ type MainSectionId =
 type SubSettingId = 
   // Operations sub-settings
   | "pressing_rates"     // إعدادات العصر والأسعار
-  | "container_types"    // أنواع العبوات
   | "display_screen"     // شاشة العرض
   | "inventory_cash"     // المخزون والسيولة
   // Invoices & Receipts sub-settings
@@ -544,28 +543,29 @@ export default function Settings() {
   const fetchContainerTypes = async () => {
     if (!activeSeason) return;
     let query = supabase
-      .from("container_types")
-      .select("*")
-      .eq("season_id", activeSeason.id);
+      .from("products" as any)
+      .select("id, name, default_sale_price")
+      .eq("product_type", "container");
 
     if (millId || activeSeason.mill_id) {
       query = (query as any).eq("mill_id", millId || activeSeason.mill_id);
-    } else if (user?.id) {
-      query = query.eq("user_id", user.id);
     }
 
     const { data } = await query.order("created_at", { ascending: true });
-    setContainerTypes(data as ContainerType[] || []);
+    setContainerTypes(((data || []) as any[]).map((product) => ({ ...product, price: product.default_sale_price })) as ContainerType[]);
   };
 
   const addContainerType = async () => {
     if (!activeSeason || !newContainerName.trim() || !newContainerPrice) return;
-    const { error } = await supabase.from("container_types").insert({
-      user_id: user?.id!,
+    const { error } = await supabase.from("products" as any).insert({
       mill_id: millId || activeSeason.mill_id || null,
-      season_id: activeSeason.id,
       name: newContainerName.trim(),
-      price: parseFloat(newContainerPrice)
+      product_type: "container",
+      unit: "قطعة",
+      default_purchase_price: 0,
+      default_sale_price: parseFloat(newContainerPrice),
+      current_stock: 0,
+      active: true,
     } as any);
     if (!error) {
       toast({ title: "تمت الإضافة", description: `تم إضافة نوع "${newContainerName}"` });
@@ -578,7 +578,7 @@ export default function Settings() {
 
   const deleteContainerType = async () => {
     if (!containerDeleteTarget) return;
-    await supabase.from("container_types").delete().eq("id", containerDeleteTarget.id);
+    await supabase.from("products" as any).update({ active: false }).eq("id", containerDeleteTarget.id);
     setContainerDeleteTarget(null);
     fetchContainerTypes();
   };
@@ -847,7 +847,6 @@ export default function Settings() {
                     <span>/</span>
                     <span className="font-bold text-foreground">
                       {activeSubSetting === "pressing_rates" && "إعدادات العصر والأسعار"}
-                      {activeSubSetting === "container_types" && "أنواع العبوات والتنكات"}
                       {activeSubSetting === "display_screen" && "شاشة العرض العامة"}
                       {activeSubSetting === "inventory_cash" && "المخزون والسيولة"}
                       {activeSubSetting === "currency" && "العملة المعتمدة"}
@@ -1153,27 +1152,6 @@ export default function Settings() {
               <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
             </div>
 
-            {/* SubCard: أنواع العبوات */}
-            <div
-              onClick={() => openSubSetting("container_types")}
-              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                  <Package className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
-                    أنواع العبوات والتنكات
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    إدارة وتحديد أنواع العبوات المستخدمة في المعصرة وأسعارها ({containerTypes.length})
-                  </p>
-                </div>
-              </div>
-              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
-            </div>
-
             {/* SubCard: شاشة العرض */}
             <div
               onClick={() => openSubSetting("display_screen")}
@@ -1288,97 +1266,6 @@ export default function Settings() {
                 حفظ الإعدادات
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* OPERATIONS SUB-SETTING 2: أنواع العبوات والتنكات */}
-      {activeSection === "operations" && activeSubSetting === "container_types" && (
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="pb-4 border-b border-border/50 flex flex-row items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Package className="h-5 w-5 text-amber-500" />
-                أنواع العبوات والتنكات
-              </CardTitle>
-              <CardDescription>الأنواع المتاحة للمزارعين وأسعارها عند إصدار الفواتير</CardDescription>
-            </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5 rounded-xl font-bold">
-                  <Plus className="h-4 w-4" />
-                  إضافة نوع
-                </Button>
-              </DialogTrigger>
-              <DialogContent dir="rtl" className="rounded-2xl sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>إضافة نوع تنكة جديد</DialogTitle>
-                  <DialogDescription>أدخل اسم العبوة وسعرها بالعملة المعتمدة</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">اسم النوع</Label>
-                    <Input 
-                      value={newContainerName} 
-                      onChange={(e) => setNewContainerName(e.target.value)} 
-                      placeholder="مثال: بلاستيك 16 لتر، حديد..." 
-                      className="rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">السعر ({selectedCurrency})</Label>
-                    <Input 
-                      type="number" 
-                      value={newContainerPrice} 
-                      onChange={(e) => setNewContainerPrice(e.target.value)} 
-                      min="0" 
-                      step="0.1" 
-                      className="rounded-xl"
-                    />
-                  </div>
-                  <Button 
-                    onClick={addContainerType} 
-                    disabled={!newContainerName.trim() || !newContainerPrice} 
-                    className="w-full rounded-xl font-bold gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    إضافة العبوة
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-5">
-            {containerTypes.length > 0 ? (
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                {containerTypes.map((ct) => (
-                  <div 
-                    key={ct.id} 
-                    className="flex items-center justify-between p-3.5 rounded-xl border border-border/70 bg-card hover:bg-muted/20 transition-colors"
-                  >
-                    <div>
-                      <p className="font-bold text-sm text-foreground">{ct.name}</p>
-                      <p className="text-xs text-primary font-semibold mt-0.5">
-                        {ct.price} {selectedCurrency}
-                      </p>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => setContainerDeleteTarget(ct)}
-                      className="text-destructive hover:bg-destructive/10 rounded-lg h-8 w-8"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 border border-dashed rounded-xl space-y-2">
-                <p className="text-sm font-semibold text-foreground">لا توجد أنواع عبوات مضافة حالياً</p>
-                <p className="text-xs text-muted-foreground">اضغط على زر "إضافة نوع" لإضافة تنكات حديد أو بلاستيك</p>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}

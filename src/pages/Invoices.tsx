@@ -37,7 +37,6 @@ import {
 } from "@/lib/invoiceCalculations";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
-import { CashSessionGuard } from "@/components/CashSessionGuard";
 
 interface PaymentMethod extends PaymentBreakdown {
   total: string;
@@ -46,7 +45,7 @@ interface PaymentMethod extends PaymentBreakdown {
 interface ContainerType {
   id: string;
   name: string;
-  price: number;
+  default_sale_price: number;
 }
 
 const paymentLabel = (type: string) => {
@@ -123,9 +122,10 @@ export default function Invoices() {
     try {
       const effectiveMillId = activeSeason.mill_id || millId;
       let query = supabase
-        .from("container_types")
-        .select("*")
-        .eq("season_id", activeSeason.id);
+        .from("products" as any)
+        .select("id, name, default_sale_price")
+        .eq("product_type", "container")
+        .eq("active", true);
 
       if (effectiveMillId) {
         query = query.eq("mill_id", effectiveMillId);
@@ -170,7 +170,7 @@ export default function Invoices() {
   const getTotalContainerCost = () => {
     let total = 0;
     containerTypes.forEach(ct => {
-      total += (containerCounts[ct.id] || 0) * ct.price;
+      total += (containerCounts[ct.id] || 0) * ct.default_sale_price;
     });
     return total;
   };
@@ -309,7 +309,7 @@ export default function Invoices() {
 
     const containerLines = containerTypes
         .filter((container) => (containerCounts[container.id] || 0) > 0)
-        .map((container) => ({ name: container.name, quantity: containerCounts[container.id] }));
+        .map((container) => ({ product_id: container.id, name: container.name, quantity: containerCounts[container.id], unit_price: container.default_sale_price }));
 
       const isDeferred = deferCashSettlement && selectedPayment.cashAmount > 0;
       const commonInvoiceArgs = {
@@ -422,7 +422,6 @@ export default function Invoices() {
   };
 
   return (
-    <CashSessionGuard>
     <div className="space-y-6" dir="rtl">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b">
@@ -597,7 +596,7 @@ export default function Invoices() {
                       >
                         <div className="overflow-hidden">
                           <p className="text-sm font-medium truncate">{ct.name}</p>
-                          <p className="text-xs text-muted-foreground">{ct.price} {currency} للواحدة</p>
+                          <p className="text-xs text-muted-foreground">{ct.default_sale_price} {currency} للواحدة</p>
                         </div>
                         <div className="flex items-center gap-1.5" dir="ltr">
                           <Button
@@ -887,6 +886,5 @@ export default function Invoices() {
       </Dialog>
 
     </div>
-    </CashSessionGuard>
   );
 }

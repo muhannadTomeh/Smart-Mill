@@ -19,7 +19,6 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatDate } from "@/lib/formatters";
-import { CashSessionGuard } from "@/components/CashSessionGuard";
 
 interface Transaction {
   id: string;
@@ -215,7 +214,6 @@ const OilTrading = () => {
   });
 
   return (
-    <CashSessionGuard>
     <div className="space-y-6 text-right" dir="rtl">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -584,7 +582,6 @@ const OilTrading = () => {
         </DialogContent>
       </Dialog>
     </div>
-    </CashSessionGuard>
   );
 };
 

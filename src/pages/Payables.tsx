@@ -41,7 +41,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCashSession } from "@/contexts/CashSessionContext";
 import { formatDate } from "@/lib/formatters";
 
 interface Payable {
@@ -85,7 +84,6 @@ export default function Payables() {
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
-  const { isOpen: isCashOpen, refresh: refreshCash } = useCashSession();
 
   const [payables, setPayables] = useState<Payable[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -156,15 +154,6 @@ export default function Payables() {
       return;
     }
 
-    if (settleMethod === "cash" && !isCashOpen) {
-      toast({
-        title: "الصندوق مغلق",
-        description: "يجب فتح الصندوق أولاً قبل سداد الالتزامات نقداً",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setSettleLoading(true);
     try {
       const { data, error } = await supabase.rpc("settle_payable_lifecycle_command" as any, {
@@ -186,7 +175,6 @@ export default function Payables() {
       setSettleAmount("");
       setSettleNotes("");
       await fetchData();
-      await refreshCash();
     } catch (err: any) {
       toast({
         title: "فشل السداد",
@@ -227,7 +215,6 @@ export default function Payables() {
       toast({ title: "تم عكس السداد", description: "عادت الذمة ورصيد الكاش — إن وُجد — إلى حالتهما الصحيحة." });
       if (historyTarget) await openSettlementHistory(historyTarget);
       await fetchData();
-      await refreshCash();
     } catch (err: any) {
       toast({ title: "تعذّر عكس السداد", description: err.message || "تعذرت العملية", variant: "destructive" });
     } finally {
@@ -618,11 +605,6 @@ export default function Payables() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                {settleMethod === "cash" && !isCashOpen && (
-                  <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1">
-                    <AlertCircle className="h-3.5 w-3.5" /> الصندوق مغلق؛ يتطلب السداد النقدي فتح الصندوق أولاً.
-                  </p>
-                )}
               </div>
 
               <div className="space-y-1.5">
@@ -641,7 +623,7 @@ export default function Payables() {
             </Button>
             <Button
               onClick={handleSettle}
-              disabled={settleLoading || (settleMethod === "cash" && !isCashOpen)}
+              disabled={settleLoading}
               className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
             >
               {settleLoading ? "جاري المعالجة..." : "تأكيد السداد"}

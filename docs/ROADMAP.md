@@ -1,5 +1,7 @@
 # Smart Mill Implementation Roadmap
 
+> Final pre-production cleanup completed (2026-09-15): remove operational cash sessions, use ledger-derived mill cash, unify containers and goods under products, and reset disposable tenant data while retaining Platform Admin and Credential Vault records.
+
 > Foundation cleanup completed before Step D: active membership-only tenancy, role-backed Platform Admin, canonical `mill_employee`, and deployed hardened account/vault Edge Functions.
 
 > Foundation cleanup completed before Step D: active membership-only tenancy, role-backed Platform Admin, canonical `mill_employee`, and deployed hardened account/vault Edge Functions.

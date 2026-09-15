@@ -21,7 +21,7 @@ import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 interface ContainerType {
   id: string;
   name: string;
-  price: number;
+  default_sale_price: number;
 }
 
 interface QuickInvoiceSheetProps {
@@ -64,9 +64,11 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const fetchContainerTypes = async () => {
     if (!activeSeason) return;
     const { data } = await supabase
-      .from("container_types")
-      .select("*")
-      .eq("season_id", activeSeason.id)
+      .from("products" as any)
+      .select("id, name, default_sale_price")
+      .eq("product_type", "container")
+      .eq("active", true)
+      .eq("mill_id", activeSeason.mill_id)
       .order("created_at", { ascending: true });
     const types = (data as ContainerType[]) || [];
     setContainerTypes(types);
@@ -76,7 +78,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   };
 
   const totalContainerCost = useMemo(() => {
-    return containerTypes.reduce((sum, ct) => sum + (containerCounts[ct.id] || 0) * ct.price, 0);
+    return containerTypes.reduce((sum, ct) => sum + (containerCounts[ct.id] || 0) * ct.default_sale_price, 0);
   }, [containerTypes, containerCounts]);
 
   const containerOilPrice = settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 25);
@@ -190,7 +192,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       p_cash_amount: selected.cashAmount,
       p_total_display: selected.label,
       p_queue_id: customer.id,
-      p_container_lines: [],
+      p_container_lines: containerTypes.filter((ct) => (containerCounts[ct.id] || 0) > 0).map((ct) => ({ product_id: ct.id, name: ct.name, quantity: containerCounts[ct.id], unit_price: ct.default_sale_price })),
       p_idempotency_key: crypto.randomUUID(),
     });
 
@@ -335,7 +337,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                   <div key={ct.id} className="flex items-center gap-3 rounded-lg bg-muted/40 p-3">
                     <div className="flex-1">
                       <p className="font-medium">{ct.name}</p>
-                      <p className="text-xs text-muted-foreground">{ct.price} {currency} / تنكة</p>
+                      <p className="text-xs text-muted-foreground">{ct.default_sale_price} {currency} / تنكة</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => adjustContainer(ct.id, -1)}>

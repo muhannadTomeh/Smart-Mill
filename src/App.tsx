@@ -11,7 +11,6 @@ import { RoleProvider, useRole } from "@/contexts/RoleContext";
 import { SubscriptionProvider, useSubscription } from "@/contexts/SubscriptionContext";
 import { SeasonProvider, useSeason } from "@/contexts/SeasonContext";
 import { AdminWorkspaceProvider, useAdminWorkspace } from "@/contexts/AdminWorkspaceContext";
-import { CashSessionProvider } from "@/contexts/CashSessionContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, Calendar, Plus, Users, Receipt, Wallet, User, ChevronDown, Menu, Lock, Phone, ShieldCheck, Undo2 } from "lucide-react";
@@ -28,7 +27,6 @@ import Dashboard from "./pages/Dashboard";
 import Queue from "./pages/Queue";
 import Invoices from "./pages/Invoices";
 import InvoicesHistory from "./pages/InvoicesHistory";
-import DailyClosing from "./pages/DailyClosing";
 import Customers from "./pages/Customers";
 import Workers from "./pages/Workers";
 import OilTrading from "./pages/OilTrading";
@@ -40,7 +38,6 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Notifications from "./pages/Notifications";
 import FinancialLedger from "./pages/FinancialLedger";
-import Treasury from "./pages/Treasury";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import LandingPage from "./pages/LandingPage";
@@ -314,8 +311,7 @@ const ProtectedLayout = () => {
   return (
     <SubscriptionGate>
       <SeasonProvider>
-        <CashSessionProvider>
-          <AdminWorkspaceProvider>
+        <AdminWorkspaceProvider>
             <SidebarProvider>
               <div className="min-h-screen flex w-full bg-background" dir="rtl">
                 <AppSidebar />
@@ -331,7 +327,6 @@ const ProtectedLayout = () => {
               <ReAuthDialog />
             </SidebarProvider>
           </AdminWorkspaceProvider>
-        </CashSessionProvider>
       </SeasonProvider>
     </SubscriptionGate>
   );
@@ -409,7 +404,6 @@ const SeasonGateContent = () => {
       <Route path="/invoices" element={<Invoices />} />
       <Route path="/invoices-history" element={<InvoicesHistory />} />
       <Route path="/oil-trading" element={<OilTrading />} />
-      <Route path="/daily-closing" element={<DailyClosing />} />
       <Route path="/queue-display" element={<QueueDisplay />} />
 
       {/* 2. Admin Workspace Routes (Owner Only + Re-authenticated) */}
@@ -419,7 +413,6 @@ const SeasonGateContent = () => {
       <Route path="/partners" element={<AdminRouteGuard><Partners /></AdminRouteGuard>} />
       <Route path="/reports" element={<AdminRouteGuard><Reports /></AdminRouteGuard>} />
       <Route path="/financial-ledger" element={<AdminRouteGuard><FinancialLedger /></AdminRouteGuard>} />
-      <Route path="/treasury" element={<AdminRouteGuard><Treasury /></AdminRouteGuard>} />
       <Route path="/workers" element={<AdminRouteGuard><Workers /></AdminRouteGuard>} />
       <Route path="/customers" element={<AdminRouteGuard><Customers /></AdminRouteGuard>} />
       <Route path="/inventory" element={<AdminRouteGuard><Inventory /></AdminRouteGuard>} />
