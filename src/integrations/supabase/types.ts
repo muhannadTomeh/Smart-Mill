@@ -1227,6 +1227,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "obligation_movements_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "payable_settlement_history"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "obligation_movements_season_id_fkey"
             columns: ["season_id"]
             isOneToOne: false
@@ -2605,6 +2612,111 @@ export type Database = {
           },
         ]
       }
+      payable_settlement_history: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          financial_transaction_id: string | null
+          id: string | null
+          mill_id: string | null
+          movement_type: string | null
+          operation_id: string | null
+          payable_id: string | null
+          payment_method: string | null
+          reason: string | null
+          reversal_of: string | null
+          reversed: boolean | null
+          season_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          financial_transaction_id?: string | null
+          id?: string | null
+          mill_id?: string | null
+          movement_type?: string | null
+          operation_id?: string | null
+          payable_id?: string | null
+          payment_method?: string | null
+          reason?: string | null
+          reversal_of?: string | null
+          reversed?: never
+          season_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          financial_transaction_id?: string | null
+          id?: string | null
+          mill_id?: string | null
+          movement_type?: string | null
+          operation_id?: string | null
+          payable_id?: string | null
+          payment_method?: string | null
+          reason?: string | null
+          reversal_of?: string | null
+          reversed?: never
+          season_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obligation_movements_financial_transaction_id_fkey"
+            columns: ["financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_effective_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_financial_transaction_id_fkey"
+            columns: ["financial_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "financial_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "obligation_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "payable_settlement_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obligation_movements_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       adjust_product_stock_command: {
@@ -2964,6 +3076,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      reverse_invoice_collection_lifecycle_command: {
+        Args: {
+          p_idempotency_key: string
+          p_movement_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      reverse_payable_settlement_lifecycle_command: {
+        Args: {
+          p_idempotency_key: string
+          p_movement_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       set_admin_pin: { Args: { new_pin: string }; Returns: boolean }
       set_employee_pin: { Args: { new_pin: string }; Returns: undefined }
       set_report_pin: { Args: { new_pin: string }; Returns: undefined }
@@ -2977,6 +3105,16 @@ export type Database = {
         Returns: Json
       }
       settle_payable_command: {
+        Args: {
+          p_amount: number
+          p_idempotency_key: string
+          p_notes: string
+          p_payable_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
+      settle_payable_lifecycle_command: {
         Args: {
           p_amount: number
           p_idempotency_key: string
