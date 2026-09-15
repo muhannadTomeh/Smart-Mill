@@ -18,10 +18,8 @@ export default defineTool({
     const supabase = supabaseForUser(ctx);
     try {
       const seasonId = await resolveSeasonId(supabase, season_id);
-      // Keep MCP-created expenses on the same atomic financial path as the UI.
-      // This records the ledger entry, enforces the open cash drawer, and updates
-      // the season inventory together.
-      const { data, error } = await supabase.rpc("record_expense_v2", {
+      // Use the idempotent lifecycle command used by the application UI.
+      const { data, error } = await supabase.rpc("record_expense_command", {
         p_season_id: seasonId,
         p_category: category,
         p_amount: amount,
@@ -31,6 +29,7 @@ export default defineTool({
         p_supplier_id: null,
         p_partner_name: null,
         p_creditor_name: null,
+        p_idempotency_key: crypto.randomUUID(),
       });
       if (error) return errorResult(error.message);
       return textResult({ expense: data, payment_method: "cash" });
