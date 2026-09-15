@@ -30,6 +30,9 @@ interface Transaction {
   total_price: number;
   party_name: string | null;
   notes: string | null;
+  payment_method: 'cash' | 'credit';
+  payable_id: string | null;
+  status: 'active' | 'cancelled';
   created_at: string;
 }
 
@@ -46,6 +49,7 @@ const OilTrading = () => {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [cancellingTransactionId, setCancellingTransactionId] = useState<string | null>(null);
 
   // Filter state
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -100,7 +104,7 @@ const OilTrading = () => {
       if (error) {
         console.error("fetchTransactions error:", error);
       }
-      setTransactions(((data || []) as any[]).map((tx) => ({
+      setTransactions((data || []).map((tx) => ({
         id: tx.id,
         type: tx.type,
         amount: Number(tx.amount),
@@ -108,6 +112,9 @@ const OilTrading = () => {
         total_price: Number(tx.total_price),
         party_name: tx.party_name,
         notes: tx.notes,
+        payment_method: tx.payment_method === 'credit' ? 'credit' : 'cash',
+        payable_id: tx.payable_id ?? null,
+        status: tx.status === 'cancelled' ? 'cancelled' : 'active',
         created_at: tx.created_at,
         source_type: tx.type === 'buy' ? 'oil_purchase' : 'oil_sale',
       })) as Transaction[]);
@@ -120,6 +127,21 @@ const OilTrading = () => {
 
   const resetForm = () => {
     setNewTransaction({ type: 'buy', paymentMethod: 'cash', amount: "", price: "", partyName: "", notes: "" });
+  };
+
+  const oilTradeErrorMessage = (message?: string) => {
+    const code = message || "";
+    const messages: Record<string, string> = {
+      OIL_SALE_CREDIT_UNSUPPORTED: "بيع الزيت الآجل غير متاح حالياً.",
+      OIL_PURCHASE_CREDITOR_REQUIRED: "أدخل اسم المورد عند اختيار الشراء الآجل.",
+      INSUFFICIENT_OIL_STOCK: "كمية الزيت المطلوبة غير متوفرة في مخزون المعصرة.",
+      INSUFFICIENT_OIL_STOCK_FOR_CANCELLATION: "لا يمكن الإلغاء لأن الزيت استُخدم أو بيع لاحقاً وسيؤدي الإلغاء إلى مخزون سالب.",
+      DEPENDENT_SETTLEMENT_EXISTS: "لا يمكن إلغاء شراء الزيت الآجل قبل عكس جميع دفعات الالتزام المرتبطة به.",
+      OIL_TRADE_ALREADY_CANCELLED: "هذه العملية ملغاة بالفعل.",
+      CANCELLATION_REASON_REQUIRED: "سبب الإلغاء مطلوب.",
+      OIL_TRADE_CANCEL_FORBIDDEN: "لا تملك صلاحية إلغاء هذه العملية.",
+    };
+    return messages[code] || "تعذر تنفيذ العملية. حدّث الصفحة وحاول مجدداً.";
   };
 
   const addTransaction = async () => {
@@ -162,6 +184,15 @@ const OilTrading = () => {
       return;
     }
 
+    if (newTransaction.type === 'buy' && newTransaction.paymentMethod === 'credit' && !newTransaction.partyName.trim()) {
+      toast({
+        title: "اسم المورّد مطلوب",
+        description: "اختَر أو اكتب اسم الدائن حتى يُنشأ الالتزام المالي بشكل صحيح.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const totalPrice = amount * price;
 
     if (newTransaction.type === 'sell' && amount > inventory.total_oil) {
@@ -184,7 +215,7 @@ const OilTrading = () => {
 
     setIsSubmitting(true);
     try {
-      const { error } = await (supabase.rpc as any)("record_oil_trade_command", {
+      const { error } = await supabase.rpc("record_oil_trade_command", {
         p_season_id: activeSeason.id,
         p_movement_type: newTransaction.type === 'buy' ? 'IN' : 'OUT',
         p_quantity: amount,
@@ -199,7 +230,7 @@ const OilTrading = () => {
         console.error("record_oil_trade_command error:", error);
         toast({
           title: "خطأ في تسجيل العملية",
-          description: error.message || "تعذر حفظ المعاملة في قاعدة البيانات",
+          description: oilTradeErrorMessage(error.message),
           variant: "destructive"
         });
         return;
@@ -216,15 +247,45 @@ const OilTrading = () => {
       await fetchTransactions();
       await refetchInventory();
       await refetchCashBalance();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("addTransaction error:", err);
       toast({
         title: "خطأ غير متوقع",
-        description: err.message || "حدث خطأ أثناء تنفيذ العملية",
+        description: err instanceof Error ? oilTradeErrorMessage(err.message) : "حدث خطأ أثناء تنفيذ العملية",
         variant: "destructive"
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const cancelTransaction = async (transaction: Transaction) => {
+    const reason = window.prompt("اكتب سبب إلغاء عملية الزيت:");
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast({ title: "سبب الإلغاء مطلوب", description: "يجب إدخال سبب واضح قبل الإلغاء.", variant: "destructive" });
+      return;
+    }
+
+    setCancellingTransactionId(transaction.id);
+    try {
+      const { error } = await supabase.rpc("cancel_oil_trade_command", {
+        p_oil_transaction_id: transaction.id,
+        p_reason: reason.trim(),
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) {
+        console.error("cancel_oil_trade_command error:", error);
+        toast({ title: "تعذر إلغاء العملية", description: oilTradeErrorMessage(error.message), variant: "destructive" });
+        return;
+      }
+      toast({ title: "تم إلغاء العملية", description: "أُنشئت الحركات العكسية للكاش والزيت دون حذف السجل التاريخي." });
+      await Promise.all([fetchTransactions(), refetchInventory(), refetchCashBalance()]);
+    } catch (error: unknown) {
+      console.error("cancelTransaction error:", error);
+      toast({ title: "تعذر إلغاء العملية", description: oilTradeErrorMessage(error instanceof Error ? error.message : undefined), variant: "destructive" });
+    } finally {
+      setCancellingTransactionId(null);
     }
   };
 
@@ -393,7 +454,9 @@ const OilTrading = () => {
                     <TableHead className="text-right font-bold text-xs">السعر / كغم</TableHead>
                     <TableHead className="text-right font-bold text-xs">الإجمالي</TableHead>
                     <TableHead className="text-right font-bold text-xs">الطرف المعني</TableHead>
+                    <TableHead className="text-right font-bold text-xs">الدفع / الحالة</TableHead>
                     <TableHead className="text-right font-bold text-xs">ملاحظات</TableHead>
+                    <TableHead className="text-right font-bold text-xs">إجراء</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -429,8 +492,31 @@ const OilTrading = () => {
                       <TableCell className="text-right text-xs">
                         {tx.party_name || <span className="text-muted-foreground italic">—</span>}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge variant="outline" className="text-[10px]">
+                            {tx.payment_method === 'credit' ? 'آجل' : 'نقدي'}
+                          </Badge>
+                          <Badge variant="outline" className={`text-[10px] ${tx.status === 'cancelled' ? 'border-rose-300 text-rose-700' : 'border-emerald-300 text-emerald-700'}`}>
+                            {tx.status === 'cancelled' ? 'ملغاة' : 'فعالة'}
+                          </Badge>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground max-w-[200px] truncate">
                         {tx.notes || <span className="text-muted-foreground/50 italic">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {tx.status === 'active' ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={cancellingTransactionId === tx.id}
+                            onClick={() => void cancelTransaction(tx)}
+                            className="h-7 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-50 text-[11px]"
+                          >
+                            {cancellingTransactionId === tx.id ? 'جارٍ الإلغاء...' : 'إلغاء العملية'}
+                          </Button>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -486,7 +572,7 @@ const OilTrading = () => {
 
                 <button
                   type="button"
-                  onClick={() => setNewTransaction((p) => ({ ...p, type: 'sell' }))}
+                  onClick={() => setNewTransaction((p) => ({ ...p, type: 'sell', paymentMethod: 'cash' }))}
                   className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-xs sm:text-sm transition-all ${
                     newTransaction.type === 'sell'
                       ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 ring-2 ring-blue-500/20'
@@ -551,7 +637,9 @@ const OilTrading = () => {
             {/* Party Name */}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">
-                {newTransaction.type === 'buy' ? 'اسم المورّد / المزارع' : 'اسم المشتري / الزبون'} (اختياري)
+                {newTransaction.type === 'buy' && newTransaction.paymentMethod === 'credit'
+                  ? 'اسم المورّد / الدائن *'
+                  : `${newTransaction.type === 'buy' ? 'اسم المورّد / المزارع' : 'اسم المشتري / الزبون'} (اختياري)`}
               </Label>
               <Input
                 value={newTransaction.partyName}

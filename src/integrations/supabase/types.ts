@@ -1320,10 +1320,16 @@ export type Database = {
       oil_transactions: {
         Row: {
           amount: number
+          cancellation_operation_id: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string
           id: string
           mill_id: string | null
           notes: string | null
+          payable_id: string | null
+          payment_method: string
           party_name: string | null
           price: number
           season_id: string | null
@@ -1333,10 +1339,16 @@ export type Database = {
         }
         Insert: {
           amount: number
+          cancellation_operation_id?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           id?: string
           mill_id?: string | null
           notes?: string | null
+          payable_id?: string | null
+          payment_method?: string
           party_name?: string | null
           price: number
           season_id?: string | null
@@ -1346,10 +1358,16 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cancellation_operation_id?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           id?: string
           mill_id?: string | null
           notes?: string | null
+          payable_id?: string | null
+          payment_method?: string
           party_name?: string | null
           price?: number
           season_id?: string | null
@@ -1359,10 +1377,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "oil_transactions_cancellation_operation_id_fkey"
+            columns: ["cancellation_operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_oil_transactions_mill_id"
             columns: ["mill_id"]
             isOneToOne: false
             referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oil_transactions_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
             referencedColumns: ["id"]
           },
           {
@@ -2764,6 +2796,14 @@ export type Database = {
         Args: {
           p_idempotency_key: string
           p_invoice_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      cancel_oil_trade_command: {
+        Args: {
+          p_idempotency_key: string
+          p_oil_transaction_id: string
           p_reason: string
         }
         Returns: Json
