@@ -291,8 +291,8 @@ const Inventory = () => {
       toast({ title: "تنبيه", description: "يرجى إدخال كمية صحيحة", variant: "destructive" });
       return;
     }
-    if (isNaN(buyPrice) || buyPrice < 0) {
-      toast({ title: "تنبيه", description: "يرجى إدخال سعر شراء صحيح", variant: "destructive" });
+    if (isNaN(buyPrice) || buyPrice <= 0) {
+      toast({ title: "تنبيه", description: "سعر شراء الوحدة يجب أن يكون أكبر من صفر", variant: "destructive" });
       return;
     }
     if (purchaseForm.payment_method === "partner" && !purchaseForm.partner_name.trim() && !purchaseForm.partner_id) {
@@ -340,9 +340,21 @@ const Inventory = () => {
       await refetchInventory();
       await fetchAll();
     } catch (err: any) {
+      const errorMessage = String(err?.message || "");
+      const purchaseErrorMessage = errorMessage.includes("PRODUCT_PURCHASE_INVALID")
+        ? "تأكد من أن الكمية وسعر شراء الوحدة أكبر من صفر."
+        : errorMessage.includes("SUPPLIER_NOT_FOUND")
+          ? "يرجى اختيار مورد فعّال تابع لهذه المعصرة."
+          : errorMessage.includes("PARTNER_REQUIRED")
+            ? "يرجى اختيار شريك مسجل لعملية الدفع من شريك."
+            : errorMessage.includes("PARTNER_NOT_FOUND")
+              ? "الشريك المختار غير موجود في هذه المعصرة."
+              : errorMessage.includes("PRODUCT_PURCHASE_FORBIDDEN")
+                ? "هذه العملية متاحة لمالك المعصرة فقط."
+                : errorMessage || "تعذر إتمام الشراء";
       toast({
         title: "خطأ في تسجيل الشراء",
-        description: err.message || "تعذر إتمام الشراء",
+        description: purchaseErrorMessage,
         variant: "destructive",
       });
     } finally {
@@ -1024,13 +1036,13 @@ const Inventory = () => {
 
             {/* Supplier Selector */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">المورد (اختياري)</Label>
+              <Label className="text-xs font-semibold">المورد *</Label>
               <select
                 value={purchaseForm.supplier_id}
                 onChange={(e) => setPurchaseForm((p) => ({ ...p, supplier_id: e.target.value }))}
                 className="w-full h-10 px-3 border border-input rounded-xl text-sm bg-background text-foreground"
               >
-                <option value="">-- بدون تحديد مورد محدد --</option>
+                <option value="">-- اختر المورد --</option>
                 {suppliers.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -1057,8 +1069,8 @@ const Inventory = () => {
                 <Label className="text-xs font-semibold">سعر الشراء للوحدة *</Label>
                 <Input
                   type="number"
-                  min="0"
-                  step="0.5"
+                  min="0.01"
+                  step="0.01"
                   value={purchaseForm.purchase_price}
                   onChange={(e) => setPurchaseForm((p) => ({ ...p, purchase_price: e.target.value }))}
                   className="h-10 text-sm rounded-xl font-mono"

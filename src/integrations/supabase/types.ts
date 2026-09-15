@@ -2647,6 +2647,14 @@ export type Database = {
         Args: { p_owner_user_id: string }
         Returns: boolean
       }
+      cancel_invoice_lifecycle_command: {
+        Args: {
+          p_idempotency_key: string
+          p_invoice_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       check_user_mill_access: { Args: { p_mill_id: string }; Returns: boolean }
       claim_financial_command: {
         Args: { p_idempotency_key: string; p_operation: string }
