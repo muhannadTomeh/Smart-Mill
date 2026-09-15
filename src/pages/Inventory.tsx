@@ -89,6 +89,8 @@ const Inventory = () => {
   const { cashBalance, loading: cashBalanceLoading, refetch: refetchCashBalance } = useCashBalance();
   const { toast } = useToast();
 
+  const todayStr = new Date().toISOString().split("T")[0];
+
   const [activeMainTab, setActiveMainTab] = useState<"oil" | "products" | "definitions">("oil");
 
   // Oil & Cash movements state
