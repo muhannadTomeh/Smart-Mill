@@ -92,7 +92,7 @@ const oilSourceLabel: Record<string, string> = {
 
 const Inventory = () => {
   const { isEmployee } = useRole();
-  const { millId } = useAuth();
+  const { millId, isOwner } = useAuth();
   const { activeSeason } = useSeason();
   const { inventory, loading: invLoading, refetch: refetchInventory } = useInventory();
   const { cashBalance, loading: cashBalanceLoading, refetch: refetchCashBalance } = useCashBalance();
@@ -111,7 +111,8 @@ const Inventory = () => {
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [stockMovements, setStockMovements] = useState<ProductMovement[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
-  const [openingBalanceExists, setOpeningBalanceExists] = useState(false);
+  const [cashOpeningBalanceExists, setCashOpeningBalanceExists] = useState(false);
+  const [oilOpeningBalanceExists, setOilOpeningBalanceExists] = useState(false);
 
   // Modals state
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
@@ -146,7 +147,13 @@ const Inventory = () => {
     if (activeSeason) {
       fetchReadModels();
       fetchProductsData();
-      supabase.from("financial_transactions").select("id").eq("season_id", activeSeason.id).eq("reference_type", "cash_opening_balance").eq("status", "active").limit(1).then(({ data }) => setOpeningBalanceExists(Boolean(data?.length)));
+      void Promise.all([
+        supabase.from("financial_transactions").select("id").eq("season_id", activeSeason.id).eq("reference_type", "cash_opening_balance").eq("status", "active").limit(1),
+        supabase.from("oil_movements").select("id").eq("season_id", activeSeason.id).eq("source_type", "opening_balance").limit(1),
+      ]).then(([cashResult, oilResult]) => {
+        setCashOpeningBalanceExists(Boolean(cashResult.data?.length));
+        setOilOpeningBalanceExists(Boolean(oilResult.data?.length));
+      });
     }
   }, [activeSeason?.id]);
 
@@ -398,9 +405,29 @@ const Inventory = () => {
       toast({ title: "تعذر تسجيل الرصيد الافتتاحي", description: error.message === "DUPLICATE_OPENING_BALANCE" ? "تم تسجيل الرصيد الافتتاحي مسبقاً" : error.message, variant: "destructive" });
       return;
     }
-    setOpeningBalanceExists(true);
+    setCashOpeningBalanceExists(true);
     toast({ title: "تم تسجيل الرصيد النقدي الافتتاحي" });
-    fetchReadModels();
+    await Promise.all([fetchReadModels(), refetchCashBalance()]);
+  };
+
+  const setOpeningOilBalance = async () => {
+    if (!activeSeason) return;
+    const raw = window.prompt("الرصيد الافتتاحي للزيت في المعصرة (كغم)");
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const { error } = await supabase.rpc("record_oil_opening_balance_command" as any, {
+      p_season_id: activeSeason.id,
+      p_amount: amount,
+      p_notes: null,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) {
+      toast({ title: "تعذر تسجيل الرصيد الافتتاحي للزيت", description: error.message === "DUPLICATE_OPENING_BALANCE" ? "تم تسجيل الرصيد الافتتاحي للزيت مسبقاً" : error.message, variant: "destructive" });
+      return;
+    }
+    setOilOpeningBalanceExists(true);
+    toast({ title: "تم تسجيل الرصيد الافتتاحي للزيت" });
+    await Promise.all([fetchReadModels(), refetchInventory()]);
   };
 
   const cashTotals = useMemo(() => cashMovements.reduce((totals, movement) => {
@@ -521,7 +548,24 @@ const Inventory = () => {
       ───────────────────────────────────────────────────────────── */}
       {activeMainTab === "oil" && (
         <div className="space-y-6">
-          {!openingBalanceExists && <Card className="border-amber-300 bg-amber-50/50 rounded-2xl"><CardContent className="py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">الرصيد النقدي الافتتاحي</p><p className="text-sm text-muted-foreground">يُسجّل مرة واحدة كبداية للرصيد وليس كإيراد أو ربح.</p></div><Button onClick={setOpeningCashBalance}>تعيين الرصيد النقدي الافتتاحي</Button></CardContent></Card>}
+          {isOwner && (!cashOpeningBalanceExists || !oilOpeningBalanceExists) && (
+            <Card className="border-amber-300 bg-amber-50/50 rounded-2xl">
+              <CardContent className="py-4 grid gap-4 md:grid-cols-2">
+                {!cashOpeningBalanceExists && (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div><p className="font-bold">الرصيد النقدي الافتتاحي</p><p className="text-sm text-muted-foreground">يُسجّل مرة واحدة كبداية للرصيد وليس كإيراد أو ربح.</p></div>
+                    <Button onClick={setOpeningCashBalance}>تسجيل الرصيد النقدي الافتتاحي</Button>
+                  </div>
+                )}
+                {!oilOpeningBalanceExists && (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div><p className="font-bold">الرصيد الافتتاحي للزيت</p><p className="text-sm text-muted-foreground">يُسجّل مرة واحدة كحركة زيت واردة وليس بتعديل الرصيد الحالي.</p></div>
+                    <Button variant="outline" onClick={setOpeningOilBalance}>تسجيل الرصيد الافتتاحي للزيت</Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Live balances */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

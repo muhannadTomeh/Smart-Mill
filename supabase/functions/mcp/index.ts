@@ -247,13 +247,19 @@ var get_inventory_default = defineTool7({
     const supabase = supabaseForUser(ctx);
     try {
       const seasonId = await resolveSeasonId(supabase, season_id);
-      const { data, error } = await supabase.from("inventory").select("total_oil,total_cash,updated_at").eq("season_id", seasonId).maybeSingle();
-      if (error) return errorResult(error.message);
+      const { data: season, error: seasonError } = await supabase.from("seasons").select("mill_id").eq("id", seasonId).single();
+      if (seasonError) return errorResult(seasonError.message);
+      const [cashResult, oilResult] = await Promise.all([
+        supabase.from("mill_cash_balance").select("cash_balance").eq("season_id", seasonId).eq("mill_id", season.mill_id).maybeSingle(),
+        supabase.from("mill_oil_balance").select("current_balance").eq("season_id", seasonId).eq("mill_id", season.mill_id).maybeSingle()
+      ]);
+      if (cashResult.error) return errorResult(cashResult.error.message);
+      if (oilResult.error) return errorResult(oilResult.error.message);
       return textResult({
         season_id: seasonId,
-        total_oil: data?.total_oil ?? 0,
-        total_cash: data?.total_cash ?? 0,
-        updated_at: data?.updated_at ?? null
+        total_oil: Number(oilResult.data?.current_balance ?? 0),
+        total_cash: Number(cashResult.data?.cash_balance ?? 0),
+        balance_sources: { oil: "mill_oil_balance", cash: "mill_cash_balance" }
       });
     } catch (e) {
       return errorResult(e instanceof Error ? e.message : String(e));

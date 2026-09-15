@@ -176,7 +176,6 @@ export default function MillDetails() {
         queueRes,
         expensesRes,
         oilRes,
-        inventoryRes,
         paymentsRes
       ] = await Promise.all([
         supabase.from("seasons").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }).limit(5),
@@ -184,7 +183,6 @@ export default function MillDetails() {
         supabase.from("queue").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
         supabase.from("expenses").select("*").eq("mill_id", canonicalMillId).is("voided_at", null).order("created_at", { ascending: false }),
         supabase.from("oil_transactions").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
-        supabase.from("inventory").select("*").eq("mill_id", canonicalMillId).limit(1),
         supabase.from("subscription_payments").select("*").eq("mill_id", canonicalMillId).order("payment_date", { ascending: false })
       ]);
 
@@ -193,7 +191,6 @@ export default function MillDetails() {
       const queue = queueRes.data || [];
       const expensesData = expensesRes.data || [];
       const oilData = oilRes.data || [];
-      const inventory = inventoryRes.data || [];
       const paymentsData = paymentsRes.data || [];
 
       // Canonical Mill Memberships employee query
@@ -261,8 +258,7 @@ export default function MillDetails() {
       setMillData({
         profile: safeProfile,
         currentSeason,
-        invoices: invoices || [],
-        inventory: inventory?.[0] || null
+        invoices: invoices || []
       });
       setQueueItems(queue || []);
       setExpenses(expensesData || []);

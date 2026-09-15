@@ -17,10 +17,9 @@ import {
   ShieldCheck, Building2, MapPin, User, Phone, Globe, UserCheck,
   Tv, ExternalLink, Copy, Sparkles, SlidersHorizontal, Receipt,
   Users, ChevronLeft, ArrowRight, HardHat, Printer, Coins,
-  Package, DollarSign, Lock, Scale, CheckCircle2, AlertCircle, Pencil
+  Package, DollarSign, Lock, CheckCircle2, AlertCircle, Pencil
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
-import { useInventory } from "@/hooks/useInventory";
 import { useCurrency, POPULAR_CURRENCIES } from "@/hooks/useCurrency";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
@@ -70,7 +69,6 @@ type SubSettingId =
   // Operations sub-settings
   | "pressing_rates"     // إعدادات العصر والأسعار
   | "display_screen"     // شاشة العرض
-  | "inventory_cash"     // المخزون والسيولة
   // Invoices & Receipts sub-settings
   | "currency"           // العملة المعتمدة
   | "expense_categories" // أنواع المصاريف
@@ -88,7 +86,6 @@ export default function Settings() {
   const { user, millId, profile, refreshProfile } = useAuth();
   const { activeSeason, refetch: refetchSeasons } = useSeason();
   const { settings, loading } = useSettings();
-  const { inventory, updateInventory } = useInventory();
   const { currency, setCurrency, currencies } = useCurrency();
   const { toast } = useToast();
 
@@ -145,10 +142,6 @@ export default function Settings() {
     cash_return_cost: ""
   });
 
-  const [inventoryForm, setInventoryForm] = useState({
-    total_oil: "",
-    total_cash: ""
-  });
 
   const [containerTypes, setContainerTypes] = useState<ContainerType[]>([]);
   const [newContainerName, setNewContainerName] = useState("");
@@ -497,12 +490,8 @@ export default function Settings() {
         oil_buy_price: String(settings.oil_buy_price),
         cash_return_cost: String(settings.cash_return_cost)
       });
-      setInventoryForm({
-        total_oil: String(inventory.total_oil),
-        total_cash: String(inventory.total_cash)
-      });
     }
-  }, [loading, settings, inventory]);
+  }, [loading, settings]);
 
   useEffect(() => {
     if (activeSeason) {
@@ -606,16 +595,6 @@ export default function Settings() {
     if (!error) {
       await refetchSeasons();
       toast({ title: "تم الحفظ", description: "تم حفظ إعدادات المعصرة والعملة بنجاح" });
-    }
-  };
-
-  const saveInventory = async () => {
-    const result = await updateInventory({
-      total_oil: parseFloat(inventoryForm.total_oil),
-      total_cash: parseFloat(inventoryForm.total_cash)
-    });
-    if (!result?.error) {
-      toast({ title: "تم الحفظ", description: "تم تحديث المخزون بنجاح" });
     }
   };
 
@@ -859,7 +838,6 @@ export default function Settings() {
                     <span className="font-bold text-foreground">
                       {activeSubSetting === "pressing_rates" && "إعدادات العصر والأسعار"}
                       {activeSubSetting === "display_screen" && "شاشة العرض العامة"}
-                      {activeSubSetting === "inventory_cash" && "المخزون والسيولة"}
                       {activeSubSetting === "currency" && "العملة المعتمدة"}
                       {activeSubSetting === "expense_categories" && "أنواع المصاريف"}
                       {activeSubSetting === "receipt_format" && "مواصفات الطباعة"}
@@ -1184,26 +1162,6 @@ export default function Settings() {
               <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
             </div>
 
-            {/* SubCard: المخزون والسيولة */}
-            <div
-              onClick={() => openSubSetting("inventory_cash")}
-              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                  <Scale className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
-                    المخزون والسيولة
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    تعديل يدوي ومطابقة رصيد الزيت والنقدية في الصندوق
-                  </p>
-                </div>
-              </div>
-              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
-            </div>
           </div>
         </div>
       )}
@@ -1517,51 +1475,6 @@ export default function Settings() {
               >
                 <Save className="h-4 w-4" />
                 {savingDisplay ? "جارٍ الحفظ..." : "حفظ إعدادات الشاشة"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* OPERATIONS SUB-SETTING 4: المخزون والسيولة */}
-      {activeSection === "operations" && activeSubSetting === "inventory_cash" && (
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="pb-4 border-b border-border/50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Scale className="h-5 w-5 text-amber-500" />
-              المخزون والسيولة
-            </CardTitle>
-            <CardDescription>تعديل يدوي ومطابقة رصيد الزيت والنقدية في المعصرة</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5 pt-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold">إجمالي الزيت (كغم)</Label>
-                <Input 
-                  type="number" 
-                  value={inventoryForm.total_oil} 
-                  onChange={(e) => setInventoryForm((p) => ({ ...p, total_oil: e.target.value }))} 
-                  min="0" 
-                  step="0.1" 
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold">إجمالي النقدية ({selectedCurrency})</Label>
-                <Input 
-                  type="number" 
-                  value={inventoryForm.total_cash} 
-                  onChange={(e) => setInventoryForm((p) => ({ ...p, total_cash: e.target.value }))} 
-                  min="0" 
-                  step="0.1" 
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-            <div className="pt-2 border-t border-border/50">
-              <Button onClick={saveInventory} className="gap-2 rounded-xl font-bold">
-                <Save className="h-4 w-4" />
-                تحديث المخزون
               </Button>
             </div>
           </CardContent>
