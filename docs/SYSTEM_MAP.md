@@ -20,7 +20,7 @@ Supabase Auth user
 |---|---|---|---|
 | Auth/tenant | Auth, contexts, credentialVault | Auth, profiles, roles, mills, memberships | resolves role/mill; subscription gating |
 | Seasons | Seasons, SeasonSetup, context | `seasons`, `inventory` | determines operating period and defaults |
-| Queue/milling | Queue, displays, QuickInvoice | `queue`, public queue RPCs | feeds invoice/customer flow |
+| Queue/milling | Queue, displays, QuickInvoice | `queue.customer_id → customers.id`, invoice lifecycle RPC | canonical tenant-scoped customer link; legacy notes are read-only compatibility only |
 | Invoices | Invoices, history | `create_invoice_and_settle`, invoices | atomically creates invoice, cash ledger event/inventory update and queue completion; needs idempotency and complete receivable semantics |
 | Cash session | banner, guard, DailyClosing | cash session RPCs/triggers | stamps cash events, computes reconciliation |
 | Expenses/payables | Expenses, Payables | expense/settlement/void RPCs | expense, cash out or payable, financial event |

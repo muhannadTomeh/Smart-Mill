@@ -388,6 +388,7 @@ export type Database = {
       }
       customers: {
         Row: {
+          active: boolean
           created_at: string
           id: string
           mill_id: string | null
@@ -398,6 +399,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -408,6 +410,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          active?: boolean
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -1818,6 +1821,7 @@ export type Database = {
       queue: {
         Row: {
           bags: number
+          customer_id: string | null
           created_at: string
           estimated_minutes: number | null
           id: string
@@ -1833,6 +1837,7 @@ export type Database = {
         }
         Insert: {
           bags: number
+          customer_id?: string | null
           created_at?: string
           estimated_minutes?: number | null
           id?: string
@@ -1848,6 +1853,7 @@ export type Database = {
         }
         Update: {
           bags?: number
+          customer_id?: string | null
           created_at?: string
           estimated_minutes?: number | null
           id?: string
@@ -1862,6 +1868,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "queue_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fk_queue_mill_id"
             columns: ["mill_id"]
@@ -3077,6 +3090,10 @@ export type Database = {
           p_season_id: string
           p_type: string
         }
+        Returns: Json
+      }
+      archive_master_data_command: {
+        Args: { p_entity: string; p_id: string }
         Returns: Json
       }
       record_product_purchase_atomic: {

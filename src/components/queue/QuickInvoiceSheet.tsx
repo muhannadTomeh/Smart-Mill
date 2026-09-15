@@ -133,11 +133,8 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
 
     const selected = paymentType === "oil" ? calc.oilOnly : paymentType === "cash" ? calc.cashOnly : calc.mixed;
 
-    // Ensure customer record (Keep distinct per queue customer)
-    let customerId: string | null = null;
-    if (customer.id) {
-      customerId = localStorage.getItem(`queue_cust_${customer.id}`);
-    }
+    // New queue rows carry the canonical FK. Notes are read only for pre-migration rows.
+    let customerId: string | null = (customer as any).customer_id || null;
     if (!customerId && customer.notes) {
       const match = customer.notes.match(/\[cust_id:([^\]]+)\]/);
       if (match) customerId = match[1];
@@ -154,6 +151,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
           .eq("season_id", activeSeason!.id)
           .eq("name", customer.name.trim())
           .eq("phone", cleanPhone)
+          .eq("active", true)
           .maybeSingle();
         existingCust = data;
       }

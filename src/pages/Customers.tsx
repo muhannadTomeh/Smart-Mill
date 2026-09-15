@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Users, Search, FileText, Phone, Calendar, UserPlus, Plus,
-  Printer, Eye, Star, Receipt, BookOpen
+  Printer, Eye, Star, Receipt, BookOpen, Archive
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +21,7 @@ import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 interface Customer {
+  active?: boolean;
   id: string;
   name: string;
   phone: string | null;
@@ -60,6 +61,7 @@ const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
 
   // New Customer Dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -115,7 +117,7 @@ const Customers = () => {
       fetchCustomers();
       fetchInvoices();
     }
-  }, [activeSeason?.id, millId, user?.id]);
+  }, [activeSeason?.id, millId, user?.id, showArchived]);
 
   const fetchCustomers = async () => {
     if (!activeSeason) return;
@@ -123,6 +125,8 @@ const Customers = () => {
       .from("customers")
       .select("*")
       .eq("season_id", activeSeason.id);
+
+    query = query.eq("active", showArchived ? false : true);
 
     if (millId || activeSeason.mill_id) {
       query = query.eq("mill_id", millId || activeSeason.mill_id);
@@ -133,6 +137,16 @@ const Customers = () => {
     const { data } = await query.order("created_at", { ascending: false });
     setCustomers((data as Customer[]) || []);
     setLoading(false);
+  };
+
+  const archiveCustomer = async (customer: Customer) => {
+    const { error } = await supabase.rpc("archive_master_data_command", { p_entity: "customer", p_id: customer.id });
+    if (error) {
+      toast({ title: "تعذرت الأرشفة", description: "لم يتم تعديل أي فاتورة أو حركة مالية.", variant: "destructive" });
+      return;
+    }
+    toast({ title: "تمت أرشفة الزبون", description: "بقيت الفواتير والحركات التاريخية محفوظة." });
+    await fetchCustomers();
   };
 
   const fetchInvoices = async () => {
@@ -198,12 +212,7 @@ const Customers = () => {
   );
 
   const getCustomerInvoices = (customerId: string) => {
-    const customer = customers.find(c => c.id === customerId);
-    if (!customer) return [];
-    return invoices.filter(inv =>
-      (inv.customer_id && inv.customer_id === customer.id) ||
-      (!inv.customer_id && inv.customer_name === customer.name)
-    );
+    return invoices.filter(inv => inv.customer_id === customerId);
   };
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
@@ -220,6 +229,9 @@ const Customers = () => {
             <p className="text-xs text-muted-foreground mt-0.5">عرض سجلات الزبائن وفواتيرهم وإدارتها</p>
           </div>
         </div>
+        <Button variant="outline" onClick={() => setShowArchived(value => !value)}>
+          {showArchived ? "عرض النشطين" : "عرض المؤرشفين"}
+        </Button>
 
         <Button variant="outline" onClick={() => navigate("/financial-ledger")} className="gap-2">
           <BookOpen className="h-4 w-4" />
@@ -335,10 +347,7 @@ const Customers = () => {
               </TableHeader>
               <TableBody>
                 {filteredCustomers.map((customer) => {
-                  const custInvoices = invoices.filter(inv =>
-                    (inv.customer_id && inv.customer_id === customer.id) ||
-                    (!inv.customer_id && inv.customer_name === customer.name)
-                  );
+                  const custInvoices = invoices.filter(inv => inv.customer_id === customer.id);
                   const isStarred = starredIds.includes(customer.id);
                   return (
                     <TableRow key={customer.id} className="hover:bg-accent/30 transition-colors">
@@ -357,6 +366,11 @@ const Customers = () => {
                               )}
                             />
                           </button>
+                          {!showArchived && (
+                            <Button variant="ghost" size="icon" title="أرشفة الزبون" onClick={() => archiveCustomer(customer)}>
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
                           <span className="font-semibold text-foreground text-sm">{customer.name}</span>
                           {isStarred && (
                             <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/15 border border-amber-500/20 px-1.5 py-0.2 rounded-md">

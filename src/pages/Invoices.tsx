@@ -89,7 +89,7 @@ export default function Invoices() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [queueId, setQueueId] = useState<string | null>(null);
-  const [queueCustomers, setQueueCustomers] = useState<{ id: string; name: string; phone: string | null; position: number }[]>([]);
+  const [queueCustomers, setQueueCustomers] = useState<{ id: string; customer_id: string | null; name: string; phone: string | null; position: number }[]>([]);
   
   // Custom mixed payment adjustments
   const [customMixedOil, setCustomMixedOil] = useState<number | null>(null);
@@ -152,7 +152,7 @@ export default function Invoices() {
       const effectiveMillId = activeSeason.mill_id || millId;
       let query = supabase
         .from("queue")
-        .select("id, name, phone, position")
+        .select("id, customer_id, name, phone, position")
         .eq("season_id", activeSeason.id)
         .neq("status", "done");
 
@@ -262,7 +262,8 @@ export default function Invoices() {
     try {
       let customerId: string | null = null;
       if (queueId && queueId !== "manual") {
-        customerId = localStorage.getItem(`queue_cust_${queueId}`);
+        customerId = queueCustomers.find(q => q.id === queueId)?.customer_id || null;
+        // Read-only compatibility for rows created before queue.customer_id existed.
         if (!customerId) {
           const qCust = queueCustomers.find(q => q.id === queueId);
           if (qCust && (qCust as any).notes) {
@@ -282,6 +283,7 @@ export default function Invoices() {
             .eq("season_id", activeSeason!.id)
             .eq("name", invoiceData.customerName.trim())
             .eq("phone", cleanPhone)
+            .eq("active", true)
             .maybeSingle();
           existingCust = data;
         }
