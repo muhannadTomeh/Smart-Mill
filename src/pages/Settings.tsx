@@ -17,7 +17,7 @@ import {
   ShieldCheck, Building2, MapPin, User, Phone, Globe, UserCheck,
   Tv, ExternalLink, Copy, Sparkles, SlidersHorizontal, Receipt,
   Users, ChevronLeft, ArrowRight, HardHat, Printer, Coins,
-  Package, DollarSign, Lock, Scale, CheckCircle2, AlertCircle
+  Package, DollarSign, Lock, Scale, CheckCircle2, AlertCircle, Pencil
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useInventory } from "@/hooks/useInventory";
@@ -172,6 +172,7 @@ export default function Settings() {
   const [newItemTitle, setNewItemTitle] = useState("");
   const [newItemDetails, setNewItemDetails] = useState("");
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const loadedSeasonIdRef = useRef<string | null>(null);
 
   const displayUrl = activeSeason ? `${window.location.origin}/display/${activeSeason.id}` : "";
@@ -281,7 +282,7 @@ export default function Settings() {
     }
   };
 
-  const addDynamicItem = () => {
+  const saveDynamicItem = () => {
     if (!newItemTitle.trim() || !newItemDetails.trim()) {
       toast({ title: "تنبيه", description: "يرجى كتابة العنوان والتفاصيل", variant: "destructive" });
       return;
@@ -294,7 +295,9 @@ export default function Settings() {
     };
     setDisplaySettings((prev) => {
       const currentItems = getDynamicItems(prev);
-      const updatedItems = [...currentItems, newItem];
+      const updatedItems = editingItemId
+        ? currentItems.map((item) => item.id === editingItemId ? { ...item, title: newItem.title, details: newItem.details } : item)
+        : [...currentItems, newItem];
       const updated = {
         ...prev,
         dynamic_items: updatedItems,
@@ -309,8 +312,16 @@ export default function Settings() {
     });
     setNewItemTitle("");
     setNewItemDetails("");
+    setEditingItemId(null);
     setAddItemDialogOpen(false);
-    toast({ title: "تمت الإضافة بنجاح", description: `تمت إضافة "${newItem.title}" للشاشة بنجاح` });
+    toast({ title: editingItemId ? "تم تعديل العنصر" : "تمت الإضافة بنجاح", description: `تم حفظ "${newItem.title}" للشاشة` });
+  };
+
+  const startEditingDynamicItem = (item: DynamicDisplayItem) => {
+    setEditingItemId(item.id);
+    setNewItemTitle(item.title);
+    setNewItemDetails(item.details);
+    setAddItemDialogOpen(true);
   };
 
   const toggleItemVisibility = (id: string) => {
@@ -1314,6 +1325,17 @@ export default function Settings() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6 pt-5">
+            <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 space-y-4">
+              <div>
+                <h3 className="font-bold text-sm text-foreground">ترويسة شاشة العرض</h3>
+                <p className="text-xs text-muted-foreground mt-1">اترك الحقل فارغاً لاستخدام اسم المعصرة واسم الموسم تلقائياً.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5"><Label className="text-xs font-semibold">العنوان الرئيسي</Label><Input value={displaySettings.header_title || ""} onChange={(e) => updateDisplaySetting("header_title", e.target.value)} placeholder="اسم المعصرة" className="rounded-xl" /></div>
+                <div className="space-y-1.5"><Label className="text-xs font-semibold">العنوان الفرعي</Label><Input value={displaySettings.header_subtitle || ""} onChange={(e) => updateDisplaySetting("header_subtitle", e.target.value)} placeholder="مثال: أهلاً بكم في موسم الزيتون" className="rounded-xl" /></div>
+              </div>
+            </div>
+
             {/* Dynamic Items Bar */}
             <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/50">
               <div>
@@ -1322,7 +1344,7 @@ export default function Settings() {
               </div>
               <div className="flex items-center gap-2">
                 <Button
-                  onClick={() => setAddItemDialogOpen(true)}
+                  onClick={() => { setEditingItemId(null); setNewItemTitle(""); setNewItemDetails(""); setAddItemDialogOpen(true); }}
                   size="sm"
                   className="gap-1.5 rounded-xl text-xs font-bold"
                 >
@@ -1349,7 +1371,7 @@ export default function Settings() {
                 <DialogHeader className="text-right">
                   <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
                     <Plus className="h-5 w-5 text-primary" />
-                    إضافة عنصر لشاشة العرض
+                    {editingItemId ? "تعديل عنصر الشاشة" : "إضافة عنصر لشاشة العرض"}
                   </DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground">
                     العنوان والقيمة التي ستظهر للمزارعين على شاشة التلفاز
@@ -1386,6 +1408,7 @@ export default function Settings() {
                       setAddItemDialogOpen(false);
                       setNewItemTitle("");
                       setNewItemDetails("");
+                      setEditingItemId(null);
                     }}
                     className="rounded-xl"
                   >
@@ -1393,11 +1416,11 @@ export default function Settings() {
                   </Button>
                   <Button
                     size="sm"
-                    onClick={addDynamicItem}
+                    onClick={saveDynamicItem}
                     disabled={!newItemTitle.trim() || !newItemDetails.trim()}
                     className="rounded-xl font-bold"
                   >
-                    إضافة
+                    {editingItemId ? "حفظ التعديل" : "إضافة"}
                   </Button>
                 </div>
               </DialogContent>
@@ -1439,6 +1462,15 @@ export default function Settings() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      onClick={() => startEditingDynamicItem(item)}
+                      className="text-primary hover:bg-primary/10 h-8 w-8 rounded-lg"
+                      title="تعديل العنصر"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => removeDynamicItem(item.id)}
                       className="text-destructive hover:bg-destructive/10 h-8 w-8 rounded-lg"
                     >
@@ -1469,6 +1501,12 @@ export default function Settings() {
                 placeholder="أهلاً وسهلاً بكم في معصرتنا... نبارك لكم موسم الخير"
                 className="rounded-xl text-sm"
               />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3"><Label className="text-xs font-semibold">سرعة الشريط المتحرك</Label><span className="text-xs font-mono text-primary">{displaySettings.ticker_speed_seconds ?? 28} ثانية</span></div>
+              <input type="range" min="8" max="60" step="1" value={displaySettings.ticker_speed_seconds ?? 28} onChange={(e) => updateDisplaySetting("ticker_speed_seconds", Number(e.target.value))} className="w-full accent-primary" />
+              <p className="text-[11px] text-muted-foreground">قيمة أقل تعني شريطاً أسرع.</p>
             </div>
 
             <div className="pt-2 flex items-center justify-between border-t border-border/50">

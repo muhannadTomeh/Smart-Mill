@@ -377,10 +377,10 @@ export default function PublicQueueDisplay() {
           <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399] animate-pulse shrink-0" />
           <div className="flex flex-col text-right">
             <span className="text-white text-2xl md:text-3xl font-black tracking-wide drop-shadow-md">
-              {millName || "معصرة الزيتون"}
+              {displaySettings.header_title?.trim() || millName || "معصرة الزيتون"}
             </span>
             <span className="text-emerald-400/90 text-sm md:text-base font-bold tracking-wider mt-0.5">
-              {season?.name || "نظام إدارة الطابور المباشر"}
+              {displaySettings.header_subtitle?.trim() || season?.name || "نظام إدارة الطابور المباشر"}
             </span>
           </div>
         </div>
@@ -638,7 +638,7 @@ export default function PublicQueueDisplay() {
             </span>
           </div>
           <div className="flex-1 overflow-hidden whitespace-nowrap relative">
-            <div className="inline-block animate-marquee-arabic text-emerald-100 font-extrabold text-xl md:text-2xl lg:text-3xl tracking-wide">
+            <div className="inline-block animate-marquee-arabic text-emerald-100 font-extrabold text-xl md:text-2xl lg:text-3xl tracking-wide" style={{ animationDuration: `${Math.max(8, Math.min(60, Number(displaySettings.ticker_speed_seconds) || 28))}s` }}>
               {displaySettings.ticker_text}
             </div>
           </div>

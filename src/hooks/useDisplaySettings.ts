@@ -41,6 +41,9 @@ export function getDynamicItems(settings: any): DynamicDisplayItem[] {
 export interface DisplaySettings {
   dynamic_items?: DynamicDisplayItem[];
   ticker_text?: string;
+  ticker_speed_seconds?: number;
+  header_title?: string;
+  header_subtitle?: string;
   show_estimated_time?: boolean;
   show_oil_prices?: boolean;
   show_sell_price?: boolean;
@@ -57,6 +60,9 @@ export const defaultDisplaySettings: DisplaySettings = {
     { id: "2", title: "رقم التواصل مع المعصرة", details: "0569945677", visible: true },
   ],
   ticker_text: "",
+  ticker_speed_seconds: 28,
+  header_title: "",
+  header_subtitle: "",
   show_estimated_time: true,
   show_oil_prices: true,
   show_sell_price: true,
