@@ -154,7 +154,7 @@ const HeaderBar = () => {
             <div className="px-3 py-2">
               <p className="text-sm font-medium truncate">{user?.email}</p>
               <p className="text-xs text-muted-foreground">
-                {isAdmin ? "مشرف المنصة العام" : isEmployee ? "موظف الكاشير" : isMillOwner && isAdminWorkspace ? "مالك المعصرة (لوحة الإدارة)" : "مالك المعصرة"}
+                {isAdmin ? "مشرف المنصة العام" : isEmployee ? "موظف المعصرة" : isMillOwner && isAdminWorkspace ? "مالك المعصرة (لوحة الإدارة)" : "مالك المعصرة"}
               </p>
             </div>
             <DropdownMenuSeparator />

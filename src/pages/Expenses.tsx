@@ -570,7 +570,7 @@ const Expenses = () => {
                           </Badge>
                         ) : (
                           <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[11px]">
-                            كاش الصندوق
+                            نقدي المعصرة
                           </Badge>
                         )}
                       </TableCell>
@@ -726,7 +726,7 @@ const Expenses = () => {
                   }`}
                 >
                   <Wallet className="h-4 w-4" />
-                  <span>كاش الصندوق</span>
+                  <span>نقدي المعصرة</span>
                 </button>
 
                 <button
@@ -863,7 +863,7 @@ const Expenses = () => {
                 )}
 
                 <p className="text-[11px] text-muted-foreground">
-                  سيتم قيد المصروف وتسجيل ذمة مستحقة الدفع (Payable) على المعصرة دون خصم كاش الصندوق الآن.
+                  سيتم قيد المصروف وتسجيل ذمة مستحقة الدفع (Payable) على المعصرة دون خصم نقدي المعصرة الآن.
                 </p>
               </div>
             )}

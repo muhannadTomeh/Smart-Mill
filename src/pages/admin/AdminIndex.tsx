@@ -1076,7 +1076,7 @@ export default function AdminIndex() {
                   <span>إدارة الحسابات والمستخدمين (Accounts & Credentials Vault)</span>
                 </CardTitle>
                 <CardDescription className="text-xs mt-1">
-                  عرض وإدارة حسابات المشرف العام، أصحاب المعاصر، وموظفي الكاشير مع تشفير كامل لكلمات المرور
+                  عرض وإدارة حسابات المشرف العام، أصحاب المعاصر، والموظفين مع تشفير كامل لكلمات المرور
                 </CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">

@@ -68,6 +68,10 @@ export default function Reports() {
     oilPurchasedKg: 0,
     oilSoldKg: 0,
     oilOpeningAndAdjustments: 0,
+    cashOpening: 0,
+    cashIn: 0,
+    cashOut: 0,
+    cashNetChange: 0,
   });
 
   useEffect(() => {
@@ -78,13 +82,14 @@ export default function Reports() {
     if (!activeSeason) return;
     const dateFrom = getDateRange(period);
 
-    const [invoicesRes, expensesRes, salesRes, purchasesRes, workerPaymentsRes, oilMovementsRes] = await Promise.all([
+    const [invoicesRes, expensesRes, salesRes, purchasesRes, workerPaymentsRes, oilMovementsRes, financialRes] = await Promise.all([
       supabase.from("invoices").select("*").eq("season_id", activeSeason.id).is("voided_at", null).gte("created_at", dateFrom),
       supabase.from("expenses").select("amount").eq("season_id", activeSeason.id).is("voided_at", null).gte("created_at", dateFrom),
       supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "sell").gte("created_at", dateFrom),
       supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),
       supabase.from("worker_payments").select("amount").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
       (supabase.from("oil_movements" as any) as any).select("source_type,movement_type,quantity").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
+      (supabase.from("financial_effective_events" as any) as any).select("id,amount,direction,reference_type,reversal_of,status,created_at").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
     ]);
 
     const invoices = invoicesRes.data || [];
@@ -103,6 +108,12 @@ export default function Reports() {
     const oilPurchasedKg = movements.filter((m) => m.source_type === "oil_purchase" && m.movement_type === "IN").reduce((s, m) => s + Number(m.quantity), 0);
     const oilSoldKg = movements.filter((m) => m.source_type === "oil_sale" && m.movement_type === "OUT").reduce((s, m) => s + Number(m.quantity), 0);
     const oilOpeningAndAdjustments = movements.filter((m) => m.source_type === "opening_balance" || m.source_type === "adjustment").reduce((s, m) => s + (m.movement_type === "IN" ? Number(m.quantity) : -Number(m.quantity)), 0);
+    const financial = (financialRes.data || []) as any[];
+    const reversed = new Set(financial.flatMap((e) => e.reversal_of ? [e.reversal_of] : []));
+    const effective = financial.filter((e) => e.status === "active" && !e.reversal_of && !reversed.has(e.id));
+    const cashIn = effective.filter((e) => e.direction === "in").reduce((sum, e) => sum + Number(e.amount), 0);
+    const cashOut = effective.filter((e) => e.direction === "out").reduce((sum, e) => sum + Number(e.amount), 0);
+    const cashOpening = effective.filter((e) => e.reference_type === "cash_opening_balance").reduce((sum, e) => sum + Number(e.amount), 0);
 
     setStats({
       totalOilProduced,
@@ -119,12 +130,16 @@ export default function Reports() {
       oilPurchasedKg,
       oilSoldKg,
       oilOpeningAndAdjustments,
+      cashOpening,
+      cashIn,
+      cashOut,
+      cashNetChange: cashIn - cashOut,
     });
   };
 
-  const totalOutgoing = stats.totalExpenses + stats.totalWorkerPayments + stats.totalOilPurchases;
-  const totalIncoming = stats.totalCashEarned + stats.totalOilSales;
-  const netProfit = totalIncoming - totalOutgoing;
+  const totalOutgoing = stats.cashOut;
+  const totalIncoming = stats.cashIn;
+  const netOperatingMovement = stats.totalCashEarned + stats.totalOilSales - stats.totalExpenses - stats.totalWorkerPayments - stats.totalOilPurchases;
 
   if (isEmployee) {
     return <Navigate to="/queue" replace />;
@@ -188,42 +203,47 @@ export default function Reports() {
         {/* Financial Summary */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" /> ملخص مالي شامل</CardTitle>
+            <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" /> التدفق النقدي</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableBody>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-green-600">إيرادات الفواتير (كاش)</TableCell>
-                  <TableCell className="text-right text-green-600">+{stats.totalCashEarned.toFixed(0)} ش</TableCell>
+                  <TableCell className="text-right font-medium">الرصيد النقدي الافتتاحي</TableCell>
+                  <TableCell className="text-right">{stats.cashOpening.toFixed(0)} ش</TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-green-600">إيرادات الفواتير (زيت)</TableCell>
-                  <TableCell className="text-right text-green-600">+{stats.totalOilReturn.toFixed(2)} كغم</TableCell>
+                  <TableCell className="text-right font-medium text-green-600">كاش داخل فعّال</TableCell>
+                  <TableCell className="text-right text-green-600">+{stats.cashIn.toFixed(0)} ش</TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-green-600">مبيعات زيت ({stats.totalOilSalesAmount.toFixed(1)} كغم)</TableCell>
-                  <TableCell className="text-right text-green-600">+{stats.totalOilSales.toFixed(0)} ش</TableCell>
+                  <TableCell className="text-right font-medium text-destructive">كاش خارج فعّال</TableCell>
+                  <TableCell className="text-right text-destructive">-{stats.cashOut.toFixed(0)} ش</TableCell>
                 </TableRow>
                 <TableRow className="border-t-2">
-                  <TableCell className="text-right font-medium text-destructive">مشتريات زيت ({stats.totalOilPurchasesAmount.toFixed(1)} كغم)</TableCell>
-                  <TableCell className="text-right text-destructive">-{stats.totalOilPurchases.toFixed(0)} ش</TableCell>
+                  <TableCell className="text-right font-medium">صافي تغير الكاش خلال الفترة</TableCell>
+                  <TableCell className="text-right">{stats.cashNetChange >= 0 ? "+" : ""}{stats.cashNetChange.toFixed(0)} ش</TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-destructive">مصاريف عامة</TableCell>
-                  <TableCell className="text-right text-destructive">-{stats.totalExpenses.toFixed(0)} ش</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell className="text-right font-medium text-destructive">أجور العمال</TableCell>
-                  <TableCell className="text-right text-destructive">-{stats.totalWorkerPayments.toFixed(0)} ش</TableCell>
-                </TableRow>
-                <TableRow className="border-t-2">
-                  <TableCell className="text-right font-bold">صافي الربح</TableCell>
-                  <TableCell className={`text-right font-bold text-lg ${netProfit >= 0 ? "text-green-600" : "text-destructive"}`}>{netProfit >= 0 ? "+" : ""}{netProfit.toFixed(0)} ش</TableCell>
+                  <TableCell className="text-right font-bold">الرصيد النقدي الحالي</TableCell>
+                  <TableCell className="text-right font-bold text-lg">{cashBalance.toFixed(0)} ش</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" /> ملخص التشغيل</CardTitle></CardHeader>
+          <CardContent><Table><TableBody>
+            <TableRow><TableCell>قيمة فواتير العصر</TableCell><TableCell>{stats.totalCashEarned.toFixed(0)} ش</TableCell></TableRow>
+            <TableRow><TableCell>المصاريف التشغيلية</TableCell><TableCell>{stats.totalExpenses.toFixed(0)} ش</TableCell></TableRow>
+            <TableRow><TableCell>أجور العمال</TableCell><TableCell>{stats.totalWorkerPayments.toFixed(0)} ش</TableCell></TableRow>
+            <TableRow><TableCell>مبيعات الزيت</TableCell><TableCell>{stats.totalOilSales.toFixed(0)} ش</TableCell></TableRow>
+            <TableRow><TableCell>مشتريات الزيت</TableCell><TableCell>{stats.totalOilPurchases.toFixed(0)} ش</TableCell></TableRow>
+            <TableRow className="border-t-2"><TableCell className="font-bold">صافي الحركة التشغيلية المسجلة</TableCell><TableCell className="font-bold">{netOperatingMovement.toFixed(0)} ش</TableCell></TableRow>
+          </TableBody></Table>
+          <p className="text-xs text-muted-foreground mt-3">ليس صافي ربح محاسبيًا: لا يتضمن هذا التقرير تكلفة مخزون/COGS كاملة.</p></CardContent>
         </Card>
 
         {/* Current Inventory */}

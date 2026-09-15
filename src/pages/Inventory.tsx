@@ -1090,7 +1090,7 @@ const Inventory = () => {
                   }`}
                 >
                   <Wallet className="h-4 w-4" />
-                  <span>كاش الصندوق</span>
+                  <span>نقدي المعصرة</span>
                 </button>
 
                 <button
@@ -1168,14 +1168,14 @@ const Inventory = () => {
                   </div>
                 )}
                 <p className="text-[11px] text-muted-foreground">
-                  سيتم تسجيل البضاعة بالمخزن وإثبات ذمة مستحقة للشريك دون خصم كاش الصندوق.
+                  سيتم تسجيل البضاعة بالمخزن وإثبات ذمة مستحقة للشريك دون خصم نقدي المعصرة.
                 </p>
               </div>
             )}
 
             {purchaseForm.payment_method === "credit" && (
               <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
-                سيتم إثبات التزام مستحق الدفع (Payable) لصالح المورد بقيمة إجمالي الفاتورة دون خصم كاش الصندوق الآن.
+                سيتم إثبات التزام مستحق الدفع (Payable) لصالح المورد بقيمة إجمالي الفاتورة دون خصم نقدي المعصرة الآن.
               </div>
             )}
 

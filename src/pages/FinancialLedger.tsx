@@ -104,8 +104,10 @@ export default function FinancialLedger() {
         variant: "destructive",
       });
     } else {
+      const rawEvents = (data ?? []) as Omit<LedgerEvent, "effect_status" | "signed_amount">[];
+      const reversedIds = new Set(rawEvents.flatMap((event) => event.reversal_of ? [event.reversal_of] : []));
       setEvents(
-        (data ?? []).map((event: any) => ({
+        rawEvents.map((event) => ({
           ...event,
           signed_amount:
             event.direction === "in"
@@ -113,7 +115,7 @@ export default function FinancialLedger() {
               : event.direction === "out"
                 ? -Number(event.amount)
                 : 0,
-          effect_status: event.reversal_of ? "reversal" : "effective",
+          effect_status: event.reversal_of ? "reversal" : reversedIds.has(event.id) ? "reversed" : event.status === "voided" ? "legacy_voided" : "effective",
         })) as LedgerEvent[],
       );
     }
@@ -166,7 +168,7 @@ export default function FinancialLedger() {
   const totals = useMemo(
     () =>
       events
-        .filter((event) => event.status === "active")
+        .filter((event) => event.effect_status === "effective")
         .reduce(
           (value, event) => ({
             incoming:
@@ -211,28 +213,40 @@ export default function FinancialLedger() {
     const t = event.type;
     const ref = event.reference_type;
 
-    if (t === "income" || ref === "invoice") {
+    if (event.effect_status === "reversal") return <Badge variant="secondary" className="text-xs gap-1"><RefreshCw className="h-3 w-3" /> حركة تصحيح</Badge>;
+    // The source document is more specific than a generic accounting type.
+    if (ref === "invoice") return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs gap-1"><Receipt className="h-3 w-3" /> فاتورة عصر</Badge>;
+    if (ref === "expense") return <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-xs gap-1"><Sprout className="h-3 w-3" /> مصروف</Badge>;
+    if (ref === "worker_payment") return <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-xs gap-1"><Users className="h-3 w-3" /> دفعة عامل</Badge>;
+    if (ref === "product_purchase") return <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs gap-1"><Package className="h-3 w-3" /> شراء بضاعة</Badge>;
+    if (ref === "oil_transaction") return <Badge className="bg-teal-50 text-teal-700 border-teal-200 text-xs gap-1"><Droplets className="h-3 w-3" /> {event.direction === "in" ? "بيع زيت" : "شراء زيت"}</Badge>;
+    if (ref === "customer_payment" || t === "customer_payment") return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs gap-1"><CheckCircle className="h-3 w-3" /> تحصيل ذمة</Badge>;
+    if (ref === "payable_settlement") return <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-xs gap-1"><CheckCircle className="h-3 w-3" /> سداد التزام</Badge>;
+    if (ref === "partner_transaction" || t === "owner_deposit" || t === "owner_withdrawal") return <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-xs">{event.direction === "in" ? "مساهمة شريك" : "سحب شريك"}</Badge>;
+    if (ref === "cash_opening_balance" || t === "cash_opening_balance") return <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-xs gap-1"><Wallet className="h-3 w-3" /> رصيد افتتاحي</Badge>;
+
+    if (t === "income") {
       return (
         <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 text-xs gap-1 font-medium shadow-none">
           <Receipt className="h-3 w-3" /> فاتورة عصر
         </Badge>
       );
     }
-    if (t === "expense" || ref === "expense") {
+    if (t === "expense") {
       return (
         <Badge className="bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 text-xs gap-1 font-medium shadow-none">
           <Sprout className="h-3 w-3" /> مصروف
         </Badge>
       );
     }
-    if (t === "worker_payment" || ref === "worker_payment") {
+    if (t === "worker_payment") {
       return (
         <Badge className="bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 text-xs gap-1 font-medium shadow-none">
           <Users className="h-3 w-3" /> أجر عامل
         </Badge>
       );
     }
-    if (t === "stock_purchase" || ref === "product_purchase") {
+    if (t === "stock_purchase") {
       return (
         <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 text-xs gap-1 font-medium shadow-none">
           <Package className="h-3 w-3" /> شراء بضاعة
@@ -332,6 +346,8 @@ export default function FinancialLedger() {
                 [{event.category}]
               </span>
             )}
+          {event.effect_status === "reversal" && event.reversal_of && <span className="text-[11px] text-muted-foreground">تصحيح للعملية #{event.reversal_of.slice(0, 8)}</span>}
+          {event.effect_status === "reversed" && <span className="text-[11px] text-muted-foreground">تم عكسها</span>}
         </div>
       </div>
     );
@@ -624,14 +640,14 @@ export default function FinancialLedger() {
                             variant="secondary"
                             className="text-[10px] bg-muted font-normal"
                           >
-                            قيد عكسي
+                            حركة تصحيح
                           </Badge>
                         ) : event.effect_status === "reversed" ? (
                           <Badge
                             variant="outline"
                             className="text-[10px] text-muted-foreground"
                           >
-                            معكوسة
+                            تم عكسها
                           </Badge>
                         ) : event.effect_status === "legacy_voided" ? (
                           <Badge variant="secondary" className="text-[10px]">

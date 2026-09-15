@@ -170,7 +170,7 @@ export function AppSidebar() {
 
   // Dynamic branding titles
   let brandTitle = profile?.mill_name || "المعصرة الذكية"
-  let brandSubtitle = isEmployee ? "واجهة الموظف (الكاشير)" : "الواجهة التشغيلية"
+  let brandSubtitle = isEmployee ? "واجهة الموظف" : "الواجهة التشغيلية"
 
   if (isAdmin) {
     brandTitle = "لوحة الأدمن"

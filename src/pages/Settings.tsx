@@ -759,7 +759,7 @@ export default function Settings() {
     },
     users_roles: {
       title: "المستخدمون والصلاحيات",
-      desc: "إدارة المستخدمين والعمال وحسابات الكاشير والصلاحيات",
+      desc: "إدارة المستخدمين والعمال والصلاحيات",
       icon: Users,
       colorClass: "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
     },
@@ -968,7 +968,7 @@ export default function Settings() {
                   المستخدمون والصلاحيات
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                  إدارة حسابات الكاشير، العمال، وصلاحيات النظام
+                  إدارة حسابات المستخدمين، العمال، وصلاحيات النظام
                 </p>
               </div>
             </div>
