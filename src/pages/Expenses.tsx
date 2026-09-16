@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,8 +66,6 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 const Expenses = () => {
-  const [searchParams] = useSearchParams();
-  const isVaultMode = searchParams.get("cash") === "vault";
   const { user, millId } = useAuth();
   const { isEmployee } = useRole();
   const { activeSeason } = useSeason();
@@ -265,7 +262,7 @@ const Expenses = () => {
         title: "تمت إضافة المصروف بنجاح",
         description: `تم تسجيل مصروف "${finalCategory}" بقيمة ${amount} ${activeCurrency} (${
           newExpense.payment_method === "cash"
-            ? "نقداً من الصندوق"
+            ? "نقدي المعصرة"
             : newExpense.payment_method === "credit"
             ? "دين مؤجل"
             : "مدفوع من الشريك"
@@ -299,9 +296,10 @@ const Expenses = () => {
     }
     if (!deleteTarget) return;
     const { id } = deleteTarget;
-    const { error } = await supabase.rpc("void_expense_and_reverse" as any, {
+    const { error } = await supabase.rpc("cancel_expense_lifecycle_command" as any, {
       p_expense_id: id,
       p_reason: "إلغاء من واجهة إدارة المصاريف",
+      p_idempotency_key: crypto.randomUUID(),
     });
     if (!error) {
       toast({ title: "تم الإلغاء", description: "أُلغي المصروف وعُكست حركته النقدية بأمان" });
@@ -312,7 +310,12 @@ const Expenses = () => {
         refetchCashBalance(),
       ]);
     } else {
-      toast({ title: "خطأ", description: error.message || "تعذر حذف المصروف", variant: "destructive" });
+      const messages: Record<string, string> = {
+        EXPENSE_HAS_SETTLEMENTS_REVERSE_SETTLEMENTS_FIRST: "لا يمكن إلغاء المصروف قبل عكس دفعات سداد الالتزام المرتبطة به.",
+        EXPENSE_NOT_CANCELLABLE: "هذا المصروف ملغى بالفعل أو غير قابل للإلغاء.",
+        EXPENSE_CANCEL_FORBIDDEN: "إلغاء المصروف متاح لمالك المعصرة فقط.",
+      };
+      toast({ title: "تعذر إلغاء المصروف", description: messages[error.message] || "تعذر إلغاء المصروف.", variant: "destructive" });
     }
   };
 
@@ -356,8 +359,8 @@ const Expenses = () => {
             <Receipt className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{isVaultMode ? "مصروف من الخزنة" : "إدارة المصاريف"}</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">{isVaultMode ? "هذا المسار الإداري لا يسجل أي حركة داخل جلسة الجارور." : "تسجيل ومتابعة مصاريف المعصرة اليومية والتشغيلية والالتزامات"}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">إدارة المصاريف</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">تسجيل ومتابعة مصاريف المعصرة اليومية والتشغيلية والالتزامات</p>
           </div>
         </div>
 
@@ -587,7 +590,7 @@ const Expenses = () => {
                             variant="ghost"
                             className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
                             onClick={() => setDeleteTarget(exp)}
-                            title="حذف المصروف"
+                            title="إلغاء المصروف"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>

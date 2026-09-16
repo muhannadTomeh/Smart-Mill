@@ -30,7 +30,8 @@ import {
   Phone,
   Percent,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Archive
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -91,7 +92,7 @@ export default function Partners() {
     setLoading(true);
     try {
       const [partnersRes, payablesRes, txsRes] = await Promise.all([
-        supabase.from("partners" as any).select("*").order("name", { ascending: true }),
+        supabase.from("partners" as any).select("*").eq("active", true).order("name", { ascending: true }),
         supabase
           .from("payables" as any)
           .select("partner_id, remaining_amount")
@@ -120,6 +121,17 @@ export default function Partners() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const archivePartner = async (partner: Partner) => {
+    if (!window.confirm(`أرشفة الشريك ${partner.name}؟ سيبقى تاريخه المالي محفوظاً.`)) return;
+    const { error } = await supabase.rpc("archive_master_data_command", { p_entity: "partner", p_id: partner.id });
+    if (error) {
+      toast({ title: "تعذرت الأرشفة", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "تمت أرشفة الشريك", description: "بقيت الالتزامات والحركات التاريخية محفوظة." });
+    await fetchPartners();
   };
 
   const handleAddPartner = async () => {
@@ -320,6 +332,9 @@ export default function Partners() {
                             className="h-7 text-xs gap-1 border-rose-500/40 hover:bg-rose-50 text-rose-700 dark:hover:bg-rose-950/40 dark:text-rose-400"
                           >
                             <ArrowUpRight className="h-3 w-3" /> سحب أرباح
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => void archivePartner(p)}>
+                            <Archive className="h-3 w-3" /> أرشفة
                           </Button>
                         </div>
                       </TableCell>

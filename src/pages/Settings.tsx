@@ -38,12 +38,6 @@ import {
 export type { DynamicDisplayItem, DisplaySettings };
 export { defaultDisplaySettings };
 
-interface ContainerType {
-  id: string;
-  name: string;
-  price: number;
-}
-
 const COUNTRIES = [
   "فلسطين",
   "الأردن",
@@ -143,15 +137,10 @@ export default function Settings() {
   });
 
 
-  const [containerTypes, setContainerTypes] = useState<ContainerType[]>([]);
-  const [newContainerName, setNewContainerName] = useState("");
-  const [newContainerPrice, setNewContainerPrice] = useState("");
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [expenseCategories, setExpenseCategories] = useState<{ id: string, name: string }[]>([]);
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState("");
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   
-  const [containerDeleteTarget, setContainerDeleteTarget] = useState<ContainerType | null>(null);
   const [expenseDeleteTarget, setExpenseDeleteTarget] = useState<{ id: string, name: string } | null>(null);
   const [currentAdminPin, setCurrentAdminPin] = useState("");
   const [newAdminPin, setNewAdminPin] = useState("");
@@ -495,7 +484,6 @@ export default function Settings() {
 
   useEffect(() => {
     if (activeSeason) {
-      fetchContainerTypes();
       fetchExpenseCategories();
     }
   }, [activeSeason?.id]);
@@ -538,49 +526,6 @@ export default function Settings() {
     await supabase.from("expense_categories").delete().eq("id", expenseDeleteTarget.id);
     setExpenseDeleteTarget(null);
     fetchExpenseCategories();
-  };
-
-  const fetchContainerTypes = async () => {
-    if (!activeSeason) return;
-    let query = supabase
-      .from("products" as any)
-      .select("id, name, default_sale_price")
-      .eq("product_type", "container");
-
-    if (millId || activeSeason.mill_id) {
-      query = (query as any).eq("mill_id", millId || activeSeason.mill_id);
-    }
-
-    const { data } = await query.order("created_at", { ascending: true });
-    setContainerTypes(((data || []) as any[]).map((product) => ({ ...product, price: product.default_sale_price })) as ContainerType[]);
-  };
-
-  const addContainerType = async () => {
-    if (!activeSeason || !newContainerName.trim() || !newContainerPrice) return;
-    const { error } = await supabase.from("products" as any).insert({
-      mill_id: millId || activeSeason.mill_id || null,
-      name: newContainerName.trim(),
-      product_type: "container",
-      unit: "قطعة",
-      default_purchase_price: 0,
-      default_sale_price: parseFloat(newContainerPrice),
-      current_stock: 0,
-      active: true,
-    } as any);
-    if (!error) {
-      toast({ title: "تمت الإضافة", description: `تم إضافة نوع "${newContainerName}"` });
-      setNewContainerName("");
-      setNewContainerPrice("");
-      setDialogOpen(false);
-      fetchContainerTypes();
-    }
-  };
-
-  const deleteContainerType = async () => {
-    if (!containerDeleteTarget) return;
-    await supabase.from("products" as any).update({ active: false }).eq("id", containerDeleteTarget.id);
-    setContainerDeleteTarget(null);
-    fetchContainerTypes();
   };
 
   const saveSettings = async () => {
@@ -747,7 +692,7 @@ export default function Settings() {
     },
     operations: {
       title: "التشغيل",
-      desc: "إعدادات العصر، أنواع العبوات، وإعدادات التشغيل",
+      desc: "إعدادات العصر وشاشة العرض وإعدادات التشغيل",
       icon: SlidersHorizontal,
       colorClass: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
     },
@@ -922,7 +867,7 @@ export default function Settings() {
                   التشغيل
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                  إعدادات العصر، أنواع العبوات، شاشة العرض، والمخزون
+                  إعدادات العصر، شاشة العرض، وإعدادات التشغيل
                 </p>
               </div>
             </div>
@@ -2128,26 +2073,6 @@ export default function Settings() {
       {/* ─────────────────────────────────────────────────────────────
           GLOBAL CONFIRMATION ALERT DIALOGS
       ───────────────────────────────────────────────────────────── */}
-      <AlertDialog open={!!containerDeleteTarget} onOpenChange={(o) => !o && setContainerDeleteTarget(null)}>
-        <AlertDialogContent dir="rtl" className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد حذف نوع العبوة</AlertDialogTitle>
-            <AlertDialogDescription>
-              هل تريد بالتأكيد حذف نوع <strong>{containerDeleteTarget?.name}</strong>؟ لا يمكن التراجع عن هذا الإجراء.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel className="rounded-xl">إلغاء</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={deleteContainerType} 
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
-            >
-              حذف النوع
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <AlertDialog open={!!expenseDeleteTarget} onOpenChange={(o) => !o && setExpenseDeleteTarget(null)}>
         <AlertDialogContent dir="rtl" className="rounded-2xl">
           <AlertDialogHeader>

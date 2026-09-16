@@ -598,7 +598,7 @@ export default function Payables() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">
-                      كاش من صندوق المعصرة (يخصم من الكاش والصندوق)
+                      نقدي المعصرة (يخصم من الرصيد النقدي للمعصرة)
                     </SelectItem>
                     <SelectItem value="other">
                       مصدر آخر / تحويل بنكي خارجي (لا يمس الكاش)

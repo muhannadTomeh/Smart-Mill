@@ -11,6 +11,7 @@ import { UserCheck, Plus, DollarSign, Pencil, ClipboardList, Search, Filter, Arc
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/contexts/RoleContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { formatDate } from "@/lib/formatters";
@@ -45,10 +46,13 @@ interface WorkerPayment {
   amount: number;
   notes: string | null;
   created_at: string;
+  status: "active" | "reversed";
+  reversal_reason: string | null;
 }
 
 const Workers = () => {
   const { user, millId } = useAuth();
+  const { isEmployee } = useRole();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory } = useInventory();
@@ -222,6 +226,10 @@ const Workers = () => {
   };
 
   const reversePayment = async (payment: WorkerPayment) => {
+    if (isEmployee) {
+      toast({ title: "غير مصرح", description: "عكس دفعات العمال متاح لمالك المعصرة فقط.", variant: "destructive" });
+      return;
+    }
     const reason = window.prompt("سبب عكس الدفعة (إلزامي)")?.trim();
     if (!reason) return;
     const { error } = await (supabase.rpc as any)("reverse_worker_payment_command", {
@@ -239,6 +247,10 @@ const Workers = () => {
   };
 
   const payWorker = async (worker: Worker, amount: number, notes: string, onDone: () => void) => {
+    if (isEmployee) {
+      toast({ title: "غير مصرح", description: "دفع أجور العمال متاح لمالك المعصرة فقط.", variant: "destructive" });
+      return;
+    }
     if (amount <= 0) return;
     
     const { error } = await (supabase.rpc as any)("pay_worker_command", {
@@ -463,7 +475,7 @@ const Workers = () => {
                                 <Button size="sm" variant="outline" onClick={() => startEdit(worker)}>
                                   <Pencil className="h-3 w-3 me-1" />تعديل
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => startPay(worker)} disabled={!worker.active || balance <= 0}>
+                                <Button size="sm" variant="outline" onClick={() => startPay(worker)} disabled={!worker.active || balance <= 0 || isEmployee}>
                                   <DollarSign className="h-3 w-3 me-1" />دفع
                                 </Button>
                                 <Button size="sm" variant="outline" className="text-amber-700 hover:text-amber-700" onClick={() => archiveWorker(worker)} disabled={!worker.active} title="أرشفة العامل">
@@ -628,7 +640,7 @@ const Workers = () => {
                             <TableCell className="text-right">{worker.total_paid} ش</TableCell>
                             <TableCell className={`text-right font-bold ${balance > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{balance} ش</TableCell>
                             <TableCell className="text-right">
-                              <Button size="sm" onClick={() => startPayFromList(worker)} disabled={balance <= 0}>
+                              <Button size="sm" onClick={() => startPayFromList(worker)} disabled={balance <= 0 || isEmployee}>
                                 <DollarSign className="h-3 w-3 me-1" />إجراء دفعة
                               </Button>
                             </TableCell>
@@ -683,7 +695,7 @@ const Workers = () => {
                                 <TableCell className="text-right text-muted-foreground text-xs">{payment.notes || '—'}</TableCell>
                                 <TableCell className="text-right font-mono text-xs">{formatDate(payment.created_at)}</TableCell>
                                 <TableCell className="text-right"><Badge variant={payment.status === "active" ? "default" : "secondary"}>{payment.status === "active" ? "فعالة" : "معكوسة"}</Badge></TableCell>
-                                <TableCell className="text-right">{payment.status === "active" ? <Button size="sm" variant="outline" onClick={() => reversePayment(payment)}><RotateCcw className="h-3 w-3 me-1" />عكس الدفعة</Button> : <span className="text-xs text-muted-foreground">{payment.reversal_reason || "—"}</span>}</TableCell>
+                                <TableCell className="text-right">{payment.status === "active" ? <Button size="sm" variant="outline" onClick={() => reversePayment(payment)} disabled={isEmployee}><RotateCcw className="h-3 w-3 me-1" />عكس الدفعة</Button> : <span className="text-xs text-muted-foreground">{payment.reversal_reason || "—"}</span>}</TableCell>
                               </TableRow>
                             );
                           })}

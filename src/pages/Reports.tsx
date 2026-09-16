@@ -68,7 +68,6 @@ export default function Reports() {
     oilPurchasedKg: 0,
     oilSoldKg: 0,
     oilOpeningAndAdjustments: 0,
-    cashOpening: 0,
     cashIn: 0,
     cashOut: 0,
     cashNetChange: 0,
@@ -89,7 +88,7 @@ export default function Reports() {
       supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),
       supabase.from("worker_payments").select("amount").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
       (supabase.from("oil_movements" as any) as any).select("source_type,movement_type,quantity").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
-      (supabase.from("financial_effective_events" as any) as any).select("id,amount,direction,reference_type,reversal_of,status,created_at").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
+      (supabase.from("financial_transactions" as any) as any).select("id,amount,direction,payment_method,status,created_at").eq("season_id", activeSeason.id).eq("status", "active").gte("created_at", dateFrom),
     ]);
 
     const invoices = invoicesRes.data || [];
@@ -109,11 +108,10 @@ export default function Reports() {
     const oilSoldKg = movements.filter((m) => m.source_type === "oil_sale" && m.movement_type === "OUT").reduce((s, m) => s + Number(m.quantity), 0);
     const oilOpeningAndAdjustments = movements.filter((m) => m.source_type === "opening_balance" || m.source_type === "adjustment").reduce((s, m) => s + (m.movement_type === "IN" ? Number(m.quantity) : -Number(m.quantity)), 0);
     const financial = (financialRes.data || []) as any[];
-    const reversed = new Set(financial.flatMap((e) => e.reversal_of ? [e.reversal_of] : []));
-    const effective = financial.filter((e) => e.status === "active" && !e.reversal_of && !reversed.has(e.id));
-    const cashIn = effective.filter((e) => e.direction === "in").reduce((sum, e) => sum + Number(e.amount), 0);
-    const cashOut = effective.filter((e) => e.direction === "out").reduce((sum, e) => sum + Number(e.amount), 0);
-    const cashOpening = effective.filter((e) => e.reference_type === "cash_opening_balance").reduce((sum, e) => sum + Number(e.amount), 0);
+    // Period cash flow is historical: reversals are real cash movements at their
+    // own timestamps, so retain every active cash IN/OUT ledger event.
+    const cashIn = financial.filter((e) => e.payment_method === "cash" && e.direction === "in").reduce((sum, e) => sum + Number(e.amount), 0);
+    const cashOut = financial.filter((e) => e.payment_method === "cash" && e.direction === "out").reduce((sum, e) => sum + Number(e.amount), 0);
 
     setStats({
       totalOilProduced,
@@ -130,15 +128,12 @@ export default function Reports() {
       oilPurchasedKg,
       oilSoldKg,
       oilOpeningAndAdjustments,
-      cashOpening,
       cashIn,
       cashOut,
       cashNetChange: cashIn - cashOut,
     });
   };
 
-  const totalOutgoing = stats.cashOut;
-  const totalIncoming = stats.cashIn;
   const netOperatingMovement = stats.totalCashEarned + stats.totalOilSales - stats.totalExpenses - stats.totalWorkerPayments - stats.totalOilPurchases;
 
   if (isEmployee) {
@@ -185,7 +180,7 @@ export default function Reports() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">كمية الكاش</CardTitle>
+            <CardTitle className="text-sm font-medium">كاش فواتير العصر</CardTitle>
             <Banknote className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent><div className="text-2xl font-bold">{stats.totalCashEarned.toFixed(0)} <span className="text-sm font-normal text-muted-foreground">ش</span></div></CardContent>
@@ -209,15 +204,11 @@ export default function Reports() {
             <Table>
               <TableBody>
                 <TableRow>
-                  <TableCell className="text-right font-medium">الرصيد النقدي الافتتاحي</TableCell>
-                  <TableCell className="text-right">{stats.cashOpening.toFixed(0)} ش</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell className="text-right font-medium text-green-600">كاش داخل فعّال</TableCell>
+                  <TableCell className="text-right font-medium text-green-600">الكاش الداخل خلال الفترة</TableCell>
                   <TableCell className="text-right text-green-600">+{stats.cashIn.toFixed(0)} ش</TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="text-right font-medium text-destructive">كاش خارج فعّال</TableCell>
+                  <TableCell className="text-right font-medium text-destructive">الكاش الخارج خلال الفترة</TableCell>
                   <TableCell className="text-right text-destructive">-{stats.cashOut.toFixed(0)} ش</TableCell>
                 </TableRow>
                 <TableRow className="border-t-2">
@@ -275,17 +266,6 @@ export default function Reports() {
                   <p className="text-sm text-muted-foreground">الرصيد النقدي للمعصرة</p>
                   <p className="text-2xl font-bold">{cashBalance} ش</p>
                 </div>
-              </div>
-            </div>
-            <div className="p-4 rounded-lg bg-muted/50 border space-y-2">
-              <p className="text-sm font-medium">ملخص سريع</p>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">إجمالي الوارد</span>
-                <span className="text-green-600 font-medium">+{totalIncoming.toFixed(0)} ش</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">إجمالي الصادر</span>
-                <span className="text-destructive font-medium">-{totalOutgoing.toFixed(0)} ش</span>
               </div>
             </div>
           </CardContent>

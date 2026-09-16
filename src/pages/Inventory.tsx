@@ -9,7 +9,7 @@ import {
   Warehouse, Droplets, Wallet, ArrowUp, ArrowDown,
   ShoppingCart, Calendar,
   Package, Plus, RefreshCw, Layers, Tag,
-  Handshake, Users, ArrowUpRight, ArrowDownLeft
+  Handshake, Users, ArrowUpRight, ArrowDownLeft, Archive
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -215,7 +215,7 @@ const Inventory = () => {
     setLoadingProducts(true);
     try {
       const [prodsRes, supsRes, partsRes, movesRes, purchasesRes] = await Promise.all([
-        supabase.from("products" as any).select("*").order("name"),
+        supabase.from("products" as any).select("*").eq("active", true).order("name"),
         supabase.from("suppliers" as any).select("id, name").eq("active", true).order("name"),
         supabase.from("partners" as any).select("id, name").eq("active", true).order("name"),
         supabase.from("product_stock_movements" as any)
@@ -239,6 +239,17 @@ const Inventory = () => {
     } finally {
       setLoadingProducts(false);
     }
+  };
+
+  const archiveMasterData = async (entity: "supplier" | "product", id: string, name: string) => {
+    if (!window.confirm(`أرشفة ${name}؟ سيبقى تاريخه محفوظاً ولن يظهر في العمليات الجديدة.`)) return;
+    const { error } = await supabase.rpc("archive_master_data_command", { p_entity: entity, p_id: id });
+    if (error) {
+      toast({ title: "تعذرت الأرشفة", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "تمت الأرشفة", description: `تمت أرشفة ${name} مع الاحتفاظ بالسجل التاريخي.` });
+    await fetchProductsData();
   };
 
   const cancelPurchase = async (purchase: any) => {
@@ -877,6 +888,9 @@ const Inventory = () => {
                         <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => void adjustProductStock(p)}>
                           تعديل الرصيد بسجل حركة
                         </Button>
+                        <Button variant="ghost" size="sm" className="w-full text-xs text-destructive" onClick={() => void archiveMasterData("product", p.id, p.name)}>
+                          <Archive className="h-3.5 w-3.5 me-1" /> أرشفة الصنف
+                        </Button>
                       </CardContent>
                     </Card>
                   );
@@ -1249,6 +1263,18 @@ const Inventory = () => {
                 <ShoppingCart className="h-5 w-5" /> + شراء بضاعة
               </Button>
             </CardContent>
+            {suppliers.length > 0 && (
+              <CardContent className="border-t pt-4">
+                <p className="mb-3 text-sm font-semibold">الموردون النشطون</p>
+                <div className="flex flex-wrap gap-2">
+                  {suppliers.map((supplier) => (
+                    <Button key={supplier.id} variant="outline" size="sm" className="gap-2" onClick={() => void archiveMasterData("supplier", supplier.id, supplier.name)}>
+                      <Archive className="h-3.5 w-3.5" /> أرشفة {supplier.name}
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            )}
           </Card>
           <Card className="rounded-2xl border-border/70">
             <CardHeader><CardTitle className="text-base">آخر عمليات التوريد</CardTitle></CardHeader>

@@ -207,7 +207,7 @@ const OilTrading = () => {
     if (newTransaction.type === 'buy' && newTransaction.paymentMethod === 'cash' && totalPrice > cashBalance) {
       toast({
         title: "الرصيد النقدي لا يكفي",
-        description: `الكاش المتوفر بالصندوق: ${cashBalance.toLocaleString()} ${selectedCurrency} فقط`,
+        description: `الرصيد النقدي المتوفر للمعصرة: ${cashBalance.toLocaleString()} ${selectedCurrency} فقط`,
         variant: "destructive"
       });
       return;
@@ -357,7 +357,7 @@ const OilTrading = () => {
         <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground font-medium">الكاش المتوفر بالصندوق</p>
+              <p className="text-xs text-muted-foreground font-medium">الرصيد النقدي المتوفر للمعصرة</p>
               <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                 {cashBalance.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{selectedCurrency}</span>
               </h3>
