@@ -659,12 +659,11 @@ export default function PublicQueueDisplay() {
           100% { opacity: 1; transform: translateY(0); }
         }
         @keyframes marquee-arabic {
-          0% { left: 100%; transform: translateX(0); }
-          100% { left: 0; transform: translateX(-100%); }
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
         }
         .animate-marquee-arabic {
           display: inline-block;
-          position: relative;
           animation: marquee-arabic 13s linear infinite;
         }
       `}</style>
