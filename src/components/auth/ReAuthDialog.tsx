@@ -59,85 +59,102 @@ export const ReAuthDialog = () => {
 
   return (
     <Dialog open={isReAuthModalOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
-        <DialogHeader className="text-right space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-1">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
-          <DialogTitle className="text-xl font-bold text-foreground">
-            تأكيد الوصول إلى لوحة الإدارة
-          </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground leading-relaxed">
-            للوصول إلى لوحة الإدارة والإحصاءات الحساسة، يرجى إدخال رمز PIN لوحة الإدارة الخاص بمالك المعصرة:
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          <div className="space-y-2">
-            <Label htmlFor="admin-reauth-pin" className="text-xs font-semibold">
-              رمز PIN لوحة الإدارة
-            </Label>
-            <div className="relative">
-              <Input
-                id="admin-reauth-pin"
-                type={showPin ? "text" : "password"}
-                placeholder="أدخل رمز PIN (أرقام)"
-                value={pin}
-                maxLength={8}
-                onChange={(e) => {
-                  setPin(e.target.value.replace(/\D/g, ""));
-                  if (errorMessage) setErrorMessage("");
-                }}
-                disabled={loading}
-                autoFocus
-                className="pe-10 text-center font-mono tracking-widest text-base rounded-xl"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPin(!showPin)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                tabIndex={-1}
-              >
-                {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+      <DialogContent
+        className="sm:max-w-[420px] rounded-2xl p-0 overflow-hidden"
+        dir="rtl"
+      >
+        <div className="p-5 sm:p-6">
+          <DialogHeader className="text-right sm:text-right space-y-2">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <ShieldCheck className="h-5 w-5" />
             </div>
-            {errorMessage && (
-              <p className="text-xs font-medium text-destructive mt-1 flex items-center gap-1">
-                <span>⚠️</span>
-                <span>{errorMessage}</span>
-              </p>
-            )}
-          </div>
 
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={loading}
-              className="rounded-xl w-full sm:w-auto"
-            >
-              إلغاء
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading || !pin.trim()}
-              className="rounded-xl font-semibold w-full sm:w-auto gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>جارٍ التحقق...</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="h-4 w-4" />
-                  <span>تأكيد ودخول الإدارة</span>
-                </>
+            <DialogTitle className="text-lg font-bold">
+              تأكيد الوصول إلى لوحة الإدارة
+            </DialogTitle>
+
+            <DialogDescription className="text-sm leading-6">
+              أدخل رمز PIN الخاص بمالك المعصرة للوصول إلى إعدادات الإدارة.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4 mt-5">
+            <div className="space-y-2">
+              <Label
+                htmlFor="admin-reauth-pin"
+                className="text-sm font-medium"
+              >
+                رمز PIN
+              </Label>
+
+              <div className="relative">
+                <Input
+                  id="admin-reauth-pin"
+                  type={showPin ? "text" : "password"}
+                  placeholder="أدخل رمز PIN"
+                  value={pin}
+                  maxLength={8}
+                  onChange={(e) => {
+                    setPin(e.target.value.replace(/\D/g, ""));
+                    if (errorMessage) setErrorMessage("");
+                  }}
+                  disabled={loading}
+                  autoFocus
+                  className="h-11 pe-10 rounded-xl text-center font-mono tracking-[0.3em]"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showPin ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+
+              {errorMessage && (
+                <p className="text-xs font-medium text-destructive">
+                  {errorMessage}
+                </p>
               )}
-            </Button>
-          </DialogFooter>
-        </form>
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={loading}
+                className="rounded-xl"
+              >
+                إلغاء
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={loading || !pin.trim()}
+                className="rounded-xl font-semibold gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>جارٍ التحقق...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-4 w-4" />
+                    <span>دخول الإدارة</span>
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

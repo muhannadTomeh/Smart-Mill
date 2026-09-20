@@ -30,7 +30,8 @@ import {
   Phone,
   Percent,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Archive
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,6 +47,8 @@ interface Partner {
   notes?: string | null;
   active: boolean;
   created_at: string;
+  reference_type?: string | null;
+  reversal_of?: string | null;
   total_due?: number; // Computed from payables
 }
 
@@ -57,8 +60,9 @@ interface PartnerTx {
   description: string;
   party_name: string;
   created_at: string;
+  reference_type?: string | null;
+  reversal_of?: string | null;
 }
-
 export default function Partners() {
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
@@ -88,19 +92,20 @@ export default function Partners() {
 
   const fetchPartners = async () => {
     if (!activeSeason) return;
+    const effectiveMillId = millId || activeSeason.mill_id;
+    if (!effectiveMillId) return;
     setLoading(true);
+
     try {
       const [partnersRes, payablesRes, txsRes] = await Promise.all([
-        supabase.from("partners" as any).select("*").order("name", { ascending: true }),
+        supabase.from("partners" as any).select("*").eq("mill_id", effectiveMillId).eq("active", true).order("name", { ascending: true }),
         supabase
           .from("payables" as any)
           .select("partner_id, remaining_amount")
+          .eq("season_id", activeSeason.id)
           .eq("type", "due_to_partner")
           .in("status", ["unpaid", "partially_paid"]),
-        supabase.from("financial_transactions" as any).select("*").eq("party_type", "partner").order("created_at", { ascending: false }).limit(20)
-      ]);
-
-      const partnerList: Partner[] = (partnersRes.data || []) as any;
+        supabase.from("financial_transactions" as any).select("*").eq("mill_id", effectiveMillId).eq("season_id", activeSeason.id).eq("party_type", "partner").order("created_at", { ascending: false }).limit(20)]); const partnerList: Partner[] = (partnersRes.data || []) as any;
       const duesMap: Record<string, number> = {};
       ((payablesRes.data || []) as any[]).forEach((p) => {
         if (p.partner_id) {
@@ -120,6 +125,17 @@ export default function Partners() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const archivePartner = async (partner: Partner) => {
+    if (!window.confirm(`أرشفة الشريك ${partner.name}؟ سيبقى تاريخه المالي محفوظاً.`)) return;
+    const { error } = await supabase.rpc("archive_master_data_command", { p_entity: "partner", p_id: partner.id });
+    if (error) {
+      toast({ title: "تعذرت الأرشفة", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "تمت أرشفة الشريك", description: "بقيت الالتزامات والحركات التاريخية محفوظة." });
+    await fetchPartners();
   };
 
   const handleAddPartner = async () => {
@@ -195,9 +211,37 @@ export default function Partners() {
       setTxLoading(false);
     }
   };
+  // muahnnad
+  const handleReversePartnerTx = async (tx: PartnerTx) => {
+    const reason = window.prompt("اكتب سبب عكس حركة الشريك:");
+    if (!reason?.trim()) return;
+    if (!window.confirm("تأكيد عكس هذه الحركة؟ سيتم إنشاء حركة مالية معاكسة ولن تُحذف الحركة الأصلية.")) return;
 
+    try {
+      const { error } = await supabase.rpc("reverse_partner_transaction_command" as any, {
+        p_financial_transaction_id: tx.id,
+        p_reason: reason.trim(),
+        p_idempotency_key: crypto.randomUUID(),
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "تم عكس الحركة",
+        description: "تم إنشاء حركة مالية معاكسة بنجاح.",
+      });
+
+      await fetchPartners();
+    } catch (err: any) {
+      toast({
+        title: "تعذر عكس الحركة",
+        description: err.message || "فشل عكس حركة الشريك",
+        variant: "destructive",
+      });
+    }
+  };
   const totalPartnersDue = partners.reduce((s, p) => s + (p.total_due || 0), 0);
-
+  const reversedPartnerTxIds = new Set(partnerTxs.filter((tx) => Boolean(tx.reversal_of)).map((tx) => tx.reversal_of as string));
   return (
     <div className="space-y-6 max-w-7xl mx-auto" dir="rtl">
       {/* Header */}
@@ -319,7 +363,10 @@ export default function Partners() {
                             }}
                             className="h-7 text-xs gap-1 border-rose-500/40 hover:bg-rose-50 text-rose-700 dark:hover:bg-rose-950/40 dark:text-rose-400"
                           >
-                            <ArrowUpRight className="h-3 w-3" /> سحب أرباح
+                            <ArrowUpRight className="h-3 w-3" /> سحب شريك
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => void archivePartner(p)}>
+                            <Archive className="h-3 w-3" /> أرشفة
                           </Button>
                         </div>
                       </TableCell>
@@ -351,6 +398,7 @@ export default function Partners() {
                     <TableHead className="text-right">المبلغ</TableHead>
                     <TableHead className="text-right">البيان</TableHead>
                     <TableHead className="text-right">التاريخ</TableHead>
+                    <TableHead className="text-center">إجراء</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -371,6 +419,7 @@ export default function Partners() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{tx.description}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatDate(tx.created_at)}</TableCell>
+                      <TableCell className="text-center">{tx.reference_type === "partner_transaction" && !tx.reversal_of && !reversedPartnerTxIds.has(tx.id) ? <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void handleReversePartnerTx(tx)}>عكس الحركة</Button> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

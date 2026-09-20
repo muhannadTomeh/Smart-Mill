@@ -107,15 +107,10 @@ export default function SeasonSetup() {
           .eq("status", "active");
       }
 
-      const { data, error } = await supabase.from("seasons").insert({ ...payload, status: "active" }).select().single();
+      const { error } = await supabase.from("seasons").insert({ ...payload, status: "active" }).select().single();
       if (error) {
         toast({ title: "خطأ", description: error.message, variant: "destructive" });
       } else {
-        await supabase.from("inventory").insert({
-          user_id: user?.id!,
-          mill_id: millId || null,
-          season_id: data.id,
-        });
         toast({ title: "تم الإنشاء", description: `تم إنشاء ${form.name} وتفعيله` });
         await refetch();
         navigate("/dashboard");

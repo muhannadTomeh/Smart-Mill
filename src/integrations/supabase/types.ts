@@ -388,6 +388,7 @@ export type Database = {
       }
       customers: {
         Row: {
+          active: boolean
           created_at: string
           id: string
           mill_id: string | null
@@ -398,6 +399,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -408,6 +410,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          active?: boolean
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -1320,10 +1323,16 @@ export type Database = {
       oil_transactions: {
         Row: {
           amount: number
+          cancellation_operation_id: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string
           id: string
           mill_id: string | null
           notes: string | null
+          payable_id: string | null
+          payment_method: string
           party_name: string | null
           price: number
           season_id: string | null
@@ -1333,10 +1342,16 @@ export type Database = {
         }
         Insert: {
           amount: number
+          cancellation_operation_id?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           id?: string
           mill_id?: string | null
           notes?: string | null
+          payable_id?: string | null
+          payment_method?: string
           party_name?: string | null
           price: number
           season_id?: string | null
@@ -1346,10 +1361,16 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cancellation_operation_id?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           id?: string
           mill_id?: string | null
           notes?: string | null
+          payable_id?: string | null
+          payment_method?: string
           party_name?: string | null
           price?: number
           season_id?: string | null
@@ -1359,10 +1380,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "oil_transactions_cancellation_operation_id_fkey"
+            columns: ["cancellation_operation_id"]
+            isOneToOne: false
+            referencedRelation: "business_operations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_oil_transactions_mill_id"
             columns: ["mill_id"]
             isOneToOne: false
             referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oil_transactions_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
             referencedColumns: ["id"]
           },
           {
@@ -1786,6 +1821,7 @@ export type Database = {
       queue: {
         Row: {
           bags: number
+          customer_id: string | null
           created_at: string
           estimated_minutes: number | null
           id: string
@@ -1801,6 +1837,7 @@ export type Database = {
         }
         Insert: {
           bags: number
+          customer_id?: string | null
           created_at?: string
           estimated_minutes?: number | null
           id?: string
@@ -1816,6 +1853,7 @@ export type Database = {
         }
         Update: {
           bags?: number
+          customer_id?: string | null
           created_at?: string
           estimated_minutes?: number | null
           id?: string
@@ -1830,6 +1868,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "queue_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fk_queue_mill_id"
             columns: ["mill_id"]
@@ -2592,7 +2637,7 @@ export type Database = {
           oil_balance: number | null
           oil_purchased: number | null
           oil_sold: number | null
-          opening_and_adjustments: number | null
+          adjustments: number | null
           season_id: string | null
         }
         Relationships: [
@@ -2764,6 +2809,14 @@ export type Database = {
         Args: {
           p_idempotency_key: string
           p_invoice_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      cancel_oil_trade_command: {
+        Args: {
+          p_idempotency_key: string
+          p_oil_transaction_id: string
           p_reason: string
         }
         Returns: Json
@@ -3037,6 +3090,10 @@ export type Database = {
           p_season_id: string
           p_type: string
         }
+        Returns: Json
+      }
+      archive_master_data_command: {
+        Args: { p_entity: string; p_id: string }
         Returns: Json
       }
       record_product_purchase_atomic: {

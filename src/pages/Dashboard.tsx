@@ -35,10 +35,13 @@ export default function Dashboard() {
     waitingCount: 0,
     doneCount: 0,
     todayExpenses: 0,
+    productCount: 0,
+    lowStockCount: 0,
   });
+
   const [currentProcessing, setCurrentProcessing] = useState<QueueItem | null>(null);
   const [queuePreview, setQueuePreview] = useState<QueueItem[]>([]);
-  const [showSensitive, setShowSensitive] = useState(false);
+  const [showSensitive, setShowSensitive] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
@@ -48,39 +51,51 @@ export default function Dashboard() {
 
   const fetchStats = useCallback(async () => {
     if (!activeSeason) return;
+    const effectiveMillId = millId || activeSeason.mill_id;
     const today = new Date().toISOString().split("T")[0];
-    const [waitingRes, doneQueueRes, doneInvoiceRes, expenseRes] = await Promise.all([
-      supabase
-        .from("queue")
-        .select("id", { count: "exact", head: true })
-        .eq("season_id", activeSeason.id)
-        .eq("status", "waiting"),
-      supabase
-        .from("queue")
-        .select("id", { count: "exact", head: true })
-        .eq("season_id", activeSeason.id)
-        .in("status", ["completed", "done"])
-        .gte("created_at", today),
-      supabase
-        .from("invoices")
-        .select("id", { count: "exact", head: true })
-        .eq("season_id", activeSeason.id)
-        .is("voided_at", null)
-        .gte("created_at", today),
-      supabase
-        .from("expenses")
-        .select("amount")
-        .eq("season_id", activeSeason.id)
-        .is("voided_at", null)
-        .gte("created_at", today),
+    const [waitingRes, doneQueueRes, doneInvoiceRes, expenseRes, productsRes] = await Promise.all([supabase
+      .from("queue")
+      .select("id", { count: "exact", head: true })
+      .eq("season_id", activeSeason.id)
+      .eq("status", "waiting"),
+    supabase
+      .from("queue")
+      .select("id", { count: "exact", head: true })
+      .eq("season_id", activeSeason.id)
+      .in("status", ["completed", "done"])
+      .gte("created_at", today),
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("season_id", activeSeason.id)
+      .is("voided_at", null)
+      .gte("created_at", today),
+    supabase
+      .from("expenses")
+      .select("amount")
+      .eq("season_id", activeSeason.id)
+      .is("voided_at", null)
+      .gte("created_at", today),
+    supabase
+      .from("products" as any)
+      .select("id,current_stock")
+      .eq("mill_id", effectiveMillId)
+      .eq("active", true),
+
     ]);
 
     const doneCount = Math.max(doneQueueRes.count || 0, doneInvoiceRes.count || 0);
+    const products = (productsRes.data || []) as any[];
+    const productCount = products.length;
+    const lowStockCount = products.filter(
+      (p) => Number(p.current_stock) <= 5
+    ).length;
 
     setStats({
       waitingCount: waitingRes.count || 0,
       doneCount,
-      todayExpenses: (expenseRes.data || []).reduce((s: number, e: any) => s + Number(e.amount), 0),
+      todayExpenses: (expenseRes.data || []).reduce((s: number, e: any) => s + Number(e.amount), 0), productCount,
+      lowStockCount,
     });
   }, [activeSeason?.id]);
 
@@ -132,6 +147,13 @@ export default function Dashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => {
         void fetchStats();
       })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        () => {
+          void fetchStats();
+        }
+      )
       .subscribe();
 
     return () => { void supabase.removeChannel(channel); };
@@ -139,18 +161,80 @@ export default function Dashboard() {
 
 
   const statCards = [
-    { label: "الرصيد النقدي للمعصرة", hint: "من الدفتر المالي", value: `${cashBalance.toFixed(0)} ₪`, icon: DollarSign, tone: "text-primary", bg: "bg-primary/10", sensitive: true },
-    { label: "الزيت", hint: `${((Number(inventory?.total_oil) || 0) / 16).toFixed(1)} تنكة`, value: `${(Number(inventory?.total_oil) || 0).toFixed(1)} كغم`, icon: Droplets, tone: "text-[hsl(var(--primary-glow))]", bg: "bg-[hsl(var(--primary-glow))]/12" },
-    { label: "في الطابور", hint: "زبون بانتظار العصر", value: stats.waitingCount, icon: Clock, tone: "text-[hsl(var(--warning))]", bg: "bg-[hsl(var(--warning))]/12" },
-    { label: "تم الإنجاز", hint: "اليوم", value: stats.doneCount, icon: CheckCircle, tone: "text-[hsl(var(--success))]", bg: "bg-[hsl(var(--success))]/12" },
-    { label: "مصاريف اليوم", hint: "شيكل", value: `${stats.todayExpenses} ₪`, icon: Wallet, tone: "text-destructive", bg: "bg-destructive/10", sensitive: true },
+    {
+      label: "الرصيد النقدي الحالي",
+      hint: "المتوفر الآن",
+      value: `${cashBalance.toFixed(0)} ₪`,
+      icon: DollarSign,
+      tone: "text-primary",
+      bg: "bg-primary/10",
+      sensitive: true
+    },
+
+    {
+      label: "مخزون الزيت",
+      hint: `${((Number(inventory?.total_oil) || 0) / 16).toFixed(1)} تنكة`,
+      value: `${(Number(inventory?.total_oil) || 0).toFixed(1)} كغم`,
+      icon: Droplets,
+      tone: "text-[hsl(var(--primary-glow))]",
+      bg: "bg-[hsl(var(--primary-glow))]/12"
+    },
+
+    {
+      label: "في الانتظار",
+      hint: "زبائن بالطابور",
+      value: stats.waitingCount,
+      icon: Clock,
+      tone: "text-[hsl(var(--warning))]",
+      bg: "bg-[hsl(var(--warning))]/12"
+    },
+
+    {
+      label: "تم إنجازهم اليوم",
+      hint: "زبائن / فواتير",
+      value: stats.doneCount,
+      icon: CheckCircle,
+      tone: "text-[hsl(var(--success))]",
+      bg: "bg-[hsl(var(--success))]/12"
+    },
+
+    {
+      label: "مصاريف اليوم",
+      hint: "إجمالي المسجل اليوم",
+      value: `${stats.todayExpenses} ₪`,
+      icon: Wallet,
+      tone: "text-destructive",
+      bg: "bg-destructive/10",
+      sensitive: true
+    },
   ];
 
   const quickActions = [
-    { label: "إضافة للطابور", desc: "تسجيل زبون جديد", icon: UserPlus, onClick: () => navigate("/queue"), primary: true },
-    { label: "فتح الطابور", desc: "إدارة خط الإنتاج", icon: Clock, onClick: () => navigate("/queue") },
-    { label: "إنشاء فاتورة", desc: "حساب الرد والأجرة", icon: Receipt, onClick: () => navigate("/invoices") },
-    { label: "إضافة مصروف", desc: "تسجيل نفقات المعصرة", icon: Wallet, onClick: () => navigate("/expenses") },
+    {
+      label: "إضافة للطابور",
+      desc: "تسجيل زبون جديد",
+      icon: UserPlus,
+      onClick: () => navigate("/queue"),
+      primary: true,
+    },
+    {
+      label: "المخزون والبضائع",
+      desc: "عرض المخزون والبيع والتوريد",
+      icon: Package,
+      onClick: () => navigate("/inventory"),
+    },
+    {
+      label: "إنشاء فاتورة",
+      desc: "حساب الرد والأجرة",
+      icon: Receipt,
+      onClick: () => navigate("/invoices"),
+    },
+    {
+      label: "إضافة مصروف",
+      desc: "تسجيل نفقات المعصرة",
+      icon: Wallet,
+      onClick: () => navigate("/expenses"),
+    },
   ];
 
   const procRemSec = currentProcessing ? getRemainingSeconds(currentProcessing, nowMs) : null;
@@ -167,16 +251,20 @@ export default function Dashboard() {
         <div className="absolute inset-0 glow-gradient pointer-events-none" />
         <div className="relative flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {activeSeason?.name ?? "لوحة المعصرة"}
+            <p className="text-xs font-semibold text-muted-foreground">
+              {activeSeason?.name ?? "الموسم الحالي"}
             </p>
-            <h1 className="text-3xl font-bold text-foreground mt-1.5">لوحة التحكم</h1>
-            <p className="text-sm text-muted-foreground mt-1">نظرة عامة لحظية على أداء المعصرة وخط الإنتاج</p>
+
+            <h1 className="text-3xl font-bold text-foreground mt-1.5">
+              ملخص المعصرة
+            </h1>
+
+            <p className="text-sm text-muted-foreground mt-1">
+              أهم أرقام التشغيل والمالية في مكان واحد
+            </p>
+
           </div>
-          <Badge className="rounded-full bg-primary/10 text-primary hover:bg-primary/15 border-0 px-4 py-1.5 text-xs font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary-glow))] animate-pulse ms-2" />
-            النظام يعمل الآن
-          </Badge>
+
         </div>
       </div>
 
@@ -185,8 +273,15 @@ export default function Dashboard() {
         {statCards.map((card, i) => (
           <div
             key={i}
-            className="surface-card p-5 hover:-translate-y-0.5 hover:shadow-olive transition-all duration-300"
+            onClick={
+              card.label === "مخزون البضائع"
+                ? () => navigate("/inventory")
+                : undefined
+            }
+            className={`surface-card p-5 hover:-translate-y-0.5 hover:shadow-olive transition-all duration-300 ${card.label === "مخزون البضائع" ? "cursor-pointer" : ""
+              }`}
           >
+
             <div className="flex items-start justify-between mb-4">
               <div className={`w-11 h-11 rounded-2xl ${card.bg} flex items-center justify-center`}>
                 <card.icon className={`h-5 w-5 ${card.tone}`} />
@@ -196,6 +291,7 @@ export default function Dashboard() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title={showSensitive ? "إخفاء الرصيد" : "إظهار الرصيد"}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowSensitive(!showSensitive);
@@ -225,19 +321,17 @@ export default function Dashboard() {
               <button
                 key={i}
                 onClick={action.onClick}
-                className={`group flex items-center justify-between gap-4 w-full rounded-2xl p-4 text-right transition-all duration-300 ${
-                  action.primary
-                    ? "bg-primary text-primary-foreground shadow-olive hover:scale-[1.015]"
-                    : "surface-card hover:bg-accent/50"
-                }`}
+                className={`group flex items-center justify-between gap-4 w-full rounded-2xl p-4 text-right transition-all duration-300 ${action.primary
+                  ? "bg-primary text-primary-foreground shadow-olive hover:scale-[1.015]"
+                  : "surface-card hover:bg-accent/50"
+                  }`}
               >
                 <span className="flex items-center gap-3.5">
                   <span
-                    className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
-                      action.primary
-                        ? "bg-primary-foreground/15 group-hover:bg-[hsl(var(--primary-glow))]"
-                        : "bg-accent text-primary"
-                    }`}
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${action.primary
+                      ? "bg-primary-foreground/15 group-hover:bg-[hsl(var(--primary-glow))]"
+                      : "bg-accent text-primary"
+                      }`}
                   >
                     <action.icon className="h-5 w-5" />
                   </span>
@@ -353,9 +447,8 @@ export default function Dashboard() {
                     >
                       <div className="flex items-center gap-3">
                         <span
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                            i === 0 ? "bg-amber-500/15 text-amber-800 dark:text-amber-200" : "bg-muted text-muted-foreground"
-                          }`}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-amber-500/15 text-amber-800 dark:text-amber-200" : "bg-muted text-muted-foreground"
+                            }`}
                         >
                           #{item.position}
                         </span>

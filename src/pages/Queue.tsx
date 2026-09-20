@@ -219,20 +219,34 @@ const Queue = () => {
     const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes, 10) : null;
     const bagsCount = newCustomer.bags ? parseInt(newCustomer.bags, 10) : 0;
 
-    // Create a distinct customer record for this person in the customers table
+    // Resolve by phone first, then create a canonical customer record.  The queue
+    // row stores this relationship directly; notes and browser storage are never
+    // used as an identity link for new work.
     let createdCustId: string | null = null;
     try {
-      const { data: newCustRecord, error: custErr } = await supabase
-        .from("customers")
-        .insert({
-          user_id: user?.id!,
-          mill_id: currentMillId,
-          season_id: activeSeason!.id,
-          name: newCustomer.name.trim(),
-          phone: newCustomer.phone?.trim() || null,
-        } as any)
-        .select("id")
-        .single();
+      const cleanPhone = newCustomer.phone?.trim() || null;
+      let newCustRecord: { id: string } | null = null;
+      let custErr: unknown = null;
+      if (cleanPhone) {
+        const { data } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("mill_id", currentMillId)
+          .eq("season_id", activeSeason!.id)
+          .eq("phone", cleanPhone)
+          .eq("active", true)
+          .maybeSingle();
+        newCustRecord = data as { id: string } | null;
+      }
+      if (!newCustRecord) {
+        const result = await supabase
+          .from("customers")
+          .insert({ user_id: user?.id!, mill_id: currentMillId, season_id: activeSeason!.id, name: newCustomer.name.trim(), phone: cleanPhone } as any)
+          .select("id")
+          .single();
+        newCustRecord = result.data;
+        custErr = result.error;
+      }
       if (custErr) {
         console.error("Error creating customer record in customers table:", custErr);
       }
@@ -245,7 +259,6 @@ const Queue = () => {
 
     const fallbackNotes = [
       estMin ? `[وقت_تقديري:${estMin}]` : null,
-      createdCustId ? `[cust_id:${createdCustId}]` : null,
       newCustomer.notes?.trim() || null,
     ].filter(Boolean).join(" ") || null;
 
@@ -257,6 +270,7 @@ const Queue = () => {
       user_id: user?.id!,
       mill_id: currentMillId,
       season_id: activeSeason!.id,
+      customer_id: createdCustId,
       name: newCustomer.name.trim(),
       phone: newCustomer.phone?.trim() || null,
       bags: bagsCount,
@@ -280,9 +294,6 @@ const Queue = () => {
     }
 
     if (!error) {
-      if (insertedData?.id && createdCustId) {
-        localStorage.setItem(`queue_cust_${insertedData.id}`, createdCustId);
-      }
       if (insertedData?.id && estMin) {
         localStorage.setItem(`queue_est_${insertedData.id}`, String(estMin));
       }

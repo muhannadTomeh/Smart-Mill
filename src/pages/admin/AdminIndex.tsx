@@ -11,14 +11,14 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -40,22 +40,22 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Users, User, Building2, Receipt, Droplets, CalendarCheck, Filter, 
-  UserPlus, Copy, RefreshCw, CheckCircle2, Phone, Eye, EyeOff, Key, 
+import {
+  Users, User, Building2, Receipt, Droplets, CalendarCheck, Filter,
+  UserPlus, Copy, RefreshCw, CheckCircle2, Phone, Eye, EyeOff, Key,
   Edit, Trash2, ShieldCheck, Shield, Search, UserX, UserCheck
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { 
-  fetchAllAdminAccounts, 
-  revealCredential, 
+import {
+  fetchAllAdminAccounts,
+  revealCredential,
   storeCredential,
-  updateUserAccount, 
-  deleteUserAccount, 
+  updateUserAccount,
+  deleteUserAccount,
   toggleUserAccountActive,
   createMillOwnerAccount,
-  AdminAccountItem 
+  AdminAccountItem
 } from "@/lib/credentialVault";
 
 export default function AdminIndex() {
@@ -288,7 +288,7 @@ export default function AdminIndex() {
         if (pass) {
           setDecryptedAccountPasswords((p) => ({ ...p, [key]: pass }));
         }
-      } catch {}
+      } catch { }
     }
     if (pass) {
       navigator.clipboard.writeText(pass);
@@ -342,7 +342,7 @@ export default function AdminIndex() {
         if (pin) {
           setDecryptedAccountPins((p) => ({ ...p, [key]: pin }));
         }
-      } catch {}
+      } catch { }
     }
     if (pin) {
       navigator.clipboard.writeText(pin);
@@ -362,7 +362,7 @@ export default function AdminIndex() {
         if (pass) {
           setDecryptedAccountPasswords((p) => ({ ...p, [acc.user_id]: pass }));
         }
-      } catch {}
+      } catch { }
     }
     setEditAccountForm({
       name: acc.display_name,
@@ -546,7 +546,7 @@ export default function AdminIndex() {
   const handleUpdateContactSettings = async () => {
     setUpdatingLink(true);
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     const settings = [
       { key: "contact_link", value: contactLink },
       { key: "contact_email", value: contactEmail },
@@ -556,12 +556,12 @@ export default function AdminIndex() {
 
     const { error } = await supabase
       .from("system_settings")
-      .upsert(settings.map(s => ({ 
+      .upsert(settings.map(s => ({
         ...s,
         updated_at: new Date().toISOString(),
         updated_by: user?.id
       })));
-    
+
     setUpdatingLink(false);
     if (!error) {
       toast.success("تم تحديث إعدادات التواصل بنجاح");
@@ -572,8 +572,8 @@ export default function AdminIndex() {
 
   if (loading) return <div className="p-8 text-center font-medium">جارٍ التحميل...</div>;
 
-  const filteredMills = statusFilter === "all" 
-    ? mills 
+  const filteredMills = statusFilter === "all"
+    ? mills
     : mills.filter(mill => mill.subscriptionStatus === statusFilter);
 
   const filteredAccounts = accounts.filter(acc => {
@@ -627,7 +627,7 @@ export default function AdminIndex() {
         return (
           <Badge variant="secondary" className="gap-1 font-medium text-xs">
             <Users className="h-3 w-3 text-muted-foreground" />
-            <span>كاشير (موظف)</span>
+            <span>موظف المعصرة (موظف)</span>
           </Badge>
         );
     }
@@ -659,7 +659,7 @@ export default function AdminIndex() {
                   إدخال بيانات المالك والمعصرة وبيانات الدخول للنظام
                 </DialogDescription>
               </DialogHeader>
-              
+
               {!createdCredentials ? (
                 <form onSubmit={handleCreateAccount} className="space-y-4 py-2 text-right">
                   {/* معلومات المالك */}
@@ -671,24 +671,24 @@ export default function AdminIndex() {
 
                     <div className="space-y-1.5">
                       <Label htmlFor="owner_name" className="text-right block text-xs font-semibold">اسم صاحب المعصرة *</Label>
-                      <Input 
-                        id="owner_name" 
-                        required 
+                      <Input
+                        id="owner_name"
+                        required
                         className="text-right h-9 text-sm"
                         value={newAccountData.owner_name}
-                        onChange={e => setNewAccountData(prev => ({...prev, owner_name: e.target.value}))}
+                        onChange={e => setNewAccountData(prev => ({ ...prev, owner_name: e.target.value }))}
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="owner_phone" className="text-right block text-xs font-semibold">رقم هاتف المالك *</Label>
-                      <Input 
-                        id="owner_phone" 
+                      <Input
+                        id="owner_phone"
                         required
                         dir="ltr"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.owner_phone}
-                        onChange={e => setNewAccountData(prev => ({...prev, owner_phone: e.target.value}))}
+                        onChange={e => setNewAccountData(prev => ({ ...prev, owner_phone: e.target.value }))}
                       />
                     </div>
 
@@ -697,13 +697,13 @@ export default function AdminIndex() {
                         <Label htmlFor="owner_email" className="text-right block text-xs font-semibold">البريد الإلكتروني للمالك</Label>
                         <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">اختياري</span>
                       </div>
-                      <Input 
-                        id="owner_email" 
-                        type="email" 
+                      <Input
+                        id="owner_email"
+                        type="email"
                         dir="ltr"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.owner_email}
-                        onChange={e => setNewAccountData(prev => ({...prev, owner_email: e.target.value}))}
+                        onChange={e => setNewAccountData(prev => ({ ...prev, owner_email: e.target.value }))}
                       />
                     </div>
                   </div>
@@ -717,35 +717,35 @@ export default function AdminIndex() {
 
                     <div className="space-y-1.5">
                       <Label htmlFor="mill_name" className="text-right block text-xs font-semibold">اسم المعصرة *</Label>
-                      <Input 
-                        id="mill_name" 
-                        required 
+                      <Input
+                        id="mill_name"
+                        required
                         className="text-right h-9 text-sm"
                         value={newAccountData.mill_name}
-                        onChange={e => setNewAccountData(prev => ({...prev, mill_name: e.target.value}))}
+                        onChange={e => setNewAccountData(prev => ({ ...prev, mill_name: e.target.value }))}
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="country" className="text-right block text-xs font-semibold">البلد / المدينة *</Label>
-                      <Input 
-                        id="country" 
+                      <Input
+                        id="country"
                         required
                         className="text-right h-9 text-sm"
                         value={newAccountData.country}
-                        onChange={e => setNewAccountData(prev => ({...prev, country: e.target.value}))}
+                        onChange={e => setNewAccountData(prev => ({ ...prev, country: e.target.value }))}
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="username" className="text-right block text-xs font-semibold">اسم المستخدم (Username للدخول) *</Label>
-                      <Input 
-                        id="username" 
-                        required 
+                      <Input
+                        id="username"
+                        required
                         dir="ltr"
                         className="text-left font-mono h-9 text-sm"
                         value={newAccountData.username}
-                        onChange={e => setNewAccountData(prev => ({...prev, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "")}))}
+                        onChange={e => setNewAccountData(prev => ({ ...prev, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "") }))}
                       />
                       <p className="text-[11px] text-muted-foreground text-right">يدخل به صاحب المعصرة مباشرة في شاشة الدخول</p>
                     </div>
@@ -753,18 +753,18 @@ export default function AdminIndex() {
                     <div className="space-y-1.5">
                       <Label htmlFor="password" className="text-right block text-xs font-semibold">كلمة المرور (Password) *</Label>
                       <div className="flex gap-2">
-                        <Input 
-                          id="password" 
-                          type="text" 
-                          required 
+                        <Input
+                          id="password"
+                          type="text"
+                          required
                           dir="ltr"
                           className="text-left font-mono h-9 text-sm"
                           value={newAccountData.password}
-                          onChange={e => setNewAccountData(prev => ({...prev, password: e.target.value}))}
+                          onChange={e => setNewAccountData(prev => ({ ...prev, password: e.target.value }))}
                         />
-                        <Button 
-                          type="button" 
-                          variant="outline" 
+                        <Button
+                          type="button"
+                          variant="outline"
                           size="sm"
                           onClick={generatePassword}
                           className="whitespace-nowrap h-9 text-xs"
@@ -779,10 +779,10 @@ export default function AdminIndex() {
                         PIN لوحة الإدارة (Admin PIN) *
                       </Label>
                       <div className="flex gap-2">
-                        <Input 
-                          id="admin_pin" 
-                          type="text" 
-                          required 
+                        <Input
+                          id="admin_pin"
+                          type="text"
+                          required
                           maxLength={8}
                           dir="ltr"
                           className="text-center font-mono tracking-widest h-9 text-sm"
@@ -792,9 +792,9 @@ export default function AdminIndex() {
                             setNewAccountData((prev) => ({ ...prev, admin_pin: val }));
                           }}
                         />
-                        <Button 
-                          type="button" 
-                          variant="outline" 
+                        <Button
+                          type="button"
+                          variant="outline"
                           size="sm"
                           onClick={() => setNewAccountData(prev => ({ ...prev, admin_pin: String(Math.floor(100000 + Math.random() * 900000)) }))}
                           className="whitespace-nowrap h-9 text-xs"
@@ -809,16 +809,16 @@ export default function AdminIndex() {
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => setIsCreateModalOpen(false)}
                       disabled={createLoading}
                     >
                       إلغاء
                     </Button>
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       className="bg-green-600 hover:bg-green-700 text-white"
                       disabled={createLoading}
                     >
@@ -847,10 +847,10 @@ export default function AdminIndex() {
                       <span className="text-muted-foreground">اسم المستخدم للدخول:</span>
                       <div className="flex items-center gap-1.5 font-mono font-bold text-primary">
                         <span>{createdCredentials.username}</span>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          className="h-5 w-5" 
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5"
                           onClick={() => copyToClipboard(createdCredentials.username, "اسم المستخدم")}
                         >
                           <Copy className="h-3 w-3" />
@@ -861,10 +861,10 @@ export default function AdminIndex() {
                       <span className="text-muted-foreground">كلمة المرور:</span>
                       <div className="flex items-center gap-1.5 font-mono font-bold text-amber-700 dark:text-amber-300">
                         <span>{createdCredentials.password}</span>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          className="h-5 w-5" 
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5"
                           onClick={() => copyToClipboard(createdCredentials.password, "كلمة المرور")}
                         >
                           <Copy className="h-3 w-3" />
@@ -875,10 +875,10 @@ export default function AdminIndex() {
                       <span className="text-muted-foreground">رمز لوحة الإدارة (Admin PIN):</span>
                       <div className="flex items-center gap-1.5 font-mono font-bold text-blue-700 dark:text-blue-300">
                         <span>{createdCredentials.admin_pin || "123456"}</span>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          className="h-5 w-5" 
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5"
                           onClick={() => copyToClipboard(createdCredentials.admin_pin || "123456", "رمز لوحة الإدارة")}
                         >
                           <Copy className="h-3 w-3" />
@@ -887,8 +887,8 @@ export default function AdminIndex() {
                     </div>
                   </div>
 
-                  <Button 
-                    className="w-full bg-primary" 
+                  <Button
+                    className="w-full bg-primary"
                     onClick={() => {
                       setIsCreateModalOpen(false);
                       setCreatedCredentials(null);
@@ -1043,8 +1043,8 @@ export default function AdminIndex() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => navigate(`/admin/mill/${mill.id}`)}
                         >
@@ -1076,15 +1076,15 @@ export default function AdminIndex() {
                   <span>إدارة الحسابات والمستخدمين (Accounts & Credentials Vault)</span>
                 </CardTitle>
                 <CardDescription className="text-xs mt-1">
-                  عرض وإدارة حسابات المشرف العام، أصحاب المعاصر، وموظفي الكاشير مع تشفير كامل لكلمات المرور
+                  عرض وإدارة حسابات المشرف العام، أصحاب المعاصر، والموظفين مع تشفير كامل لكلمات المرور
                 </CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                 {/* Search Input */}
                 <div className="relative flex-1 sm:w-60">
                   <Search className="h-3.5 w-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input 
-                    placeholder="بحث بالاسم أو اسم الدخول أو المعصرة..." 
+                  <Input
+                    placeholder="بحث بالاسم أو اسم الدخول أو المعصرة..."
                     value={accountSearchQuery}
                     onChange={(e) => setAccountSearchQuery(e.target.value)}
                     className="h-9 pr-8 text-xs text-right"
@@ -1100,15 +1100,15 @@ export default function AdminIndex() {
                     <SelectItem value="all">كل الأدوار</SelectItem>
                     <SelectItem value="platform_admin">المشرف العام (Platform Admin)</SelectItem>
                     <SelectItem value="mill_owner">أصحاب المعاصر (Owners)</SelectItem>
-                    <SelectItem value="mill_employee">موظفو الكاشير (Employees)</SelectItem>
+                    <SelectItem value="mill_employee">موظفو الموظف المعصرة (Employees)</SelectItem>
                   </SelectContent>
                 </Select>
 
                 {/* Refresh Button */}
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="h-9 w-9" 
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
                   onClick={loadAccounts}
                   disabled={accountsLoading}
                   title="تحديث القائمة"
@@ -1330,7 +1330,7 @@ export default function AdminIndex() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                title="حذف / تعطيل حساب الكاشير"
+                                title="حذف / تعطيل حساب الموظف المعصرة"
                                 onClick={() => setDeleteTargetAccount(acc)}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -1414,7 +1414,7 @@ export default function AdminIndex() {
                     className="text-left font-mono"
                   />
                 </div>
-                
+
                 <div className="flex justify-start pt-2">
                   <Button onClick={handleUpdateContactSettings} disabled={updatingLink}>
                     {updatingLink ? "جاري الحفظ..." : "حفظ إعدادات التواصل"}

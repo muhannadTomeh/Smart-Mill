@@ -15,17 +15,40 @@ export default defineTool({
     const supabase = supabaseForUser(ctx);
     try {
       const seasonId = await resolveSeasonId(supabase, season_id);
-      const { data, error } = await supabase
-        .from("inventory")
-        .select("total_oil,total_cash,updated_at")
-        .eq("season_id", seasonId)
-        .maybeSingle();
-      if (error) return errorResult(error.message);
+      const { data: season, error: seasonError } = await supabase
+        .from("seasons")
+        .select("mill_id")
+        .eq("id", seasonId)
+        .single();
+      if (seasonError) return errorResult(seasonError.message);
+
+      const [cashResult, oilResult] = await Promise.all([
+        // The generated browser schema does not include this canonical SQL view.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("mill_cash_balance")
+          .select("cash_balance")
+          .eq("season_id", seasonId)
+          .eq("mill_id", season.mill_id)
+          .maybeSingle(),
+        // The generated browser schema does not include this canonical SQL view.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("mill_oil_balance")
+          .select("current_balance")
+          .eq("season_id", seasonId)
+          .eq("mill_id", season.mill_id)
+          .maybeSingle(),
+      ]);
+      if (cashResult.error) return errorResult(cashResult.error.message);
+      if (oilResult.error) return errorResult(oilResult.error.message);
       return textResult({
         season_id: seasonId,
-        total_oil: data?.total_oil ?? 0,
-        total_cash: data?.total_cash ?? 0,
-        updated_at: data?.updated_at ?? null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        total_oil: Number((oilResult.data as any)?.current_balance ?? 0),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        total_cash: Number((cashResult.data as any)?.cash_balance ?? 0),
+        balance_sources: { oil: "mill_oil_balance", cash: "mill_cash_balance" },
       });
     } catch (e) {
       return errorResult(e instanceof Error ? e.message : String(e));

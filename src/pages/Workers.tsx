@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCheck, Plus, DollarSign, Pencil, ClipboardList, Search, Filter, Trash2, AlertTriangle } from "lucide-react";
+import { UserCheck, Plus, DollarSign, Pencil, ClipboardList, Search, Filter, Archive, AlertTriangle, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/contexts/RoleContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { formatDate } from "@/lib/formatters";
@@ -24,6 +25,7 @@ interface Worker {
   shift_rate: number | null;
   total_earned: number;
   total_paid: number;
+  active: boolean;
 }
 
 interface WorkRecord {
@@ -34,6 +36,8 @@ interface WorkRecord {
   amount: number;
   notes: string | null;
   created_at: string;
+  status: "active" | "reversed";
+  reversal_reason: string | null;
 }
 
 interface WorkerPayment {
@@ -42,10 +46,13 @@ interface WorkerPayment {
   amount: number;
   notes: string | null;
   created_at: string;
+  status: "active" | "reversed";
+  reversal_reason: string | null;
 }
 
 const Workers = () => {
   const { user, millId } = useAuth();
+  const { isEmployee } = useRole();
   const { activeSeason } = useSeason();
   const { toast } = useToast();
   const { inventory } = useInventory();
@@ -207,18 +214,43 @@ const Workers = () => {
     fetchWorkers();
   };
 
-  const deleteWorker = async (worker: Worker) => {
-    if (!confirm(`هل أنت متأكد من حذف العامل ${worker.name}؟`)) return;
-    const { error } = await supabase.from("workers").delete().eq("id", worker.id);
+  const archiveWorker = async (worker: Worker) => {
+    if (!confirm(`هل تريد أرشفة العامل ${worker.name}؟ سيبقى تاريخه محفوظاً.`)) return;
+    const { error } = await supabase.from("workers").update({ active: false }).eq("id", worker.id);
     if (error) {
-      toast({ title: "خطأ في الحذف", description: error.message, variant: "destructive" });
+      toast({ title: "خطأ في الأرشفة", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "تم الحذف", description: `تم حذف العامل ${worker.name}` });
+      toast({ title: "تمت الأرشفة", description: `تمت أرشفة العامل ${worker.name} مع الاحتفاظ بسجله` });
       fetchWorkers();
     }
   };
 
+  const reversePayment = async (payment: WorkerPayment) => {
+    if (isEmployee) {
+      toast({ title: "غير مصرح", description: "عكس دفعات العمال متاح لمالك المعصرة فقط.", variant: "destructive" });
+      return;
+    }
+    const reason = window.prompt("سبب عكس الدفعة (إلزامي)")?.trim();
+    if (!reason) return;
+    const { error } = await (supabase.rpc as any)("reverse_worker_payment_command", {
+      p_payment_id: payment.id,
+      p_reason: reason,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) {
+      toast({ title: "تعذر عكس الدفعة", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "تم عكس الدفعة", description: "تمت إعادة الكاش وتحديث مستحقات العامل." });
+    fetchWorkers();
+    fetchPayments();
+  };
+
   const payWorker = async (worker: Worker, amount: number, notes: string, onDone: () => void) => {
+    if (isEmployee) {
+      toast({ title: "غير مصرح", description: "دفع أجور العمال متاح لمالك المعصرة فقط.", variant: "destructive" });
+      return;
+    }
     if (amount <= 0) return;
     
     const { error } = await (supabase.rpc as any)("pay_worker_command", {
@@ -443,11 +475,11 @@ const Workers = () => {
                                 <Button size="sm" variant="outline" onClick={() => startEdit(worker)}>
                                   <Pencil className="h-3 w-3 me-1" />تعديل
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => startPay(worker)} disabled={balance <= 0}>
+                                <Button size="sm" variant="outline" onClick={() => startPay(worker)} disabled={!worker.active || balance <= 0 || isEmployee}>
                                   <DollarSign className="h-3 w-3 me-1" />دفع
                                 </Button>
-                                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => deleteWorker(worker)} title="حذف العامل">
-                                  <Trash2 className="h-3 w-3" />
+                                <Button size="sm" variant="outline" className="text-amber-700 hover:text-amber-700" onClick={() => archiveWorker(worker)} disabled={!worker.active} title="أرشفة العامل">
+                                  <Archive className="h-3 w-3" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -483,7 +515,7 @@ const Workers = () => {
                       <select value={selectedWorkerId} onChange={e => { setSelectedWorkerId(e.target.value); setWorkValue(""); }}
                         className="w-full h-10 p-2 border rounded-md bg-background text-foreground mt-1">
                         <option value="">-- اختر عامل --</option>
-                        {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                        {workers.filter(w => w.active).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                       </select>
                     </div>
                     {selectedWorkerForReg && (
@@ -608,7 +640,7 @@ const Workers = () => {
                             <TableCell className="text-right">{worker.total_paid} ش</TableCell>
                             <TableCell className={`text-right font-bold ${balance > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{balance} ش</TableCell>
                             <TableCell className="text-right">
-                              <Button size="sm" onClick={() => startPayFromList(worker)} disabled={balance <= 0}>
+                              <Button size="sm" onClick={() => startPayFromList(worker)} disabled={balance <= 0 || isEmployee}>
                                 <DollarSign className="h-3 w-3 me-1" />إجراء دفعة
                               </Button>
                             </TableCell>
@@ -649,6 +681,8 @@ const Workers = () => {
                             <TableHead className="text-right">المبلغ</TableHead>
                             <TableHead className="text-right">ملاحظات</TableHead>
                             <TableHead className="text-right">التاريخ</TableHead>
+                            <TableHead className="text-right">الحالة</TableHead>
+                            <TableHead className="text-right">إجراء</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -660,6 +694,8 @@ const Workers = () => {
                                 <TableCell className="text-right">{payment.amount} ش</TableCell>
                                 <TableCell className="text-right text-muted-foreground text-xs">{payment.notes || '—'}</TableCell>
                                 <TableCell className="text-right font-mono text-xs">{formatDate(payment.created_at)}</TableCell>
+                                <TableCell className="text-right"><Badge variant={payment.status === "active" ? "default" : "secondary"}>{payment.status === "active" ? "فعالة" : "معكوسة"}</Badge></TableCell>
+                                <TableCell className="text-right">{payment.status === "active" ? <Button size="sm" variant="outline" onClick={() => reversePayment(payment)} disabled={isEmployee}><RotateCcw className="h-3 w-3 me-1" />عكس الدفعة</Button> : <span className="text-xs text-muted-foreground">{payment.reversal_reason || "—"}</span>}</TableCell>
                               </TableRow>
                             );
                           })}

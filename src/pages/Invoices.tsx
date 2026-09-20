@@ -8,14 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { 
-  Receipt, 
-  FileText, 
-  CheckCircle, 
-  Eye, 
-  Printer, 
-  Calculator as CalcIcon, 
-  Plus, 
+import {
+  Receipt,
+  FileText,
+  CheckCircle,
+  Eye,
+  Printer,
+  Calculator as CalcIcon,
+  Plus,
   ArrowLeft,
   Sliders,
   Sparkles,
@@ -30,10 +30,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useLocation } from "react-router-dom";
 import { InvoicePreview, type InvoicePreviewData } from "@/components/invoices/InvoicePreview";
-import { 
-  calculatePaymentOptions, 
-  calculateCustomMixedFromOil, 
-  type PaymentBreakdown 
+import {
+  calculatePaymentOptions,
+  calculateCustomMixedFromOil,
+  type PaymentBreakdown
 } from "@/lib/invoiceCalculations";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
@@ -89,8 +89,8 @@ export default function Invoices() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [queueId, setQueueId] = useState<string | null>(null);
-  const [queueCustomers, setQueueCustomers] = useState<{ id: string; name: string; phone: string | null; position: number }[]>([]);
-  
+  const [queueCustomers, setQueueCustomers] = useState<{ id: string; customer_id: string | null; name: string; phone: string | null; position: number }[]>([]);
+
   // Custom mixed payment adjustments
   const [customMixedOil, setCustomMixedOil] = useState<number | null>(null);
   const [isCustomizingMixed, setIsCustomizingMixed] = useState(false);
@@ -152,7 +152,7 @@ export default function Invoices() {
       const effectiveMillId = activeSeason.mill_id || millId;
       let query = supabase
         .from("queue")
-        .select("id, name, phone, position")
+        .select("id, customer_id, name, phone, position")
         .eq("season_id", activeSeason.id)
         .neq("status", "done");
 
@@ -262,7 +262,8 @@ export default function Invoices() {
     try {
       let customerId: string | null = null;
       if (queueId && queueId !== "manual") {
-        customerId = localStorage.getItem(`queue_cust_${queueId}`);
+        customerId = queueCustomers.find(q => q.id === queueId)?.customer_id || null;
+        // Read-only compatibility for rows created before queue.customer_id existed.
         if (!customerId) {
           const qCust = queueCustomers.find(q => q.id === queueId);
           if (qCust && (qCust as any).notes) {
@@ -282,6 +283,7 @@ export default function Invoices() {
             .eq("season_id", activeSeason!.id)
             .eq("name", invoiceData.customerName.trim())
             .eq("phone", cleanPhone)
+            .eq("active", true)
             .maybeSingle();
           existingCust = data;
         }
@@ -307,7 +309,7 @@ export default function Invoices() {
 
       const containerSummary = getContainerSummary() || "بدون تنكات";
 
-    const containerLines = containerTypes
+      const containerLines = containerTypes
         .filter((container) => (containerCounts[container.id] || 0) > 0)
         .map((container) => ({ product_id: container.id, name: container.name, quantity: containerCounts[container.id], unit_price: container.default_sale_price }));
 
@@ -361,9 +363,9 @@ export default function Invoices() {
         setQueueId(null);
       }
 
-      toast({ 
-        title: shouldPrint ? "تم تأكيد الفاتورة وإرسال أمر الطباعة" : "تم تأكيد الفاتورة بنجاح", 
-        description: `تم حفظ فاتورة لـ ${invoiceData.customerName}` 
+      toast({
+        title: shouldPrint ? "تم تأكيد الفاتورة وإرسال أمر الطباعة" : "تم تأكيد الفاتورة بنجاح",
+        description: `تم حفظ فاتورة لـ ${invoiceData.customerName}`
       });
       window.dispatchEvent(new CustomEvent("smart-mill:clear-form-draft", { detail: "/invoices" }));
 
@@ -455,394 +457,392 @@ export default function Invoices() {
       {/* Main Invoice Form (Full Width RTL) */}
       <div className="max-w-4xl mx-auto space-y-6">
         <Card className="border-border/80 shadow-sm">
-            <CardHeader className="pb-4 border-b bg-muted/20">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-bold flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
-                  <span>بيانات الفاتورة والإنتاج</span>
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {formatDate(new Date())}
-                  </Badge>
-                </div>
+          <CardHeader className="pb-4 border-b bg-muted/20">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                <span>بيانات الفاتورة والإنتاج</span>
+              </CardTitle>
+              <div className="flex items-center gap-2">
+
+                <Badge variant="outline" className="font-mono text-xs">
+                  {formatDate(new Date())}
+                </Badge>
               </div>
-              <CardDescription>
-                أدخل كمية الزيت المنتج والتنكات لاحتساب الرد والأجرة تلقائياً
-              </CardDescription>
-            </CardHeader>
+            </div>
+            <CardDescription>
+              أدخل كمية الزيت المنتج والتنكات لاحتساب الرد والأجرة تلقائياً
+            </CardDescription>
+          </CardHeader>
 
-            <CardContent className="p-5 space-y-5">
-              {/* Customer Selection */}
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold flex items-center justify-between">
-                  <span>اسم الزبون</span>
-                  {queueCustomers.length > 0 && (
-                    <span className="text-xs text-primary font-normal">
-                      {queueCustomers.length} زبائن في الطابور
-                    </span>
-                  )}
-                </Label>
-                <Select
-                  value={queueId || "manual"}
-                  onValueChange={(val) => {
-                    if (val === "manual") {
-                      setQueueId(null);
-                      setInvoiceData(p => ({ ...p, customerName: "", customerPhone: "" }));
-                    } else {
-                      const c = queueCustomers.find(q => q.id === val);
-                      if (c) {
-                        setQueueId(c.id);
-                        setInvoiceData(p => ({ ...p, customerName: c.name, customerPhone: c.phone || "" }));
-                      }
+          <CardContent className="p-5 space-y-5">
+            {/* Customer Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold flex items-center justify-between">
+                <span>اسم الزبون</span>
+                {queueCustomers.length > 0 && (
+                  <span className="text-xs text-primary font-normal">
+                    {queueCustomers.length} زبائن في الطابور
+                  </span>
+                )}
+              </Label>
+              <Select
+                value={queueId || "manual"}
+                onValueChange={(val) => {
+                  if (val === "manual") {
+                    setQueueId(null);
+                    setInvoiceData(p => ({ ...p, customerName: "", customerPhone: "" }));
+                  } else {
+                    const c = queueCustomers.find(q => q.id === val);
+                    if (c) {
+                      setQueueId(c.id);
+                      setInvoiceData(p => ({ ...p, customerName: c.name, customerPhone: c.phone || "" }));
                     }
-                  }}
-                >
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="اختر زبوناً من الطابور" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {queueCustomers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        دور #{c.position} — {c.name} {c.phone ? `(${c.phone})` : ""}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="manual">إدخال زبون يدوي (خارج الطابور)</SelectItem>
-                  </SelectContent>
-                </Select>
+                  }
+                }}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="اختر زبوناً من الطابور" />
+                </SelectTrigger>
+                <SelectContent>
+                  {queueCustomers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      دور #{c.position} — {c.name} {c.phone ? `(${c.phone})` : ""}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="manual">إدخال زبون يدوي (خارج الطابور)</SelectItem>
+                </SelectContent>
+              </Select>
 
-                {(!queueId || queueId === "manual") && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <Input
-                      className="h-11"
-                      value={invoiceData.customerName}
-                      onChange={(e) => setInvoiceData(p => ({ ...p, customerName: e.target.value }))}
-                      placeholder="أدخل اسم الزبون..."
-                    />
-                    <Input
-                      className="h-11 text-right"
-                      value={invoiceData.customerPhone}
-                      onChange={(e) => setInvoiceData(p => ({ ...p, customerPhone: e.target.value }))}
-                      placeholder="رقم الهاتف (اختياري)..."
-                      dir="rtl"
-                    />
+              {(!queueId || queueId === "manual") && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <Input
+                    className="h-11"
+                    value={invoiceData.customerName}
+                    onChange={(e) => setInvoiceData(p => ({ ...p, customerName: e.target.value }))}
+                    placeholder="أدخل اسم الزبون..."
+                  />
+                  <Input
+                    className="h-11 text-right"
+                    value={invoiceData.customerPhone}
+                    onChange={(e) => setInvoiceData(p => ({ ...p, customerPhone: e.target.value }))}
+                    placeholder="رقم الهاتف (اختياري)..."
+                    dir="rtl"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Oil Quantity with Quick Increments */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="oilProduced" className="text-sm font-semibold">
+                  كمية الزيت المنتج (كغم)
+                </Label>
+                {invoiceData.oilProduced > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                      {((invoiceData.oilProduced * settings.return_percent) / 100).toFixed(2)} كغم
+                    </Badge>
+                    <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
+                      {(invoiceData.oilProduced * settings.cash_return_cost).toFixed(2)} {currency}
+                    </Badge>
                   </div>
                 )}
               </div>
 
-              {/* Oil Quantity with Quick Increments */}
-              <div className="space-y-2">
+              <div className="relative">
+                <Input
+                  id="oilProduced"
+                  type="text"
+                  inputMode="decimal"
+                  value={oilProducedStr !== "" ? oilProducedStr : (invoiceData.oilProduced ? String(invoiceData.oilProduced) : "")}
+                  onChange={handleOilProducedChange}
+                  placeholder="0.0"
+                  className="text-2xl font-black font-mono h-14 pl-24 pr-4 text-right"
+                  lang="en-US"
+                  dir="ltr"
+                />
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-muted-foreground font-bold text-sm">
+                  كغم زيت
+                </div>
+              </div>
+            </div>
+
+            {/* Containers */}
+            {containerTypes.length > 0 && (
+              <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="oilProduced" className="text-sm font-semibold">
-                    كمية الزيت المنتج (كغم)
-                  </Label>
-                  {invoiceData.oilProduced > 0 && (
+                  <Label className="text-sm font-semibold">عدد التنكات والعبوات</Label>
+                  {getTotalContainerCost() > 0 ? (
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                        {((invoiceData.oilProduced * settings.return_percent) / 100).toFixed(2)} كغم
+                        {(getTotalContainerCost() / (settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 25))).toFixed(2)} كغم
                       </Badge>
                       <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                        {(invoiceData.oilProduced * settings.cash_return_cost).toFixed(2)} {currency}
+                        {getTotalContainerCost().toFixed(2)} {currency}
                       </Badge>
                     </div>
-                  )}
-                </div>
-
-                <div className="relative">
-                  <Input
-                    id="oilProduced"
-                    type="text"
-                    inputMode="decimal"
-                    value={oilProducedStr !== "" ? oilProducedStr : (invoiceData.oilProduced ? String(invoiceData.oilProduced) : "")}
-                    onChange={handleOilProducedChange}
-                    placeholder="0.0"
-                    className="text-2xl font-black font-mono h-14 pl-24 pr-4 text-right"
-                    lang="en-US"
-                    dir="ltr"
-                  />
-                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-muted-foreground font-bold text-sm">
-                    كغم زيت
-                  </div>
-                </div>
-              </div>
-
-              {/* Containers */}
-              {containerTypes.length > 0 && (
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-semibold">عدد التنكات والعبوات</Label>
-                    {getTotalContainerCost() > 0 ? (
-                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                          {(getTotalContainerCost() / (settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 25))).toFixed(2)} كغم
-                        </Badge>
-                        <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                          {getTotalContainerCost().toFixed(2)} {currency}
-                        </Badge>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground font-mono">
-                        إجمالي التنكات: {getTotalContainerCount()}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {containerTypes.map((ct) => (
-                      <div
-                        key={ct.id}
-                        className="flex items-center justify-between p-2.5 rounded-xl border bg-muted/20"
-                      >
-                        <div className="overflow-hidden">
-                          <p className="text-sm font-medium truncate">{ct.name}</p>
-                          <p className="text-xs text-muted-foreground">{ct.default_sale_price} {currency} للواحدة</p>
-                        </div>
-                        <div className="flex items-center gap-1.5" dir="ltr">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 rounded-lg font-bold text-base"
-                            onClick={() => {
-                              const curr = containerCounts[ct.id] || 0;
-                              if (curr > 0) setContainerCounts(p => ({ ...p, [ct.id]: curr - 1 }));
-                            }}
-                          >
-                            -
-                          </Button>
-                          <Input
-                            type="text"
-                            inputMode="numeric"
-                            className="w-14 h-8 text-center font-mono font-bold text-sm p-1"
-                            value={toLatinDigits(containerCounts[ct.id] ?? 0)}
-                            onChange={(e) => {
-                              const clean = toLatinDigits(e.target.value).replace(/\D/g, "");
-                              const val = clean === "" ? 0 : parseInt(clean, 10);
-                              setContainerCounts(p => ({ ...p, [ct.id]: isNaN(val) ? 0 : Math.max(0, val) }));
-                            }}
-                            min="0"
-                            lang="en-US"
-                            dir="ltr"
-                            onFocus={(e) => e.target.select()}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 rounded-lg font-bold text-base"
-                            onClick={() => {
-                              const curr = containerCounts[ct.id] || 0;
-                              setContainerCounts(p => ({ ...p, [ct.id]: curr + 1 }));
-                            }}
-                          >
-                            +
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Notes */}
-              <div className="space-y-1.5">
-                <Label htmlFor="notes" className="text-xs text-muted-foreground">
-                  ملاحظات إضافية (اختياري)
-                </Label>
-                <Textarea
-                  id="notes"
-                  value={invoiceData.notes}
-                  onChange={(e) => setInvoiceData(p => ({ ...p, notes: e.target.value }))}
-                  placeholder="أي ملاحظات حول الجودة، الدفع، أو تسليم الزيت..."
-                  rows={2}
-                  className="resize-none"
-                />
-              </div>
-
-              {/* Payment Methods Selection */}
-              {paymentMethods.length > 0 && (
-                <div className="space-y-3 pt-3">
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-bold text-foreground">طريقة دفع الأجرة</Label>
-                    <span className="text-xs text-primary font-semibold">
-                      نسبة الرد: {settings.return_percent}% | سعر الكاش: {settings.cash_return_cost} {currency}
+                  ) : (
+                    <span className="text-xs text-muted-foreground font-mono">
+                      إجمالي التنكات: {getTotalContainerCount()}
                     </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {paymentMethods.map((method) => {
-                      const isSelected = selectedPayment?.type === method.type;
-                      return (
-                        <div
-                          key={method.type}
-                          onClick={() => {
-                            setSelectedPayment(method);
-                            if (method.type !== "mixed") {
-                              setIsCustomizingMixed(false);
-                            }
-                          }}
-                          className={`cursor-pointer rounded-xl p-3 border-2 transition-all flex flex-col justify-between gap-2 ${
-                            isSelected
-                              ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20"
-                              : "border-border hover:border-primary/40 hover:bg-muted/30"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold">{paymentLabel(method.type)}</span>
-                            {isSelected && <CheckCircle className="h-4 w-4 text-primary shrink-0" />}
-                          </div>
-                          <div className="font-mono font-bold text-sm text-primary">
-                            {method.total}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {selectedPayment && selectedPayment.cashAmount > 0 && (
-                    <label className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={deferCashSettlement}
-                        onChange={(event) => setDeferCashSettlement(event.target.checked)}
-                        className="h-4 w-4 accent-primary"
-                      />
-                      <span><strong>تأجيل الجزء النقدي كذمة</strong> — لا يدخل {selectedPayment.cashAmount.toFixed(2)} {currency} إلى الكاش الآن، ويُحصّل لاحقًا من سجل الفواتير.</span>
-                    </label>
                   )}
+                </div>
 
-                  {/* Mixed Payment Customization if Mixed is selected */}
-                  {selectedPayment?.type === "mixed" && (
-                    <div className="mt-3 p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Sliders className="h-4 w-4 text-primary" />
-                          <span className="text-xs font-bold text-foreground">تخصيص الدفع المختلط (زيت / كاش)</span>
-                        </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {containerTypes.map((ct) => (
+                    <div
+                      key={ct.id}
+                      className="flex items-center justify-between p-2.5 rounded-xl border bg-muted/20"
+                    >
+                      <div className="overflow-hidden">
+                        <p className="text-sm font-medium truncate">{ct.name}</p>
+                        <p className="text-xs text-muted-foreground">{ct.default_sale_price} {currency} للواحدة</p>
+                      </div>
+                      <div className="flex items-center gap-1.5" dir="ltr">
                         <Button
                           type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-primary"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg font-bold text-base"
                           onClick={() => {
-                            setIsCustomizingMixed(!isCustomizingMixed);
-                            if (!isCustomizingMixed) {
-                              const std = paymentMethods.find(m => m.type === "mixed");
-                              setCustomMixedOil(std ? std.oilAmount : 0);
-                            }
+                            const curr = containerCounts[ct.id] || 0;
+                            if (curr > 0) setContainerCounts(p => ({ ...p, [ct.id]: curr - 1 }));
                           }}
                         >
-                          {isCustomizingMixed ? "استعادة التلقائي" : "تخصيص كمية الزيت"}
+                          -
+                        </Button>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          className="w-14 h-8 text-center font-mono font-bold text-sm p-1"
+                          value={toLatinDigits(containerCounts[ct.id] ?? 0)}
+                          onChange={(e) => {
+                            const clean = toLatinDigits(e.target.value).replace(/\D/g, "");
+                            const val = clean === "" ? 0 : parseInt(clean, 10);
+                            setContainerCounts(p => ({ ...p, [ct.id]: isNaN(val) ? 0 : Math.max(0, val) }));
+                          }}
+                          min="0"
+                          lang="en-US"
+                          dir="ltr"
+                          onFocus={(e) => e.target.select()}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg font-bold text-base"
+                          onClick={() => {
+                            const curr = containerCounts[ct.id] || 0;
+                            setContainerCounts(p => ({ ...p, [ct.id]: curr + 1 }));
+                          }}
+                        >
+                          +
                         </Button>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-                      {isCustomizingMixed && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                          <div>
-                            <Label className="text-xs font-medium">كمية الزيت المدفوعة (كغم):</Label>
-                            <Input
-                              type="number"
-                              className="h-9 mt-1 font-mono font-bold"
-                              value={customMixedOil ?? selectedPayment.oilAmount}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                handleCustomMixedOilChange(val);
-                              }}
-                              step="0.1"
-                              min="0"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs font-medium">المبلغ النقدي المحسوب ({currency}):</Label>
-                            <div className="h-9 mt-1 px-3 flex items-center bg-background border rounded-md font-mono font-bold text-primary">
-                              {selectedPayment.cashAmount.toFixed(2)} {currency}
-                            </div>
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label htmlFor="notes" className="text-xs text-muted-foreground">
+                ملاحظات إضافية (اختياري)
+              </Label>
+              <Textarea
+                id="notes"
+                value={invoiceData.notes}
+                onChange={(e) => setInvoiceData(p => ({ ...p, notes: e.target.value }))}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+
+            {/* Payment Methods Selection */}
+            {paymentMethods.length > 0 && (
+              <div className="space-y-3 pt-3">
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-bold text-foreground">طريقة دفع الأجرة</Label>
+                  <span className="text-xs text-primary font-semibold">
+                    نسبة الرد: {settings.return_percent}% | سعر الكاش: {settings.cash_return_cost} {currency}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {paymentMethods.map((method) => {
+                    const isSelected = selectedPayment?.type === method.type;
+                    return (
+                      <div
+                        key={method.type}
+                        onClick={() => {
+                          setSelectedPayment(method);
+                          if (method.type !== "mixed") {
+                            setIsCustomizingMixed(false);
+                          }
+                        }}
+                        className={`cursor-pointer rounded-xl p-3 border-2 transition-all flex flex-col justify-between gap-2 ${isSelected
+                            ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20"
+                            : "border-border hover:border-primary/40 hover:bg-muted/30"
+                          }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold">{paymentLabel(method.type)}</span>
+                          {isSelected && <CheckCircle className="h-4 w-4 text-primary shrink-0" />}
+                        </div>
+                        <div className="font-mono font-bold text-sm text-primary">
+                          {method.total}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {selectedPayment && selectedPayment.cashAmount > 0 && (
+                  <label className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={deferCashSettlement}
+                      onChange={(event) => setDeferCashSettlement(event.target.checked)}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    <span><strong>تأجيل الجزء النقدي كذمة</strong> — لا يدخل {selectedPayment.cashAmount.toFixed(2)} {currency} إلى الكاش الآن، ويُحصّل لاحقًا من سجل الفواتير.</span>
+                  </label>
+                )}
+
+                {/* Mixed Payment Customization if Mixed is selected */}
+                {selectedPayment?.type === "mixed" && (
+                  <div className="mt-3 p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sliders className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-bold text-foreground">تخصيص الدفع المختلط (زيت / كاش)</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-primary"
+                        onClick={() => {
+                          setIsCustomizingMixed(!isCustomizingMixed);
+                          if (!isCustomizingMixed) {
+                            const std = paymentMethods.find(m => m.type === "mixed");
+                            setCustomMixedOil(std ? std.oilAmount : 0);
+                          }
+                        }}
+                      >
+                        {isCustomizingMixed ? "استعادة التلقائي" : "تخصيص كمية الزيت"}
+                      </Button>
+                    </div>
+
+                    {isCustomizingMixed && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <Label className="text-xs font-medium">كمية الزيت المدفوعة (كغم):</Label>
+                          <Input
+                            type="number"
+                            className="h-9 mt-1 font-mono font-bold"
+                            value={customMixedOil ?? selectedPayment.oilAmount}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              handleCustomMixedOilChange(val);
+                            }}
+                            step="0.1"
+                            min="0"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium">المبلغ النقدي المحسوب ({currency}):</Label>
+                          <div className="h-9 mt-1 px-3 flex items-center bg-background border rounded-md font-mono font-bold text-primary">
+                            {selectedPayment.cashAmount.toFixed(2)} {currency}
                           </div>
                         </div>
-                      )}
-
-                      <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                        <Info className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span>
-                          صافي الزيت المتبقي للزبون بعد خصم الأجرة: <strong>{netOilForCustomer.toFixed(2)} كغم</strong>
-                        </span>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
 
-              {/* Summary & Primary Action Buttons on the RIGHT */}
-              <div className="pt-3 space-y-3">
-                <Separator />
-                
-                {/* Live quick summary bar */}
-                {selectedPayment && invoiceData.oilProduced > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-muted/40 border text-xs">
-                    <div>
-                      <span className="text-muted-foreground">الزبون: </span>
-                      <span className="font-bold">{invoiceData.customerName || "غير محدد"}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">الإنتاج: </span>
-                      <span className="font-bold font-mono">{invoiceData.oilProduced} كغم</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">الأجرة: </span>
-                      <span className="font-bold font-mono text-primary">{selectedPayment.total}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">صافي الزبون: </span>
-                      <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                        {netOilForCustomer.toFixed(2)} كغم
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                      <Info className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span>
+                        صافي الزيت المتبقي للزبون بعد خصم الأجرة: <strong>{netOilForCustomer.toFixed(2)} كغم</strong>
                       </span>
                     </div>
                   </div>
                 )}
-
-                {/* Buttons Grid - RTL Order: Primary Print on the right */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-                  {/* Confirm & Print Receipt (Primary - on the right in RTL) */}
-                  <Button
-                    type="button"
-                    onClick={() => confirmInvoice(true)}
-                    disabled={!selectedPayment || !invoiceData.customerName || isSubmitting}
-                    className="sm:col-span-5 h-12 text-sm font-bold shadow-md hover:shadow-lg transition-all gap-2 bg-primary text-primary-foreground"
-                  >
-                    <Printer className="h-4 w-4" />
-                    <span>تأكيد وطباعة (80mm)</span>
-                  </Button>
-
-                  {/* Confirm Only (Secondary - in middle) */}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => confirmInvoice(false)}
-                    disabled={!selectedPayment || !invoiceData.customerName || isSubmitting}
-                    className="sm:col-span-3 h-12 text-sm font-semibold gap-1.5"
-                  >
-                    <CheckCircle className="h-4 w-4" />
-                    <span>تأكيد فقط</span>
-                  </Button>
-
-                  {/* Preview Invoice Button (Tertiary - on the left in RTL) */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowPreviewModal(true)}
-                    disabled={!invoiceData.oilProduced || !selectedPayment}
-                    className="sm:col-span-4 h-12 text-sm font-semibold border-primary/30 text-primary hover:bg-primary/5 gap-2"
-                  >
-                    <Eye className="h-4 w-4" />
-                    <span>معاينة الفاتورة</span>
-                  </Button>
-                </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+
+            {/* Summary & Primary Action Buttons on the RIGHT */}
+            <div className="pt-3 space-y-3">
+              <Separator />
+
+              {/* Live quick summary bar */}
+              {selectedPayment && invoiceData.oilProduced > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-muted/40 border text-xs">
+                  <div>
+                    <span className="text-muted-foreground">الزبون: </span>
+                    <span className="font-bold">{invoiceData.customerName || "غير محدد"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">الإنتاج: </span>
+                    <span className="font-bold font-mono">{invoiceData.oilProduced} كغم</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">الأجرة: </span>
+                    <span className="font-bold font-mono text-primary">{selectedPayment.total}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">صافي الزبون: </span>
+                    <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                      {netOilForCustomer.toFixed(2)} كغم
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Buttons Grid - RTL Order: Primary Print on the right */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                {/* Confirm & Print Receipt (Primary - on the right in RTL) */}
+                <Button
+                  type="button"
+                  onClick={() => confirmInvoice(true)}
+                  disabled={!selectedPayment || !invoiceData.customerName || isSubmitting}
+                  className="sm:col-span-5 h-12 text-sm font-bold shadow-md hover:shadow-lg transition-all gap-2 bg-primary text-primary-foreground"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>تأكيد وطباعة (80mm)</span>
+                </Button>
+
+                {/* Confirm Only (Secondary - in middle) */}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => confirmInvoice(false)}
+                  disabled={!selectedPayment || !invoiceData.customerName || isSubmitting}
+                  className="sm:col-span-3 h-12 text-sm font-semibold gap-1.5"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  <span>تأكيد فقط</span>
+                </Button>
+
+                {/* Preview Invoice Button (Tertiary - on the left in RTL) */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowPreviewModal(true)}
+                  disabled={!invoiceData.oilProduced || !selectedPayment}
+                  className="sm:col-span-4 h-12 text-sm font-semibold border-primary/30 text-primary hover:bg-primary/5 gap-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  <span>معاينة الفاتورة</span>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Live Preview Modal Dialog */}
       <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>

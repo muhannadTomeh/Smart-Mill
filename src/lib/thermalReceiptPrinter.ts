@@ -339,12 +339,12 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
     hour12: true,
   });
 
-  const diffStatus = 
-    Math.abs(data.difference) < 0.01 
-      ? `مطابق تماماً (0 ${currency})` 
-      : data.difference > 0 
-      ? `فائض (+${data.difference.toFixed(2)} ${currency})` 
-      : `عجز (${data.difference.toFixed(2)} ${currency})`;
+  const diffStatus =
+    Math.abs(data.difference) < 0.01
+      ? `مطابق تماماً (0 ${currency})`
+      : data.difference > 0
+        ? `فائض (+${data.difference.toFixed(2)} ${currency})`
+        : `عجز (${data.difference.toFixed(2)} ${currency})`;
 
   const zReportHtml = `
 <!DOCTYPE html>
@@ -499,7 +499,7 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
     <span class="info-value">${formattedDate} - ${formattedTime}</span>
   </div>
   <div class="info-row">
-    <span class="info-label">مسؤول الصندوق/الكاشير:</span>
+    <span class="info-label">مسؤول الصندوق/الموظف المعصرة:</span>
     <span class="info-value bold">${data.cashier_name}</span>
   </div>
 
@@ -577,7 +577,7 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
   <!-- التواقيع -->
   <div class="signatures">
     <div class="sig-col">
-      <div>توقيع الكاشير</div>
+      <div>توقيع الموظف المعصرة</div>
       <div class="sig-line"></div>
     </div>
     <div class="sig-col">
@@ -643,8 +643,8 @@ export function printThermalQueueTicket(data: ThermalQueueTicketData, millName =
   // Strip internal tags from notes (e.g. [وقت_تقديري:30], [بدء_العصر:...])
   const cleanNotes = data.notes
     ? data.notes
-        .replace(/\[(?:وقت_تقديري|الوقت|est|بدء_العصر):?[^\]]*\]/gi, "")
-        .trim()
+      .replace(/\[(?:وقت_تقديري|الوقت|est|بدء_العصر):?[^\]]*\]/gi, "")
+      .trim()
     : "";
 
   const ticketHtml = `
@@ -815,9 +815,9 @@ export function printThermalQueueTicket(data: ThermalQueueTicketData, millName =
     <div class="info-row" style="padding: 2px 0;">
       <span class="info-label bold" style="font-size: 13px;">أمامك في الطابور:</span>
       <span class="info-value bold" style="font-size: 14.5px;">
-        ${data.ahead_count != null && data.ahead_count > 0 
-          ? `${data.ahead_count} ${data.ahead_count === 1 ? 'زبون' : data.ahead_count === 2 ? 'زبونان' : 'زبائن'}`
-          : 'أنت التالي مباشرة (0)'}
+        ${data.ahead_count != null && data.ahead_count > 0
+      ? `${data.ahead_count} ${data.ahead_count === 1 ? 'زبون' : data.ahead_count === 2 ? 'زبونان' : 'زبائن'}`
+      : 'أنت التالي مباشرة (0)'}
       </span>
     </div>
     <div class="info-row" style="padding: 2px 0; border-top: 1px dotted #ccc; margin-top: 3px; padding-top: 3px;">

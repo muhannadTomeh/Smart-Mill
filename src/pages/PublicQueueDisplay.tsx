@@ -73,7 +73,7 @@ export default function PublicQueueDisplay() {
       if (cachedQueue) {
         localItems = JSON.parse(cachedQueue);
       }
-    } catch {}
+    } catch { }
 
     // Multi-source fetching: Try direct select first, fallback to RPC, and load display_settings
     let rawQueue: any[] = [];
@@ -114,7 +114,7 @@ export default function PublicQueueDisplay() {
             setMillName(prof.mill_name);
             try {
               localStorage.setItem("mill_name", prof.mill_name);
-            } catch {}
+            } catch { }
           }
         });
     }
@@ -126,20 +126,20 @@ export default function PublicQueueDisplay() {
         setDisplaySettings((prev) => ({ ...defaultDisplaySettings, ...dbSettings }));
         try {
           localStorage.setItem(`display_settings_${seasonId}`, JSON.stringify(dbSettings));
-        } catch {}
+        } catch { }
       }
     }
 
     // Map queue items and ensure estimated_minutes & started_at are extracted accurately
     const mappedItems: QueueItem[] = rawQueue.map((i, idx) => {
       const localMatch = localItems.find((l) => l.id === i.id || (l.name && l.name.trim() === i.name?.trim()));
-      
+
       const localEst = (i.id ? localStorage.getItem(`queue_est_${i.id}`) : null) ||
-                       (i.name ? localStorage.getItem(`queue_est_name_${i.name.trim()}`) : null) ||
-                       (localMatch ? parseEstimatedMinutes(localMatch) : null);
+        (i.name ? localStorage.getItem(`queue_est_name_${i.name.trim()}`) : null) ||
+        (localMatch ? parseEstimatedMinutes(localMatch) : null);
 
       const localStart = (i.id ? localStorage.getItem(`processing_started_${i.id}`) : null) ||
-                         (localMatch ? parseStartedAt(localMatch) : null);
+        (localMatch ? parseStartedAt(localMatch) : null);
 
       const parsedEst = parseEstimatedMinutes(i) ?? (localEst ? Number(localEst) : null);
       const parsedStartMs = parseStartedAt(i);
@@ -224,7 +224,7 @@ export default function PublicQueueDisplay() {
           }
         }
       };
-    } catch {}
+    } catch { }
 
     return () => {
       bc?.close();
@@ -295,8 +295,8 @@ export default function PublicQueueDisplay() {
           );
         }
         audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => {});
-      } catch {}
+        audioRef.current.play().catch(() => { });
+      } catch { }
     } else if (!currentItem) {
       setPrevProcessingId(null);
     }
@@ -309,10 +309,10 @@ export default function PublicQueueDisplay() {
   // Calculate live second-by-second countdown for current processing customer
   const currentEstMin = currentItem
     ? (currentItem.estimated_minutes ||
-       parseEstimatedMinutes(currentItem) ||
-       (currentItem.id ? Number(localStorage.getItem(`queue_est_${currentItem.id}`)) : null) ||
-       (currentItem.name ? Number(localStorage.getItem(`queue_est_name_${currentItem.name.trim()}`)) : null) ||
-       30)
+      parseEstimatedMinutes(currentItem) ||
+      (currentItem.id ? Number(localStorage.getItem(`queue_est_${currentItem.id}`)) : null) ||
+      (currentItem.name ? Number(localStorage.getItem(`queue_est_name_${currentItem.name.trim()}`)) : null) ||
+      30)
     : null;
   const currentStartedAt = currentItem ? parseStartedAt(currentItem) : null;
 
@@ -637,11 +637,17 @@ export default function PublicQueueDisplay() {
               إعلان المعصرة
             </span>
           </div>
-          <div className="flex-1 overflow-hidden whitespace-nowrap relative">
-            <div className="inline-block animate-marquee-arabic text-emerald-100 font-extrabold text-xl md:text-2xl lg:text-3xl tracking-wide" style={{ animationDuration: `${Math.max(8, Math.min(60, Number(displaySettings.ticker_speed_seconds) || 28))}s` }}>
+          <div className="flex-1 min-w-0 h-9 md:h-11 lg:h-12 overflow-hidden relative">
+            <div
+              className="animate-marquee-arabic text-emerald-100 font-extrabold text-xl md:text-2xl lg:text-3xl tracking-wide"
+              style={{
+                animationDuration: `${Math.max(8, Math.min(60, Number(displaySettings.ticker_speed_seconds) || 28))}s`,
+              }}
+            >
               {displaySettings.ticker_text}
             </div>
           </div>
+
         </div>
       )}
 
@@ -658,14 +664,25 @@ export default function PublicQueueDisplay() {
           0% { opacity: 0; transform: translateY(4px); }
           100% { opacity: 1; transform: translateY(0); }
         }
-        @keyframes marquee-arabic {
-          0% { transform: translateX(100%); }
-          100% { transform: translateX(-100%); }
-        }
-        .animate-marquee-arabic {
-          display: inline-block;
-          animation: marquee-arabic 13s linear infinite;
-        }
+@keyframes marquee-arabic {
+  0% {
+    left: 100%;
+    transform: translate(0, -50%);
+  }
+  100% {
+    left: 0;
+    transform: translate(-100%, -50%);
+  }
+}
+.animate-marquee-arabic {
+  position: absolute;
+  top: 50%;
+  width: max-content;
+  white-space: nowrap;
+  animation: marquee-arabic 13s linear infinite;
+}
+
+
       `}</style>
     </div>
   );

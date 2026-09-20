@@ -8,20 +8,20 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Users, Search, FileText, Phone, Calendar, UserPlus, Plus,
-  Printer, Eye, Pencil, Star, CheckCircle, Receipt, BookOpen
+  Printer, Eye, Star, Receipt, BookOpen, Archive
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 interface Customer {
+  active?: boolean;
   id: string;
   name: string;
   phone: string | null;
@@ -61,6 +61,7 @@ const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
 
   // New Customer Dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -70,20 +71,6 @@ const Customers = () => {
 
   // Preview Invoice Dialog
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRecord | null>(null);
-
-  // Edit Invoice Dialog
-  const [editInvoice, setEditInvoice] = useState<InvoiceRecord | null>(null);
-  const [editFormData, setEditFormData] = useState({
-    customer_name: "",
-    oil_produced: 0,
-    container_count: 0,
-    container_type: "",
-    payment_type: "cash",
-    cash_amount: 0,
-    oil_amount: 0,
-    total_display: "",
-  });
-  const [savingEdit, setSavingEdit] = useState(false);
 
   // Starred / VIP Customers
   const [starredIds, setStarredIds] = useState<string[]>(() => {
@@ -130,7 +117,7 @@ const Customers = () => {
       fetchCustomers();
       fetchInvoices();
     }
-  }, [activeSeason?.id, millId, user?.id]);
+  }, [activeSeason?.id, millId, user?.id, showArchived]);
 
   const fetchCustomers = async () => {
     if (!activeSeason) return;
@@ -138,6 +125,8 @@ const Customers = () => {
       .from("customers")
       .select("*")
       .eq("season_id", activeSeason.id);
+
+    query = query.eq("active", showArchived ? false : true);
 
     if (millId || activeSeason.mill_id) {
       query = query.eq("mill_id", millId || activeSeason.mill_id);
@@ -148,6 +137,16 @@ const Customers = () => {
     const { data } = await query.order("created_at", { ascending: false });
     setCustomers((data as Customer[]) || []);
     setLoading(false);
+  };
+
+  const archiveCustomer = async (customer: Customer) => {
+    const { error } = await supabase.rpc("archive_master_data_command", { p_entity: "customer", p_id: customer.id });
+    if (error) {
+      toast({ title: "تعذرت الأرشفة", description: "لم يتم تعديل أي فاتورة أو حركة مالية.", variant: "destructive" });
+      return;
+    }
+    toast({ title: "تمت أرشفة الزبون", description: "بقيت الفواتير والحركات التاريخية محفوظة." });
+    await fetchCustomers();
   };
 
   const fetchInvoices = async () => {
@@ -201,96 +200,11 @@ const Customers = () => {
     }
   };
 
-  const handleOpenEdit = (inv: InvoiceRecord) => {
-    setEditInvoice(inv);
-    setEditFormData({
-      customer_name: inv.customer_name || "",
-      oil_produced: Number(inv.oil_produced) || 0,
-      container_count: Number(inv.container_count) || 0,
-      container_type: inv.container_type || "بدون تنكات",
-      payment_type: inv.payment_type || "cash",
-      cash_amount: Number(inv.cash_amount) || 0,
-      oil_amount: Number(inv.oil_amount) || 0,
-      total_display: inv.total_display || "",
+  const showInvoiceCorrectionGuidance = () => {
+    toast({
+      title: "الفاتورة المعتمدة غير قابلة للتعديل",
+      description: "لتصحيح القيم المالية ألغِ الفاتورة وأنشئ فاتورة جديدة.",
     });
-  };
-
-  const handleSaveInvoiceEdit = async () => {
-    if (!editInvoice) return;
-    setSavingEdit(true);
-    try {
-      const { error } = await supabase
-        .from("invoices")
-        .update({
-          customer_name: editFormData.customer_name.trim(),
-          oil_produced: Number(editFormData.oil_produced),
-          container_count: Number(editFormData.container_count),
-          container_type: editFormData.container_type.trim(),
-          payment_type: editFormData.payment_type,
-          cash_amount: Number(editFormData.cash_amount),
-          oil_amount: Number(editFormData.oil_amount),
-          total_display: editFormData.total_display.trim() || `${editFormData.cash_amount} ₪`,
-        })
-        .eq("id", editInvoice.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "تم الحفظ بنجاح",
-        description: "تم تحديث بيانات الفاتورة بنجاح",
-      });
-
-      setEditInvoice(null);
-      await fetchInvoices();
-    } catch (err: any) {
-      toast({
-        title: "خطأ",
-        description: err.message || "تعذر حفظ التعديلات",
-        variant: "destructive",
-      });
-    } finally {
-      setSavingEdit(false);
-    }
-  };
-
-  const separateInvoiceToNewCustomer = async (inv: InvoiceRecord) => {
-    const effectiveMillId = activeSeason?.mill_id || millId;
-    if (!activeSeason || !effectiveMillId) return;
-    try {
-      // 1. Create a distinct customer for this invoice
-      const { data: newCust, error: cErr } = await supabase
-        .from("customers")
-        .insert({
-          mill_id: effectiveMillId,
-          user_id: user?.id || null,
-          season_id: activeSeason.id,
-          name: inv.customer_name,
-          phone: selectedCustomer?.phone || null,
-          created_at: inv.created_at,
-        })
-        .select("id")
-        .single();
-
-      if (cErr || !newCust) throw cErr || new Error("تعذر إنشاء زبون جديد");
-
-      // 2. Link this specific invoice to the new customer
-      const { error: invErr } = await supabase
-        .from("invoices")
-        .update({ customer_id: newCust.id })
-        .eq("id", inv.id);
-
-      if (invErr) throw invErr;
-
-      toast({
-        title: "تم الفصل بنجاح",
-        description: `تم فصل الفاتورة وإنشاء سجل زبون مستقل لـ "${inv.customer_name}"`,
-      });
-
-      await fetchCustomers();
-      await fetchInvoices();
-    } catch (err: any) {
-      toast({ title: "خطأ", description: err.message || "تعذر فصل الفاتورة", variant: "destructive" });
-    }
   };
 
   const filteredCustomers = customers.filter(c =>
@@ -298,12 +212,7 @@ const Customers = () => {
   );
 
   const getCustomerInvoices = (customerId: string) => {
-    const customer = customers.find(c => c.id === customerId);
-    if (!customer) return [];
-    return invoices.filter(inv =>
-      (inv.customer_id && inv.customer_id === customer.id) ||
-      (!inv.customer_id && inv.customer_name === customer.name)
-    );
+    return invoices.filter(inv => inv.customer_id === customerId);
   };
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
@@ -320,6 +229,9 @@ const Customers = () => {
             <p className="text-xs text-muted-foreground mt-0.5">عرض سجلات الزبائن وفواتيرهم وإدارتها</p>
           </div>
         </div>
+        <Button variant="outline" onClick={() => setShowArchived(value => !value)}>
+          {showArchived ? "عرض النشطين" : "عرض المؤرشفين"}
+        </Button>
 
         <Button variant="outline" onClick={() => navigate("/financial-ledger")} className="gap-2">
           <BookOpen className="h-4 w-4" />
@@ -435,10 +347,7 @@ const Customers = () => {
               </TableHeader>
               <TableBody>
                 {filteredCustomers.map((customer) => {
-                  const custInvoices = invoices.filter(inv =>
-                    (inv.customer_id && inv.customer_id === customer.id) ||
-                    (!inv.customer_id && inv.customer_name === customer.name)
-                  );
+                  const custInvoices = invoices.filter(inv => inv.customer_id === customer.id);
                   const isStarred = starredIds.includes(customer.id);
                   return (
                     <TableRow key={customer.id} className="hover:bg-accent/30 transition-colors">
@@ -457,6 +366,11 @@ const Customers = () => {
                               )}
                             />
                           </button>
+                          {!showArchived && (
+                            <Button variant="ghost" size="icon" title="أرشفة الزبون" onClick={() => archiveCustomer(customer)}>
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
                           <span className="font-semibold text-foreground text-sm">{customer.name}</span>
                           {isStarred && (
                             <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/15 border border-amber-500/20 px-1.5 py-0.2 rounded-md">
@@ -635,11 +549,11 @@ const Customers = () => {
                             size="sm"
                             variant="outline"
                             className="h-7 px-2 text-xs gap-1 rounded-md"
-                            onClick={() => handleOpenEdit(inv)}
-                            title="تعديل الفاتورة"
+                            onClick={showInvoiceCorrectionGuidance}
+                            title="تصحيح فاتورة معتمدة"
                           >
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span>تعديل</span>
+                            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>تصحيح</span>
                           </Button>
                           <Button
                             size="sm"
@@ -661,17 +575,6 @@ const Customers = () => {
                             <Printer className="h-3.5 w-3.5" />
                             <span>طباعة</span>
                           </Button>
-                          {customerInvoices.length > 1 && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground rounded-md"
-                              onClick={() => separateInvoiceToNewCustomer(inv)}
-                              title="فصل هذه الفاتورة لزبون جديد مستقل"
-                            >
-                              <UserPlus className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -680,132 +583,6 @@ const Customers = () => {
               </Table>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Invoice Dialog */}
-      <Dialog open={!!editInvoice} onOpenChange={(open) => !open && setEditInvoice(null)}>
-        <DialogContent className="sm:max-w-md rounded-2xl p-5" dir="rtl">
-          <DialogHeader className="text-right">
-            <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-              <Pencil className="h-4 w-4 text-primary" />
-              تعديل بيانات الفاتورة
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              تحديث تفاصيل الفاتورة ومبالغ المحاسبة
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">اسم الزبون</Label>
-                <Input
-                  value={editFormData.customer_name}
-                  onChange={(e) => setEditFormData(p => ({ ...p, customer_name: e.target.value }))}
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">كمية الزيت (كغم)</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={editFormData.oil_produced}
-                  onChange={(e) => setEditFormData(p => ({ ...p, oil_produced: Number(e.target.value) }))}
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">عدد التنكات</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={editFormData.container_count}
-                  onChange={(e) => setEditFormData(p => ({ ...p, container_count: Number(e.target.value) }))}
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">نوع التنكات</Label>
-                <Input
-                  value={editFormData.container_type}
-                  onChange={(e) => setEditFormData(p => ({ ...p, container_type: e.target.value }))}
-                  placeholder="مثال: بلاستيك"
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">طريقة الدفع</Label>
-                <Select
-                  value={editFormData.payment_type}
-                  onValueChange={(val) => setEditFormData(p => ({ ...p, payment_type: val }))}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent dir="rtl">
-                    <SelectItem value="cash">دفع نقدي (شيكل)</SelectItem>
-                    <SelectItem value="oil">دفع بالزيت (رد عيني)</SelectItem>
-                    <SelectItem value="mixed">دفع مختلط (زيت + نقد)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">المبلغ النقدي (شيكل)</Label>
-                <Input
-                  type="number"
-                  step="0.5"
-                  value={editFormData.cash_amount}
-                  onChange={(e) => setEditFormData(p => ({ ...p, cash_amount: Number(e.target.value) }))}
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">زيت الرد (كغم)</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={editFormData.oil_amount}
-                  onChange={(e) => setEditFormData(p => ({ ...p, oil_amount: Number(e.target.value) }))}
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">المبلغ المعروض</Label>
-                <Input
-                  value={editFormData.total_display}
-                  onChange={(e) => setEditFormData(p => ({ ...p, total_display: e.target.value }))}
-                  placeholder="مثال: 112.50 ₪"
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
-            <Button variant="outline" size="sm" onClick={() => setEditInvoice(null)}>
-              إلغاء
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSaveInvoiceEdit}
-              disabled={savingEdit}
-              className="gap-1.5 font-bold"
-            >
-              <CheckCircle className="h-4 w-4" />
-              {savingEdit ? "جارٍ الحفظ..." : "حفظ التعديلات"}
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
 

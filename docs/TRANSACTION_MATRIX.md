@@ -37,7 +37,6 @@
 | Owner withdrawal | Owner transaction | Withdrawal, not expense | `OUT` | — | — | Optional owner account effect | — | — | Current open session | Append contribution/reversal once |
 | Product stock adjustment | Adjustment document | — | — | — | — | — | Signed adjustment | — | — | Owner-only reason; append opposite if safe |
 | Oil adjustment | Adjustment document | — | — | — | — | — | — | `adjustment IN/OUT` | — | Owner-only reason; append opposite if stock stays non-negative |
-| Opening oil balance | Season opening | — | — | — | — | — | — | `opening_balance IN` | — | Correct with adjustment; never edit historical opening movement |
 | Cash adjustment | Adjustment document | Financial adjustment | `IN/OUT` | — | — | — | — | — | Current open session | Owner-only reason; append opposite once |
 | Transaction reversal | Reversal operation | Exact opposite linked by `reversal_of` | Method-dependent | Parent-dependent | Parent-dependent | Parent-dependent | Parent-dependent | Parent-dependent | Current/open-session rule | Never exposed as generic UI action for multi-effect operations |
 | Settlement reversal | Reversal operation | Opposite settlement cash event | Opposite if cash | Restore receivable | Restore payable | Restore partner due | — | — | Current/open-session rule | One reversal per settlement; enables parent cancellation |

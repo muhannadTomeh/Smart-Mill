@@ -256,6 +256,8 @@ No transition returns a closed cash session or closed season to an editable stat
 
 The action dialog previews every effect: cash, debt, product and oil. It asks for a reason and shows whether an open drawer is required.
 
+Queue entries retain a canonical `queue.customer_id` foreign key. New queue and invoice flows must not use browser storage or invoice/customer names as an identity relationship; names on source documents are historical snapshots only. Customers, suppliers, partners and products are archived rather than deleted so referenced history remains intact.
+
 ### 7.2 Eligibility messages
 
 The backend returns stable codes and metadata. Examples:
