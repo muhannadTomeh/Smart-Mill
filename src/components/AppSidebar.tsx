@@ -16,7 +16,6 @@ import {
   Undo2,
   Lock,
   Unlock,
-  UserCog,
   LockOpen,
   HandCoins,
   Users2,
@@ -56,20 +55,27 @@ const operationalItems = [
 ]
 
 // Management & Admin workspace navigation items (Owner only, shown underneath operational items when admin is opened)
-const adminManagementItems = [
-  { title: "الرئيسية والإحصاءات", url: "/dashboard", icon: LayoutDashboard },
+const managementMainItems = [
+  { title: "الرئيسية", url: "/dashboard", icon: LayoutDashboard },
+  { title: "المخزون والبضائع", url: "/inventory", icon: Warehouse },
+  { title: "التقارير", url: "/reports", icon: BarChart3 },
+];
+
+const managementFinanceItems = [
   { title: "المصاريف", url: "/expenses", icon: Wallet },
   { title: "الموردين والالتزامات", url: "/payables", icon: HandCoins },
-  { title: "الشركاء والمساهمين", url: "/partners", icon: Users2 },
-  { title: "المخزون والبضائع", url: "/inventory", icon: Warehouse },
-  { title: "التقارير المفصلة", url: "/reports", icon: BarChart3 },
   { title: "الدفتر المالي", url: "/financial-ledger", icon: BookOpen },
+];
+
+const managementAdminItems = [
+  { title: "الشركاء والمساهمين", url: "/partners", icon: Users2 },
   { title: "العمال والرواتب", url: "/workers", icon: UserCheck },
   { title: "الزبائن", url: "/customers", icon: Users },
   { title: "المواسم", url: "/seasons", icon: Calendar },
   { title: "الإعدادات والأسعار", url: "/settings", icon: Cog },
-  { title: "إدارة حسابات المستخدمين", url: "/settings?section=users_roles", icon: UserCog },
-]
+];
+
+
 
 let lastNavTimestamp = 0;
 const NAV_THROTTLE_MS = 300;
@@ -102,8 +108,8 @@ function MenuGroup({
             const isMatch = item.url.includes("?")
               ? location.pathname === item.url.split("?")[0] && location.search.includes(item.url.split("?")[1])
               : item.url === "/settings"
-              ? location.pathname === "/settings" && (!location.search || !location.search.includes("section=users_roles"))
-              : location.pathname === item.url;
+                ? location.pathname === "/settings" && (!location.search || !location.search.includes("section=users_roles"))
+                : location.pathname === item.url;
 
             return (
               <SidebarMenuItem key={item.title}>
@@ -130,17 +136,15 @@ function MenuGroup({
                       if (isMobile) setOpenMobile(false);
                     }}
                     className={() =>
-                      `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${
-                        isMatch
-                          ? "bg-sidebar-primary/20 text-sidebar-primary font-semibold"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${isMatch
+                        ? "bg-sidebar-primary/20 text-sidebar-primary font-semibold"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                       }`
                     }
                   >
                     <span
-                      className={`absolute inset-y-1.5 -right-2 w-1 rounded-full transition-all ${
-                        isMatch ? "bg-sidebar-primary" : "bg-transparent"
-                      }`}
+                      className={`absolute inset-y-2 right-0 w-1 rounded-full transition-all ${isMatch ? "bg-sidebar-primary" : "bg-transparent"
+                        }`}
                     />
                     <item.icon className="h-[18px] w-[18px] shrink-0" />
                     {!isCollapsed && (
@@ -190,11 +194,10 @@ export function AppSidebar() {
           {!isCollapsed ? (
             <div className="flex items-center gap-3">
               <div
-                className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-olive ${
-                  isAdmin
-                    ? "bg-amber-600 text-white"
-                    : "bg-sidebar-primary text-sidebar-primary-foreground"
-                }`}
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-olive ${isAdmin
+                  ? "bg-amber-600 text-white"
+                  : "bg-sidebar-primary text-sidebar-primary-foreground"
+                  }`}
               >
                 {isAdmin ? (
                   <Building2 className="h-5 w-5" />
@@ -216,11 +219,10 @@ export function AppSidebar() {
             </div>
           ) : (
             <div
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center mx-auto shadow-olive ${
-                isAdmin
-                  ? "bg-amber-600 text-white"
-                  : "bg-sidebar-primary text-sidebar-primary-foreground"
-              }`}
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center mx-auto shadow-olive ${isAdmin
+                ? "bg-amber-600 text-white"
+                : "bg-sidebar-primary text-sidebar-primary-foreground"
+                }`}
             >
               {isAdmin ? (
                 <Building2 className="h-5 w-5" />
@@ -233,18 +235,18 @@ export function AppSidebar() {
 
         <SidebarContent className="px-3 py-4 space-y-2">
           {isAdmin ? (
-            <MenuGroup 
-              label="لوحة التحكم والإشراف" 
-              items={adminItems} 
-              isCollapsed={isCollapsed} 
+            <MenuGroup
+              label="لوحة التحكم والإشراف"
+              items={adminItems}
+              isCollapsed={isCollapsed}
             />
           ) : (
             <>
               {/* 1. الواجهة التشغيلية الأساسية: دائماً موجودة بنفس الترتيب والمكان للمالك والموظف */}
-              <MenuGroup 
-                label="الواجهة التشغيلية" 
-                items={operationalItems} 
-                isCollapsed={isCollapsed} 
+              <MenuGroup
+                label="الواجهة التشغيلية"
+                items={operationalItems}
+                isCollapsed={isCollapsed}
               />
 
               {/* 2. قسم لوحة الإدارة: يظهر فقط للمالك (Owner) ولا يظهر نهائياً للموظف */}
@@ -290,12 +292,23 @@ export function AppSidebar() {
                         </div>
                       </div>
 
-                      <MenuGroup 
-                        label="أدوات الإدارة والتحكم"
-                        items={adminManagementItems} 
-                        isCollapsed={isCollapsed} 
+                      <MenuGroup
+                        label="نظرة عامة"
+                        items={managementMainItems}
+                        isCollapsed={isCollapsed}
                       />
 
+                      <MenuGroup
+                        label="المالية"
+                        items={managementFinanceItems}
+                        isCollapsed={isCollapsed}
+                      />
+
+                      <MenuGroup
+                        label="الإدارة"
+                        items={managementAdminItems}
+                        isCollapsed={isCollapsed}
+                      />
                       <div className="my-2 border-t border-sidebar-border/60 mx-1" />
 
                       {/* زر خروج من الإدارة */}

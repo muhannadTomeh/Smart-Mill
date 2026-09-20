@@ -16,27 +16,16 @@ import { Navigate } from "react-router-dom";
 type Period = "daily" | "weekly" | "monthly" | "yearly";
 
 function getDateRange(period: Period): string {
-  const now = new Date();
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
   switch (period) {
-    case "daily":
-      return now.toISOString().split("T")[0];
-    case "weekly": {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 7);
-      return d.toISOString().split("T")[0];
-    }
-    case "monthly": {
-      const d = new Date(now);
-      d.setMonth(d.getMonth() - 1);
-      return d.toISOString().split("T")[0];
-    }
-    case "yearly": {
-      const d = new Date(now);
-      d.setFullYear(d.getFullYear() - 1);
-      return d.toISOString().split("T")[0];
-    }
+    case "daily": return d.toISOString();
+    case "weekly": d.setDate(d.getDate() - 7); return d.toISOString();
+    case "monthly": d.setMonth(d.getMonth() - 1); return d.toISOString();
+    case "yearly": d.setFullYear(d.getFullYear() - 1); return d.toISOString();
   }
 }
+
 
 const periodLabels: Record<Period, string> = {
   daily: "يومي",
@@ -49,7 +38,11 @@ export default function Reports() {
   const { user, millId } = useAuth();
   const { isEmployee } = useRole();
   const { activeSeason } = useSeason();
-  const { inventory } = useInventory();
+  const {
+    inventory,
+    loading: invLoading,
+    refetch: refetchInventory,
+  } = useInventory();
   const { cashBalance } = useCashBalance();
   const [period, setPeriod] = useState<Period>("daily");
 
@@ -67,10 +60,11 @@ export default function Reports() {
     oilFromMilling: 0,
     oilPurchasedKg: 0,
     oilSoldKg: 0,
-    oilOpeningAndAdjustments: 0,
+    oilAdjustments: 0,
     cashIn: 0,
     cashOut: 0,
-    cashNetChange: 0,
+    cashNetChange: 0, totalProductSales: 0,
+
   });
 
   useEffect(() => {
@@ -84,11 +78,10 @@ export default function Reports() {
     const [invoicesRes, expensesRes, salesRes, purchasesRes, workerPaymentsRes, oilMovementsRes, financialRes] = await Promise.all([
       supabase.from("invoices").select("*").eq("season_id", activeSeason.id).is("voided_at", null).gte("created_at", dateFrom),
       supabase.from("expenses").select("amount").eq("season_id", activeSeason.id).is("voided_at", null).gte("created_at", dateFrom),
-      supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "sell").gte("created_at", dateFrom),
-      supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "buy").gte("created_at", dateFrom),
-      supabase.from("worker_payments").select("amount").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
-      (supabase.from("oil_movements" as any) as any).select("source_type,movement_type,quantity").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
-      (supabase.from("financial_transactions" as any) as any).select("id,amount,direction,payment_method,status,created_at").eq("season_id", activeSeason.id).eq("status", "active").gte("created_at", dateFrom),
+      supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "sell").eq("status", "active").gte("created_at", dateFrom),
+      supabase.from("oil_transactions").select("total_price,amount").eq("season_id", activeSeason.id).eq("type", "buy").eq("status", "active").gte("created_at", dateFrom),
+      supabase.from("worker_payments").select("amount").eq("season_id", activeSeason.id).eq("status", "active").gte("created_at", dateFrom), (supabase.from("oil_movements" as any) as any).select("source_type,movement_type,quantity").eq("season_id", activeSeason.id).gte("created_at", dateFrom),
+      (supabase.from("financial_transactions" as any) as any).select("id,amount,direction,payment_method,status,created_at,reference_type").eq("season_id", activeSeason.id).eq("status", "active").gte("created_at", dateFrom),
     ]);
 
     const invoices = invoicesRes.data || [];
@@ -106,8 +99,25 @@ export default function Reports() {
     const oilFromMilling = movements.filter((m) => m.source_type === "milling_settlement" && m.movement_type === "IN").reduce((s, m) => s + Number(m.quantity), 0);
     const oilPurchasedKg = movements.filter((m) => m.source_type === "oil_purchase" && m.movement_type === "IN").reduce((s, m) => s + Number(m.quantity), 0);
     const oilSoldKg = movements.filter((m) => m.source_type === "oil_sale" && m.movement_type === "OUT").reduce((s, m) => s + Number(m.quantity), 0);
-    const oilOpeningAndAdjustments = movements.filter((m) => m.source_type === "opening_balance" || m.source_type === "adjustment").reduce((s, m) => s + (m.movement_type === "IN" ? Number(m.quantity) : -Number(m.quantity)), 0);
+    const oilAdjustments = movements.filter((m) => m.source_type === "adjustment").reduce((s, m) => s + (m.movement_type === "IN" ? Number(m.quantity) : -Number(m.quantity)), 0);
     const financial = (financialRes.data || []) as any[];
+
+    const totalProductSales = financial
+      .filter(
+        (e) =>
+          e.reference_type === "product_sale" &&
+          e.direction === "in"
+      )
+      .reduce((sum, e) => sum + Number(e.amount), 0)
+      -
+      financial
+        .filter(
+          (e) =>
+            e.reference_type === "product_sale_cancellation" &&
+            e.direction === "out"
+        )
+        .reduce((sum, e) => sum + Number(e.amount), 0);
+
     // Period cash flow is historical: reversals are real cash movements at their
     // own timestamps, so retain every active cash IN/OUT ledger event.
     const cashIn = financial.filter((e) => e.payment_method === "cash" && e.direction === "in").reduce((sum, e) => sum + Number(e.amount), 0);
@@ -127,14 +137,20 @@ export default function Reports() {
       oilFromMilling,
       oilPurchasedKg,
       oilSoldKg,
-      oilOpeningAndAdjustments,
+      oilAdjustments,
       cashIn,
       cashOut,
-      cashNetChange: cashIn - cashOut,
+      cashNetChange: cashIn - cashOut, totalProductSales,
     });
   };
 
-  const netOperatingMovement = stats.totalCashEarned + stats.totalOilSales - stats.totalExpenses - stats.totalWorkerPayments - stats.totalOilPurchases;
+  const netOperatingMovement =
+    stats.totalCashEarned +
+    stats.totalOilSales +
+    stats.totalProductSales -
+    stats.totalExpenses -
+    stats.totalWorkerPayments -
+    stats.totalOilPurchases;
 
   if (isEmployee) {
     return <Navigate to="/queue" replace />;
@@ -180,7 +196,7 @@ export default function Reports() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">كاش فواتير العصر</CardTitle>
+            <CardTitle className="text-sm font-medium">النقد المسجل في فواتير العصر</CardTitle>
             <Banknote className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent><div className="text-2xl font-bold">{stats.totalCashEarned.toFixed(0)} <span className="text-sm font-normal text-muted-foreground">ش</span></div></CardContent>
@@ -227,14 +243,18 @@ export default function Reports() {
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" /> ملخص التشغيل</CardTitle></CardHeader>
           <CardContent><Table><TableBody>
-            <TableRow><TableCell>قيمة فواتير العصر</TableCell><TableCell>{stats.totalCashEarned.toFixed(0)} ش</TableCell></TableRow>
+            <TableRow><TableCell>النقد المسجل في فواتير العصر</TableCell><TableCell>{stats.totalCashEarned.toFixed(0)} ش</TableCell></TableRow>
             <TableRow><TableCell>المصاريف التشغيلية</TableCell><TableCell>{stats.totalExpenses.toFixed(0)} ش</TableCell></TableRow>
             <TableRow><TableCell>أجور العمال</TableCell><TableCell>{stats.totalWorkerPayments.toFixed(0)} ش</TableCell></TableRow>
             <TableRow><TableCell>مبيعات الزيت</TableCell><TableCell>{stats.totalOilSales.toFixed(0)} ش</TableCell></TableRow>
             <TableRow><TableCell>مشتريات الزيت</TableCell><TableCell>{stats.totalOilPurchases.toFixed(0)} ش</TableCell></TableRow>
-            <TableRow className="border-t-2"><TableCell className="font-bold">صافي الحركة التشغيلية المسجلة</TableCell><TableCell className="font-bold">{netOperatingMovement.toFixed(0)} ش</TableCell></TableRow>
+            <TableRow>
+              <TableCell>مبيعات البضائع</TableCell>
+              <TableCell>{stats.totalProductSales.toFixed(0)} ش</TableCell>
+            </TableRow>
+            <TableRow className="border-t-2"><TableCell className="font-bold">صافي البنود المعروضة</TableCell><TableCell className="font-bold">{netOperatingMovement.toFixed(0)} ش</TableCell></TableRow>
           </TableBody></Table>
-          <p className="text-xs text-muted-foreground mt-3">ليس صافي ربح محاسبيًا: لا يتضمن هذا التقرير تكلفة مخزون/COGS كاملة.</p></CardContent>
+            <p className="text-xs text-muted-foreground mt-3">ليس صافي ربح محاسبيًا: لا يتضمن هذا التقرير تكلفة مخزون/COGS كاملة.</p></CardContent>
         </Card>
 
         {/* Current Inventory */}
@@ -248,7 +268,13 @@ export default function Reports() {
                 <Droplets className="h-8 w-8 text-primary" />
                 <div>
                   <p className="text-sm text-muted-foreground">مخزون الزيت</p>
-                  <p className="text-2xl font-bold">{inventory.total_oil} كغم</p>
+                  {invLoading ? (
+                    <div className="h-7 w-24 bg-muted rounded animate-pulse" />
+                  ) : (
+                    <span className="text-2xl font-bold">
+                      {inventory.total_oil} كغم
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -257,7 +283,7 @@ export default function Reports() {
               <div className="flex justify-between"><span className="text-muted-foreground">ردّ تسويات العصر</span><strong>+{stats.oilFromMilling.toFixed(1)} كغم</strong></div>
               <div className="flex justify-between"><span className="text-muted-foreground">زيت مُشترى</span><strong>+{stats.oilPurchasedKg.toFixed(1)} كغم</strong></div>
               <div className="flex justify-between"><span className="text-muted-foreground">زيت مباع</span><strong>-{stats.oilSoldKg.toFixed(1)} كغم</strong></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">رصيد افتتاحي / تعديلات</span><strong>{stats.oilOpeningAndAdjustments >= 0 ? "+" : ""}{stats.oilOpeningAndAdjustments.toFixed(1)} كغم</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">تسويات وعكس حركات الزيت</span><strong>{stats.oilAdjustments >= 0 ? "+" : ""}{stats.oilAdjustments.toFixed(1)} كغم</strong></div>
             </div>
             <div className="flex items-center justify-between p-4 rounded-lg bg-green-500/5 border">
               <div className="flex items-center gap-3">

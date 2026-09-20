@@ -13,9 +13,9 @@ Authenticated browser clients retain `SELECT` access to `public.inventory` but h
 ## Opening balances
 
 - `record_cash_opening_balance_command` records a one-time cash opening balance as an active financial transaction with `type = adjustment`, `category = opening_balance`, and `direction = in`. It is not revenue.
-- `record_oil_opening_balance_command` records a one-time oil opening balance as an `oil_movements` row with `source_type = opening_balance`, `movement_type = IN`, and `direction = in`.
-- Both commands are atomic, idempotent, owner-membership-only, and create a `business_operations` record. Platform Admin does not bypass this owner-only rule.
-- The UI exposes these only to a Mill Owner on the inventory page, clearly as opening balances rather than editable current balances.
+- There is no oil opening-balance workflow. Mill oil enters inventory only through milling settlement, oil purchase, or a documented adjustment.
+- The cash-opening command is atomic, idempotent, owner-membership-only, and creates a `business_operations` record. Platform Admin does not bypass this owner-only rule.
+- The UI exposes only the cash opening balance to a Mill Owner on the inventory page; there is no oil-opening action.
 
 ## MCP / Edge read path
 

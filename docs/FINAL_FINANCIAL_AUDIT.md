@@ -105,3 +105,11 @@ Six historical worker-payment ledger sources remain physically orphaned from old
 1. Migration history/version drift blocks the fresh database equivalence acceptance criterion.
 2. Full financial E2E and permission/idempotency acceptance tests have not run because of item 1.
 3. The pre-existing Supabase Advisor still reports intentionally exposed, internally authorized canonical `SECURITY DEFINER` commands and three documented anonymous display/login endpoints; the new commands are not executable by `anon`.
+
+## 2026-09-20 — Oil opening balance removal
+
+- The oil opening-balance workflow was removed from the product and database model.
+- New oil inventory can enter only through canonical milling settlements, oil purchases, or an explicitly documented adjustment. Cash opening balance remains unchanged.
+- `record_oil_opening_balance_command` was revoked and dropped, and `oil_movements.source_type` no longer accepts `opening_balance`.
+- The canonical oil balance view now exposes `adjustments` instead of `opening_and_adjustments` and runs with invoker security so existing tenant RLS remains effective.
+- The live database contained no oil opening-balance movements or operations before removal. Oil-ledger reconciliation remained exact after the migration.

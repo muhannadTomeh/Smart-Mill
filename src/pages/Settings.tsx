@@ -12,8 +12,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Settings as SettingsIcon, Save, Plus, Trash2, Key, LogOut, 
+import {
+  Settings as SettingsIcon, Save, Plus, Trash2, Key, LogOut,
   ShieldCheck, Building2, MapPin, User, Phone, Globe, UserCheck,
   Tv, ExternalLink, Copy, Sparkles, SlidersHorizontal, Receipt,
   Users, ChevronLeft, ArrowRight, HardHat, Printer, Coins,
@@ -52,14 +52,14 @@ const COUNTRIES = [
 ];
 
 // Navigation Types for the Settings Hub
-type MainSectionId = 
+type MainSectionId =
   | "mill_info"          // 1. معلومات المعصرة
   | "operations"         // 2. التشغيل
   | "invoices_receipts"  // 3. الفواتير والإيصالات
   | "users_roles"        // 4. المستخدمون والصلاحيات
   | "account";           // 5. الحساب
 
-type SubSettingId = 
+type SubSettingId =
   // Operations sub-settings
   | "pressing_rates"     // إعدادات العصر والأسعار
   | "display_screen"     // شاشة العرض
@@ -68,8 +68,8 @@ type SubSettingId =
   | "expense_categories" // أنواع المصاريف
   | "receipt_format"     // مواصفات الإيصالات والطباعة
   // Users & Roles sub-settings
-  | "cashier_accounts"   // حسابات الكاشير
-  | "workers_link"       // العمال والأجور
+  | "cashier_accounts"   // حسابات الموظف المعصرة
+
   | "roles_overview"     // نظام الصلاحيات
   // Account sub-settings
   | "account_profile"    // الملف الشخصي
@@ -140,7 +140,7 @@ export default function Settings() {
   const [expenseCategories, setExpenseCategories] = useState<{ id: string, name: string }[]>([]);
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState("");
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
-  
+
   const [expenseDeleteTarget, setExpenseDeleteTarget] = useState<{ id: string, name: string } | null>(null);
   const [currentAdminPin, setCurrentAdminPin] = useState("");
   const [newAdminPin, setNewAdminPin] = useState("");
@@ -175,7 +175,7 @@ export default function Settings() {
           ...parsed,
           dynamic_items: dynamic_items.length > 0 ? dynamic_items : defaultDisplaySettings.dynamic_items,
         });
-      } catch {}
+      } catch { }
     } else if ((activeSeason as any).display_settings) {
       const raw = (activeSeason as any).display_settings;
       const dynamic_items = getDynamicItems(raw);
@@ -220,7 +220,7 @@ export default function Settings() {
         settings,
       });
       bc.close();
-    } catch {}
+    } catch { }
   };
 
   const updateDisplaySetting = <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
@@ -435,8 +435,8 @@ export default function Settings() {
     }
     setSavingProfile(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
+      const { error: profileError } = await supabase
+        .from("profiles")
         .update({
           mill_name: profileForm.mill_name.trim(),
           display_name: profileForm.display_name.trim(),
@@ -444,12 +444,33 @@ export default function Settings() {
           mill_location: profileForm.mill_location.trim(),
           phone: profileForm.phone.trim(),
           secondary_phone: profileForm.secondary_phone.trim() || null,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('user_id', user.id);
+        .eq("user_id", user.id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      if (millId) {
+        const { error: millError } = await supabase
+          .from("mills")
+          .update({
+            name: profileForm.mill_name.trim(),
+            country: profileForm.country,
+            location: profileForm.mill_location.trim(),
+            phone: profileForm.phone.trim(),
+            secondary_phone: profileForm.secondary_phone.trim() || null,
+          })
+          .eq("id", millId);
+
+        if (millError) throw millError;
+      }
+
+      try {
+        localStorage.setItem("mill_name", profileForm.mill_name.trim());
+      } catch { }
+
       await refreshProfile();
+
       toast({ title: "تم الحفظ بنجاح", description: "تم تحديث بيانات المعصرة بنجاح" });
     } catch (err: any) {
       toast({ title: "خطأ", description: err.message || "فشل حفظ بيانات المعصرة", variant: "destructive" });
@@ -704,7 +725,7 @@ export default function Settings() {
     },
     users_roles: {
       title: "المستخدمون والصلاحيات",
-      desc: "إدارة المستخدمين والعمال والصلاحيات",
+      desc: "إدارة حسابات مستخدمي النظام وصلاحيات الوصول",
       icon: Users,
       colorClass: "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
     },
@@ -734,7 +755,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12" dir="rtl">
-      
+
       {/* ─────────────────────────────────────────────────────────────
           TOP HEADER & BREADCRUMBS NAVIGATION
       ───────────────────────────────────────────────────────────── */}
@@ -750,22 +771,22 @@ export default function Settings() {
               >
                 <ArrowRight className="h-4 w-4" />
                 <span>
-                  {activeSubSetting 
+                  {activeSubSetting
                     ? `العودة إلى ${SECTIONS_CONFIG[activeSection].title}`
                     : "العودة إلى الإعدادات"
                   }
                 </span>
               </Button>
-              
+
               <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
-                <button 
+                <button
                   onClick={() => { setActiveSection(null); setActiveSubSetting(null); setSearchParams({}); }}
                   className="hover:text-primary transition-colors cursor-pointer"
                 >
                   الإعدادات
                 </button>
                 <span>/</span>
-                <button 
+                <button
                   onClick={() => {
                     setActiveSubSetting(null);
                     if (activeSection) setSearchParams({ section: activeSection });
@@ -786,8 +807,7 @@ export default function Settings() {
                       {activeSubSetting === "currency" && "العملة المعتمدة"}
                       {activeSubSetting === "expense_categories" && "أنواع المصاريف"}
                       {activeSubSetting === "receipt_format" && "مواصفات الطباعة"}
-                      {activeSubSetting === "cashier_accounts" && "حسابات الكاشير"}
-                      {activeSubSetting === "workers_link" && "العمال والرواتب"}
+                      {activeSubSetting === "cashier_accounts" && "حسابات موظفي المعصرة"}
                       {activeSubSetting === "roles_overview" && "نظام الصلاحيات"}
                       {activeSubSetting === "account_profile" && "الملف الشخصي"}
                       {activeSubSetting === "change_password" && "تغيير كلمة المرور"}
@@ -829,7 +849,7 @@ export default function Settings() {
       ───────────────────────────────────────────────────────────── */}
       {!activeSection && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 pt-2">
-          
+
           {/* Card 1: معلومات المعصرة */}
           <div
             onClick={() => openSection("mill_info")}
@@ -913,8 +933,7 @@ export default function Settings() {
                   المستخدمون والصلاحيات
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                  إدارة حسابات المستخدمين، العمال، وصلاحيات النظام
-                </p>
+                  إدارة حسابات مستخدمي النظام وصلاحيات الوصول                </p>
               </div>
             </div>
             <div className="ms-3 shrink-0 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all">
@@ -968,19 +987,19 @@ export default function Settings() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">اسم المعصرة *</Label>
-                <Input 
-                  value={profileForm.mill_name} 
-                  onChange={(e) => setProfileForm(p => ({ ...p, mill_name: e.target.value }))} 
-                  placeholder="اسم المعصرة..." 
+                <Input
+                  value={profileForm.mill_name}
+                  onChange={(e) => setProfileForm(p => ({ ...p, mill_name: e.target.value }))}
+                  placeholder="اسم المعصرة..."
                   className="rounded-xl"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">اسم المالك / المدير</Label>
-                <Input 
-                  value={profileForm.display_name} 
-                  onChange={(e) => setProfileForm(p => ({ ...p, display_name: e.target.value }))} 
-                  placeholder="اسم المالك..." 
+                <Input
+                  value={profileForm.display_name}
+                  onChange={(e) => setProfileForm(p => ({ ...p, display_name: e.target.value }))}
+                  placeholder="اسم المالك..."
                   className="rounded-xl"
                 />
               </div>
@@ -1002,10 +1021,10 @@ export default function Settings() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">موقع / مدينة المعصرة</Label>
-                <Input 
-                  value={profileForm.mill_location} 
-                  onChange={(e) => setProfileForm(p => ({ ...p, mill_location: e.target.value }))} 
-                  placeholder="مثال: نابلس - حوارة" 
+                <Input
+                  value={profileForm.mill_location}
+                  onChange={(e) => setProfileForm(p => ({ ...p, mill_location: e.target.value }))}
+                  placeholder="مثال: نابلس - حوارة"
                   className="rounded-xl"
                 />
               </div>
@@ -1014,30 +1033,30 @@ export default function Settings() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">رقم الهاتف الأساسي</Label>
-                <Input 
+                <Input
                   type="tel"
-                  value={profileForm.phone} 
-                  onChange={(e) => setProfileForm(p => ({ ...p, phone: e.target.value }))} 
-                  placeholder="05XXXXXXXX" 
+                  value={profileForm.phone}
+                  onChange={(e) => setProfileForm(p => ({ ...p, phone: e.target.value }))}
+                  placeholder="05XXXXXXXX"
                   className="rounded-xl"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">رقم هاتف إضافي (اختياري)</Label>
-                <Input 
+                <Input
                   type="tel"
-                  value={profileForm.secondary_phone} 
-                  onChange={(e) => setProfileForm(p => ({ ...p, secondary_phone: e.target.value }))} 
-                  placeholder="هاتف أرضي أو رقم آخر" 
+                  value={profileForm.secondary_phone}
+                  onChange={(e) => setProfileForm(p => ({ ...p, secondary_phone: e.target.value }))}
+                  placeholder="هاتف أرضي أو رقم آخر"
                   className="rounded-xl"
                 />
               </div>
             </div>
 
             <div className="pt-3 flex items-center justify-between border-t border-border/50">
-              <Button 
-                onClick={handleSaveProfile} 
-                disabled={savingProfile} 
+              <Button
+                onClick={handleSaveProfile}
+                disabled={savingProfile}
                 className="gap-2 rounded-xl px-6 font-bold"
               >
                 <Save className="h-4 w-4" />
@@ -1125,50 +1144,50 @@ export default function Settings() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">نسبة الرد (%)</Label>
-                <Input 
-                  type="number" 
-                  value={form.return_percent} 
-                  onChange={(e) => setForm((p) => ({ ...p, return_percent: e.target.value }))} 
-                  min="0" 
-                  step="0.1" 
+                <Input
+                  type="number"
+                  value={form.return_percent}
+                  onChange={(e) => setForm((p) => ({ ...p, return_percent: e.target.value }))}
+                  min="0"
+                  step="0.1"
                   className="rounded-xl"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">تكلفة الرد نقداً ({selectedCurrency}/كغم)</Label>
-                <Input 
-                  type="number" 
-                  value={form.cash_return_cost} 
-                  onChange={(e) => setForm((p) => ({ ...p, cash_return_cost: e.target.value }))} 
-                  min="0" 
-                  step="0.1" 
+                <Input
+                  type="number"
+                  value={form.cash_return_cost}
+                  onChange={(e) => setForm((p) => ({ ...p, cash_return_cost: e.target.value }))}
+                  min="0"
+                  step="0.1"
                   className="rounded-xl"
                 />
               </div>
             </div>
-            
+
             <Separator />
-            
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">سعر بيع الزيت ({selectedCurrency}/كغم)</Label>
-                <Input 
-                  type="number" 
-                  value={form.oil_sell_price} 
-                  onChange={(e) => setForm((p) => ({ ...p, oil_sell_price: e.target.value }))} 
-                  min="0" 
-                  step="0.1" 
+                <Input
+                  type="number"
+                  value={form.oil_sell_price}
+                  onChange={(e) => setForm((p) => ({ ...p, oil_sell_price: e.target.value }))}
+                  min="0"
+                  step="0.1"
                   className="rounded-xl"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">سعر شراء الزيت ({selectedCurrency}/كغم)</Label>
-                <Input 
-                  type="number" 
-                  value={form.oil_buy_price} 
-                  onChange={(e) => setForm((p) => ({ ...p, oil_buy_price: e.target.value }))} 
-                  min="0" 
-                  step="0.1" 
+                <Input
+                  type="number"
+                  value={form.oil_buy_price}
+                  onChange={(e) => setForm((p) => ({ ...p, oil_buy_price: e.target.value }))}
+                  min="0"
+                  step="0.1"
                   className="rounded-xl"
                 />
               </div>
@@ -1520,8 +1539,8 @@ export default function Settings() {
           <CardContent className="space-y-4 pt-6 max-w-md">
             <div className="space-y-2">
               <Label className="text-xs font-semibold">اختر العملة</Label>
-              <Select 
-                value={selectedCurrency} 
+              <Select
+                value={selectedCurrency}
                 onValueChange={(val) => {
                   setSelectedCurrency(val);
                   setCurrency(val);
@@ -1575,16 +1594,16 @@ export default function Settings() {
                 <div className="space-y-4 pt-2">
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold">اسم المصروف</Label>
-                    <Input 
-                      value={newExpenseCategoryName} 
-                      onChange={(e) => setNewExpenseCategoryName(e.target.value)} 
-                      placeholder="مثال: فطور عمال، صيانة، كهرباء، وقود..." 
+                    <Input
+                      value={newExpenseCategoryName}
+                      onChange={(e) => setNewExpenseCategoryName(e.target.value)}
+                      placeholder="مثال: فطور عمال، صيانة، كهرباء، وقود..."
                       className="rounded-xl"
                     />
                   </div>
-                  <Button 
-                    onClick={addExpenseCategory} 
-                    disabled={!newExpenseCategoryName.trim()} 
+                  <Button
+                    onClick={addExpenseCategory}
+                    disabled={!newExpenseCategoryName.trim()}
                     className="w-full rounded-xl font-bold gap-2"
                   >
                     <Plus className="h-4 w-4" />
@@ -1598,14 +1617,14 @@ export default function Settings() {
             {expenseCategories.length > 0 ? (
               <div className="grid gap-2.5 sm:grid-cols-2">
                 {expenseCategories.map((ec) => (
-                  <div 
-                    key={ec.id} 
+                  <div
+                    key={ec.id}
                     className="flex items-center justify-between p-3.5 rounded-xl border border-border/70 bg-card hover:bg-muted/20 transition-colors"
                   >
                     <span className="font-bold text-sm text-foreground">{ec.name}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => setExpenseDeleteTarget(ec)}
                       className="text-destructive hover:bg-destructive/10 rounded-lg h-8 w-8"
                     >
@@ -1639,7 +1658,7 @@ export default function Settings() {
               <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1.5">
                 <p className="text-xs font-bold text-muted-foreground">مقاس ورق الفاتورة</p>
                 <p className="text-sm font-bold text-foreground">80mm حراري (Thermal 80mm POS)</p>
-                <p className="text-xs text-muted-foreground">متوافق مع جميع طابعات الكاشير الحرارية القياسية عبر المتصفح</p>
+                <p className="text-xs text-muted-foreground">متوافق مع جميع طابعات الإيصالات الحرارية القياسية عبر المتصفح</p>
               </div>
               <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1.5">
                 <p className="text-xs font-bold text-muted-foreground">الترويسة المعتمدة</p>
@@ -1671,11 +1690,11 @@ export default function Settings() {
               <Users className="h-5 w-5 text-indigo-500" />
               المستخدمون والصلاحيات
             </h2>
-            <p className="text-xs text-muted-foreground">إدارة وتفقد حسابات الكاشير وعمال المعصرة والصلاحيات</p>
+            <p className="text-xs text-muted-foreground">إدارة وتفقد حسابات موظفي المعصرة والعمال والصلاحيات</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {/* SubCard: حسابات الكاشير */}
+            {/* SubCard: حسابات الموظف المعصرة */}
             <div
               onClick={() => openSubSetting("cashier_accounts")}
               className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-sm transition-all cursor-pointer"
@@ -1686,10 +1705,10 @@ export default function Settings() {
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">
-                    حسابات موظفي الكاشير
+                    حسابات موظفي المعصرة
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    استعراض حسابات موظفي الكاشير التابعة للمعصرة ({employees.length})
+                    استعراض حسابات موظفي المعصرة  التابعة للمعصرة ({employees.length})
                   </p>
                 </div>
               </div>
@@ -1698,8 +1717,7 @@ export default function Settings() {
 
             {/* SubCard: عمال المعصرة */}
             <div
-              onClick={() => openSubSetting("workers_link")}
-              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-indigo-500/50 hover:shadow-sm transition-all cursor-pointer"
+
             >
               <div className="flex items-center gap-3.5">
                 <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
@@ -1741,16 +1759,15 @@ export default function Settings() {
         </div>
       )}
 
-      {/* USERS SUB-SETTING 1: حسابات موظفي الكاشير */}
+      {/* USERS SUB-SETTING 1: حسابات موظفي الموظف المعصرة */}
       {activeSection === "users_roles" && activeSubSetting === "cashier_accounts" && (
         <Card className="rounded-2xl border-border/70 shadow-sm">
           <CardHeader className="pb-4 border-b border-border/50">
             <CardTitle className="text-lg flex items-center gap-2">
               <UserCheck className="h-5 w-5 text-indigo-500" />
-              حسابات موظفي الكاشير (Cashier Sub-Accounts)
-            </CardTitle>
+              حسابات موظفي المعصرة            </CardTitle>
             <CardDescription>
-              إنشاء وإدارة حسابات الكاشير يتم من خلال مسؤول النظام (Admin) لضمان أمان وتفرد الحسابات
+              إنشاء وإدارة حسابات موظفي المعصرة يتم من خلال مسؤول النظام (Admin) لضمان أمان وتفرد الحسابات
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
@@ -1758,7 +1775,7 @@ export default function Settings() {
               {employees.map((emp: any) => (
                 <div key={emp.id} className="flex items-center justify-between p-3.5 border border-border/70 rounded-xl bg-card hover:bg-muted/20 transition-colors">
                   <div className="space-y-0.5">
-                    <p className="font-bold text-sm text-foreground">{emp.display_name || "موظف كاشير"}</p>
+                    <p className="font-bold text-sm text-foreground">{emp.display_name || "موظف المعصرة"}</p>
                     <p className="text-xs text-primary font-mono font-medium">
                       {emp.phone || emp.display_name}
                     </p>
@@ -1772,10 +1789,9 @@ export default function Settings() {
               ))}
               {employees.length === 0 && (
                 <div className="text-center py-8 border border-dashed rounded-xl space-y-2">
-                  <p className="text-sm font-semibold text-foreground">لا توجد حسابات كاشير نشطة حتى الآن</p>
+                  <p className="text-sm font-semibold text-foreground">لا توجد حسابات موظفين نشطة حتى الآن</p>
                   <p className="text-xs text-muted-foreground">
-                    تواصل مع مسؤول النظام لإنشاء وتفعيل حسابات الكاشير الخاصة بمعصرتك.
-                  </p>
+                    تواصل مع مسؤول النظام لإنشاء وتفعيل حسابات موظفي المعصرة.                  </p>
                 </div>
               )}
             </div>
@@ -1783,32 +1799,6 @@ export default function Settings() {
         </Card>
       )}
 
-      {/* USERS SUB-SETTING 2: عمال المعصرة */}
-      {activeSection === "users_roles" && activeSubSetting === "workers_link" && (
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="pb-4 border-b border-border/50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <HardHat className="h-5 w-5 text-indigo-500" />
-              عمال المعصرة وسجلات الأجور
-            </CardTitle>
-            <CardDescription>إدارة عمال المعصرة وتفاصيل ساعات العمل والمستحقات المالية</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5 pt-6">
-            <div className="p-5 rounded-xl border border-indigo-500/20 bg-indigo-500/5 space-y-3">
-              <h4 className="font-bold text-sm text-foreground">قسم مخصص لإدارة العمال</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                يحتوي النظام على صفحة متكاملة لإضافة عمال المعصرة، تعيين الأجور بالساعة أو باليوم، تسجيل الدفعات النقدية، ومتابعة الأرصدة المتبقية لكل عامل.
-              </p>
-              <Button asChild className="rounded-xl font-bold gap-2">
-                <Link to="/workers">
-                  <HardHat className="h-4 w-4" />
-                  الانتقال إلى صفحة العمال والأجور
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* USERS SUB-SETTING 3: نظام الصلاحيات */}
       {activeSection === "users_roles" && activeSubSetting === "roles_overview" && (
@@ -1827,7 +1817,7 @@ export default function Settings() {
                 <p className="text-sm font-bold text-foreground">
                   {userRole === "platform_admin" && "مسؤول النظام العام (Platform Admin)"}
                   {userRole === "mill_owner" && "مالك المعصرة (Mill Owner)"}
-                  {userRole === "mill_employee" && "موظف كاشير (Cashier Employee)"}
+                  {userRole === "mill_employee" && "موظف المعصرة"}
                   {!userRole && "مستخدم النظام"}
                 </p>
               </div>
@@ -1939,25 +1929,25 @@ export default function Settings() {
           <CardContent className="space-y-4 pt-6 max-w-lg">
             <div className="space-y-2">
               <Label className="text-xs font-semibold">البريد الإلكتروني المسجل</Label>
-              <Input 
-                value={user?.email || ""} 
-                disabled 
+              <Input
+                value={user?.email || ""}
+                disabled
                 className="bg-muted/30 font-mono text-sm rounded-xl"
               />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold">الاسم الظاهر</Label>
-              <Input 
-                value={profile?.display_name || ""} 
-                disabled 
+              <Input
+                value={profile?.display_name || ""}
+                disabled
                 className="bg-muted/30 text-sm rounded-xl"
               />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold">المعصرة التابع لها</Label>
-              <Input 
-                value={profile?.mill_name || ""} 
-                disabled 
+              <Input
+                value={profile?.mill_name || ""}
+                disabled
                 className="bg-muted/30 text-sm rounded-xl"
               />
             </div>
@@ -1978,27 +1968,27 @@ export default function Settings() {
           <CardContent className="space-y-4 pt-6 max-w-md">
             <div className="space-y-2">
               <Label className="text-xs font-semibold">كلمة المرور الجديدة</Label>
-              <Input 
-                type="password" 
-                value={newPassword} 
-                onChange={(e) => setNewPassword(e.target.value)} 
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="6 أحرف على الأقل..."
                 className="rounded-xl"
               />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold">تأكيد كلمة المرور</Label>
-              <Input 
-                type="password" 
-                value={confirmPassword} 
-                onChange={(e) => setConfirmPassword(e.target.value)} 
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="أعد إدخال كلمة المرور..."
                 className="rounded-xl"
               />
             </div>
             <div className="pt-2">
-              <Button 
-                onClick={updatePassword} 
+              <Button
+                onClick={updatePassword}
                 disabled={isUpdatingPassword || !newPassword}
                 className="rounded-xl font-bold gap-2"
               >
@@ -2025,40 +2015,40 @@ export default function Settings() {
           <CardContent className="space-y-4 pt-6 max-w-md">
             <div className="space-y-2">
               <Label className="text-xs font-semibold">رمز PIN الحالي</Label>
-              <Input 
-                type="password" 
+              <Input
+                type="password"
                 maxLength={8}
-                value={currentAdminPin} 
-                onChange={(e) => setCurrentAdminPin(e.target.value.replace(/\D/g, ""))} 
+                value={currentAdminPin}
+                onChange={(e) => setCurrentAdminPin(e.target.value.replace(/\D/g, ""))}
                 placeholder="أدخل الرمز الحالي (الافتراضي: 123456)..."
                 className="rounded-xl font-mono tracking-widest text-center"
               />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold">رمز PIN الجديد</Label>
-              <Input 
-                type="password" 
+              <Input
+                type="password"
                 maxLength={8}
-                value={newAdminPin} 
-                onChange={(e) => setNewAdminPin(e.target.value.replace(/\D/g, ""))} 
+                value={newAdminPin}
+                onChange={(e) => setNewAdminPin(e.target.value.replace(/\D/g, ""))}
                 placeholder="4 إلى 8 أرقام..."
                 className="rounded-xl font-mono tracking-widest text-center"
               />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold">تأكيد رمز PIN الجديد</Label>
-              <Input 
-                type="password" 
+              <Input
+                type="password"
                 maxLength={8}
-                value={confirmAdminPin} 
-                onChange={(e) => setConfirmAdminPin(e.target.value.replace(/\D/g, ""))} 
+                value={confirmAdminPin}
+                onChange={(e) => setConfirmAdminPin(e.target.value.replace(/\D/g, ""))}
                 placeholder="أعد إدخال الرمز الجديد..."
                 className="rounded-xl font-mono tracking-widest text-center"
               />
             </div>
             <div className="pt-2">
-              <Button 
-                onClick={updateAdminPin} 
+              <Button
+                onClick={updateAdminPin}
                 disabled={isUpdatingAdminPin || !newAdminPin}
                 className="rounded-xl font-bold gap-2 bg-amber-600 hover:bg-amber-700 text-white"
               >
@@ -2083,8 +2073,8 @@ export default function Settings() {
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
             <AlertDialogCancel className="rounded-xl">إلغاء</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={deleteExpenseCategory} 
+            <AlertDialogAction
+              onClick={deleteExpenseCategory}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
             >
               حذف النوع

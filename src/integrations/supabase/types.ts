@@ -2637,7 +2637,7 @@ export type Database = {
           oil_balance: number | null
           oil_purchased: number | null
           oil_sold: number | null
-          opening_and_adjustments: number | null
+          adjustments: number | null
           season_id: string | null
         }
         Relationships: [

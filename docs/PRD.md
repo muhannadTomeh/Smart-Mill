@@ -74,7 +74,7 @@ Goals: quick daily operation; correct, traceable financial effects; inventory th
 
 - `FIN-002` **PROPOSED**: each economic event has exactly one immutable financial event or a linked explicit reversal; voids never delete history.
 - `FIN-003` **PROPOSED**: distinguish mill cash, drawer cash, revenue, expense, receivable, supplier payable, partner due, contribution and withdrawal in labels and reports.
-- `INV-003` **PROPOSED**: all oil in sellable mill inventory is traced by source (`milling_settlement`, `oil_purchase`, `opening_balance`, or `adjustment`); a sale creates `oil_sale / OUT`. Customer oil that is not transferred to the mill is not an inventory movement.
+- `INV-003` **PROPOSED**: all oil in sellable mill inventory is traced by source (`milling_settlement`, `oil_purchase`, or a documented `adjustment`); a sale creates `oil_sale / OUT`. Customer oil that is not transferred to the mill is not an inventory movement. There is no oil opening-balance workflow.
 - `INV-004` **PROPOSED**: no stock may fall below zero; invoice lines retain price, description and quantity at the time of sale.
 - `CASH-004` **PROPOSED**: only cash events that physically affect the drawer receive `cash_session_id`; credit/partner-funded events must not.
 - `CASH-005` **EXISTING**: opening a second session fails; closing records expected, actual and difference.

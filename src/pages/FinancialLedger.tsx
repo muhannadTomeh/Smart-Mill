@@ -58,7 +58,7 @@ type LedgerEvent = {
   signed_amount: number;
 };
 
-const money = new Intl.NumberFormat("ar-PS", {
+const money = new Intl.NumberFormat("ar-PS-u-nu-latn", {
   style: "currency",
   currency: "ILS",
   maximumFractionDigits: 2,
@@ -83,10 +83,27 @@ export default function FinancialLedger() {
 
   const todayStr = new Date().toISOString().split("T")[0];
 
+  const getMonthStart = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+      .toISOString()
+      .split("T")[0];
+  };
+
+  const [dateFrom, setDateFrom] = useState(todayStr);
+  const [dateTo, setDateTo] = useState(todayStr);
+
+  const [appliedFrom, setAppliedFrom] = useState(todayStr);
+  const [appliedTo, setAppliedTo] = useState(todayStr);
+
   const load = useCallback(async () => {
     const effectiveMillId = millId || activeSeason?.mill_id;
     if (!effectiveMillId || !activeSeason) return;
     setLoading(true);
+    const startDate = new Date(`${appliedFrom}T00:00:00`);
+    const endDate = new Date(`${appliedTo}T00:00:00`);
+    endDate.setDate(endDate.getDate() + 1);
+
     const { data, error } = await supabase
       .from("financial_effective_events")
       .select(
@@ -94,8 +111,12 @@ export default function FinancialLedger() {
       )
       .eq("mill_id", effectiveMillId)
       .eq("season_id", activeSeason.id)
-      .order("created_at", { ascending: false })
-      .limit(300);
+
+      .gte("created_at", startDate.toISOString())
+      .lt("created_at", endDate.toISOString())
+
+      .order("created_at", { ascending: false });
+
 
     if (error) {
       toast({
@@ -120,7 +141,7 @@ export default function FinancialLedger() {
       );
     }
     setLoading(false);
-  }, [activeSeason, millId, toast]);
+  }, [activeSeason, millId, toast, appliedFrom, appliedTo]);
 
   useEffect(() => {
     void load();
@@ -130,6 +151,7 @@ export default function FinancialLedger() {
   useEffect(() => {
     const effectiveMillId = millId || activeSeason?.mill_id;
     if (!activeSeason || !effectiveMillId) return;
+
     const channel = supabase
       .channel(`ledger_events_${effectiveMillId}_${activeSeason.id}`)
       .on(
@@ -219,6 +241,15 @@ export default function FinancialLedger() {
     if (ref === "expense") return <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-xs gap-1"><Sprout className="h-3 w-3" /> مصروف</Badge>;
     if (ref === "worker_payment") return <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-xs gap-1"><Users className="h-3 w-3" /> دفعة عامل</Badge>;
     if (ref === "product_purchase") return <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs gap-1"><Package className="h-3 w-3" /> شراء بضاعة</Badge>;
+    if (ref === "product_sale") {
+      return (
+        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs gap-1">
+          <ArrowUpRight className="h-3 w-3" />
+          بيع بضاعة
+        </Badge>
+      );
+    }
+
     if (ref === "oil_transaction") return <Badge className="bg-teal-50 text-teal-700 border-teal-200 text-xs gap-1"><Droplets className="h-3 w-3" /> {event.direction === "in" ? "بيع زيت" : "شراء زيت"}</Badge>;
     if (ref === "customer_payment" || t === "customer_payment") return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs gap-1"><CheckCircle className="h-3 w-3" /> تحصيل ذمة</Badge>;
     if (ref === "payable_settlement") return <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-xs gap-1"><CheckCircle className="h-3 w-3" /> سداد التزام</Badge>;
@@ -307,22 +338,89 @@ export default function FinancialLedger() {
   };
 
   const renderDescription = (event: LedgerEvent) => {
-    // Determine the primary label
-    let mainLabel = event.description || event.category;
+    const ref = event.reference_type;
+    const category = event.category;
 
-    // Clean up technical terms or dashes
-    if (
-      !mainLabel ||
-      mainLabel === "expense" ||
-      mainLabel === "income" ||
-      mainLabel === "-" ||
-      mainLabel === "—"
-    ) {
-      mainLabel = event.category || "حركة نقدية";
+    const isGarbled = (text?: string | null) =>
+      Boolean(text && /[�ÃÂÐÑØÙ©]/.test(text));
+
+    let mainLabel = "";
+
+    // الحركات العكسية أولاً
+    if (event.effect_status === "reversal") {
+      if (category === "expense_reversal") {
+        mainLabel = "إلغاء مصروف";
+      } else if (
+        category === "invoice_reversal" ||
+        ref === "financial_reversal"
+      ) {
+        mainLabel = "إلغاء فاتورة عصر";
+      } else if (category === "product_sale_cancellation") {
+        mainLabel = "إلغاء بيع بضاعة";
+      } else if (
+        category === "product_purchase_reversal" ||
+        category === "stock_purchase_reversal"
+      ) {
+        mainLabel = "إلغاء شراء بضاعة";
+      } else if (ref === "worker_payment_reversal") {
+        mainLabel = "عكس دفعة عامل";
+      } else if (ref === "payable_settlement_reversal") {
+        mainLabel = "عكس سداد التزام";
+      } else if (ref === "customer_payment_reversal") {
+        mainLabel = "عكس تحصيل ذمة";
+      } else {
+        mainLabel = "حركة تصحيح";
+      }
+    }
+
+    // الحركات العادية
+    if (!mainLabel) {
+      if (ref === "invoice") {
+        mainLabel = "فاتورة عصر";
+      } else if (ref === "expense") {
+        mainLabel =
+          category && category !== "expense"
+            ? category
+            : "مصروف";
+      } else if (ref === "worker_payment") {
+        mainLabel = "دفعة عامل";
+      } else if (ref === "product_purchase") {
+        mainLabel = "شراء بضاعة";
+      } else if (ref === "product_sale") {
+        mainLabel = "بيع بضاعة";
+      } else if (ref === "oil_transaction") {
+        mainLabel =
+          event.direction === "in" ? "بيع زيت" : "شراء زيت";
+      } else if (ref === "customer_payment") {
+        mainLabel = "تحصيل ذمة";
+      } else if (ref === "payable_settlement") {
+        mainLabel = "سداد التزام";
+      } else if (ref === "partner_transaction") {
+        mainLabel =
+          event.direction === "in"
+            ? "مساهمة شريك"
+            : "سحب شريك";
+      } else if (ref === "cash_opening_balance") {
+        mainLabel = "الرصيد النقدي الافتتاحي";
+      } else if (
+        event.description &&
+        !isGarbled(event.description)
+      ) {
+        mainLabel = event.description;
+      } else if (
+        category &&
+        !isGarbled(category)
+      ) {
+        mainLabel = category;
+      } else {
+        mainLabel = "حركة مالية";
+      }
     }
 
     const party =
-      event.party_name && event.party_name !== "-" && event.party_name !== "—"
+      event.party_name &&
+        event.party_name !== "-" &&
+        event.party_name !== "—"
         ? event.party_name.trim()
         : null;
 
@@ -331,6 +429,7 @@ export default function FinancialLedger() {
         <p className="font-semibold text-foreground text-sm tracking-tight">
           {mainLabel}
         </p>
+
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {party && (
             <span className="inline-flex items-center gap-1 font-medium text-foreground/80 bg-muted/50 px-1.5 py-0.5 rounded">
@@ -338,16 +437,18 @@ export default function FinancialLedger() {
               <span>الطرف: {party}</span>
             </span>
           )}
-          {event.category &&
-            event.category !== mainLabel &&
-            event.category !== "expense" &&
-            event.category !== "income" && (
-              <span className="text-[11px] text-muted-foreground">
-                [{event.category}]
-              </span>
-            )}
-          {event.effect_status === "reversal" && event.reversal_of && <span className="text-[11px] text-muted-foreground">تصحيح للعملية #{event.reversal_of.slice(0, 8)}</span>}
-          {event.effect_status === "reversed" && <span className="text-[11px] text-muted-foreground">تم عكسها</span>}
+
+          {event.effect_status === "reversal" && (
+            <span className="text-[11px] text-muted-foreground">
+              عملية عكسية
+            </span>
+          )}
+
+          {event.effect_status === "reversed" && (
+            <span className="text-[11px] text-muted-foreground">
+              تم عكسها
+            </span>
+          )}
         </div>
       </div>
     );
@@ -526,6 +627,56 @@ export default function FinancialLedger() {
             </div>
           </div>
 
+
+          <div className="flex flex-wrap items-end gap-3 pt-3 border-t border-border/60">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                من تاريخ
+              </label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-[160px] h-9 text-xs rounded-xl bg-background"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                إلى تاريخ
+              </label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-[160px] h-9 text-xs rounded-xl bg-background"
+              />
+            </div>
+
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!dateFrom || !dateTo) return;
+
+                if (dateFrom > dateTo) {
+                  toast({
+                    title: "الفترة غير صحيحة",
+                    description: "تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+
+                setAppliedFrom(dateFrom);
+                setAppliedTo(dateTo);
+              }}
+              className="h-9 px-5 rounded-xl font-semibold"
+            >
+              عرض
+            </Button>
+          </div>
+
+
           <div className="pt-3">
             <Input
               value={search}
@@ -613,13 +764,12 @@ export default function FinancialLedger() {
                       </TableCell>
 
                       <TableCell
-                        className={`py-3 font-bold font-mono whitespace-nowrap text-sm ${
-                          event.direction === "in"
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : event.direction === "out"
-                              ? "text-rose-600 dark:text-rose-400"
-                              : "text-muted-foreground"
-                        }`}
+                        className={`py-3 font-bold font-mono whitespace-nowrap text-sm ${event.direction === "in"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : event.direction === "out"
+                            ? "text-rose-600 dark:text-rose-400"
+                            : "text-muted-foreground"
+                          }`}
                       >
                         {event.direction === "in" ? (
                           <ArrowDownLeft className="inline h-4 w-4 ms-1" />

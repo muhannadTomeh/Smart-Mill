@@ -11,9 +11,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { 
-  Info, ArrowRight, Receipt, Package, Calendar, ShieldCheck, ShieldAlert, 
-  Save, Plus, History, Banknote, Building2, MapPin, Phone, User, Globe, 
+import {
+  Info, ArrowRight, Receipt, Package, Calendar, ShieldCheck, ShieldAlert,
+  Save, Plus, History, Banknote, Building2, MapPin, Phone, User, Globe,
   Clock, UserCheck, ShoppingCart, Wallet, Lock, Mail, Users, CheckCircle2,
   RotateCcw, Copy, Eye, EyeOff, Edit, Trash2, Key, RefreshCw, UserX
 } from "lucide-react";
@@ -24,12 +24,12 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeUsernameToEmail, getDisplayUsername } from "@/lib/authUtils";
-import { 
-  revealCredential, 
-  updateUserAccount, 
-  deleteUserAccount, 
-  createEmployeeAccount, 
-  toggleUserAccountActive 
+import {
+  revealCredential,
+  updateUserAccount,
+  deleteUserAccount,
+  createEmployeeAccount,
+  toggleUserAccountActive
 } from "@/lib/credentialVault";
 import {
   Dialog,
@@ -64,13 +64,13 @@ export default function MillDetails() {
   const [payments, setPayments] = useState<any[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [newPayment, setNewPayment] = useState({ amount: "", date: new Date().toISOString().split('T')[0], notes: "" });
-  
+
   // Activities and Cashier accounts state
   const [queueItems, setQueueItems] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [oilTransactions, setOilTransactions] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
-  
+
   // Mill Code management
   const [millCode, setMillCode] = useState("");
   const [savingMillCode, setSavingMillCode] = useState(false);
@@ -151,7 +151,7 @@ export default function MillDetails() {
           target_user_id: millId,
           admin_action: 'viewed_mill_details'
         });
-      } catch {}
+      } catch { }
 
       // 2. Fetch owner profile for display only (not used as tenant filter)
       let profile: any = null;
@@ -300,7 +300,7 @@ export default function MillDetails() {
         await Promise.allSettled([
           supabase
             .from("profiles")
-            .update({ 
+            .update({
               subscription_status: status,
               is_active: isActive,
               updated_at: new Date().toISOString()
@@ -318,7 +318,7 @@ export default function MillDetails() {
           target_user_id: currentMillRecord.owner_user_id || currentMillRecord.id,
           admin_action: `updated_subscription_status_to_${status}`
         });
-      } catch {}
+      } catch { }
 
       // 3. Immediately update local state so UI buttons and badge reflect change instantly
       setCurrentMillRecord((prev: any) => ({
@@ -328,8 +328,8 @@ export default function MillDetails() {
 
       setMillData((prev: any) => ({
         ...prev,
-        profile: { 
-          ...prev?.profile, 
+        profile: {
+          ...prev?.profile,
           subscription_status: status,
           is_active: isActive
         }
@@ -445,13 +445,13 @@ export default function MillDetails() {
 
       setIsPaymentModalOpen(false);
       setNewPayment({ amount: "", date: new Date().toISOString().split('T')[0], notes: "" });
-      
+
       const { data: paymentsData } = await supabase
         .from("subscription_payments")
         .select("*")
         .eq("mill_id", currentMillRecord.id)
         .order("payment_date", { ascending: false });
-      
+
       setPayments(paymentsData || []);
     } catch (error) {
       console.error("Error adding payment:", error);
@@ -545,7 +545,7 @@ export default function MillDetails() {
         if (pass) {
           setDecryptedPasswords((p) => ({ ...p, [key]: pass }));
         }
-      } catch {}
+      } catch { }
     }
     if (pass) {
       navigator.clipboard.writeText(pass);
@@ -616,7 +616,7 @@ export default function MillDetails() {
 
       toast({
         title: "تم حذف الحساب",
-        description: `تم حذف حساب الكاشير (${deleteTargetEmployee.display_name || deleteTargetEmployee.phone})`,
+        description: `تم حذف حساب الموظف المعصرة (${deleteTargetEmployee.display_name || deleteTargetEmployee.phone})`,
       });
 
       setDeleteTargetEmployee(null);
@@ -639,7 +639,7 @@ export default function MillDetails() {
       return;
     }
     if (!millCode.trim()) {
-      toast({ title: "يجب تعيين رمز المعصرة أولاً", description: "اذهب لتبويب 'رمز المعصرة' وأنشئ رمزاً فريداً للمعصرة قبل إضافة كاشير", variant: "destructive" });
+      toast({ title: "يجب تعيين رمز المعصرة أولاً", description: "اذهب لتبويب 'رمز المعصرة' وأنشئ رمزاً فريداً للمعصرة قبل إضافة موظف المعصرة", variant: "destructive" });
       return;
     }
 
@@ -667,7 +667,7 @@ export default function MillDetails() {
       }
 
       toast({
-        title: "تم إنشاء حساب الكاشير بنجاح",
+        title: "تم إنشاء حساب الموظف المعصرة بنجاح",
         description: `اسم الدخول: ${originalUsername} | كلمة المرور: ${originalPassword}`
       });
 
@@ -678,9 +678,9 @@ export default function MillDetails() {
     } catch (err: any) {
       toast({
         title: "خطأ في إنشاء الحساب",
-        description: err.message?.includes("already registered") || err.message?.includes("مستخدم مسبقاً") 
-          ? "اسم المستخدم هذا موجود مسبقاً في هذه المعصرة" 
-          : err.message || "تعذر إنشاء حساب الكاشير",
+        description: err.message?.includes("already registered") || err.message?.includes("مستخدم مسبقاً")
+          ? "اسم المستخدم هذا موجود مسبقاً في هذه المعصرة"
+          : err.message || "تعذر إنشاء حساب الموظف المعصرة",
         variant: "destructive"
       });
     } finally {
@@ -862,12 +862,12 @@ export default function MillDetails() {
 
         <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-right">حسابات الموظفين (الكاشير)</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">حسابات الموظفين (الموظف المعصرة)</CardTitle>
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="text-right">
             <p className="text-2xl font-bold">{employees.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">حسابات كاشير فرعية</p>
+            <p className="text-xs text-muted-foreground mt-0.5">حسابات موظف المعصرة فرعية</p>
           </CardContent>
         </Card>
       </div>
@@ -885,7 +885,7 @@ export default function MillDetails() {
           </TabsTrigger>
           <TabsTrigger value="employees" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
             <UserCheck className="h-4 w-4 shrink-0" />
-            <span>حسابات الكاشير ({employees.length})</span>
+            <span>حسابات الموظف المعصرة ({employees.length})</span>
           </TabsTrigger>
           <TabsTrigger value="finance" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
             <Wallet className="h-4 w-4 shrink-0" />
@@ -1013,8 +1013,8 @@ export default function MillDetails() {
                 <span>رمز المعصرة (Mill Code) — ضروري للتمييز بين المعاصر</span>
               </CardTitle>
               <CardDescription className="text-xs text-right">
-                رمز فريد عالمياً يُضاف تلقائياً لأسماء مستخدمي الكاشير عند إنشائهم.
-                مثال: إذا كان الرمز <strong>tomeh</strong> وأنشأت كاشيراً باسم <strong>ahmad</strong>، يدخل الكاشير بكتابة <strong>ahmad</strong> فقط في شاشة الدخول.
+                رمز فريد عالمياً يُضاف تلقائياً لأسماء مستخدمي الموظف المعصرة عند إنشائهم.
+                مثال: إذا كان الرمز <strong>tomeh</strong> وأنشأت موظف المعصرةاً باسم <strong>ahmad</strong>، يدخل الموظف المعصرة بكتابة <strong>ahmad</strong> فقط في شاشة الدخول.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1031,13 +1031,13 @@ export default function MillDetails() {
                 </Button>
                 {millCode && (
                   <span className="text-xs text-muted-foreground">
-                    الكاشيرون يدخلون باسم مستخدم بسيط (مثل: <code className="font-mono bg-muted px-1.5 py-0.5 rounded">ahmad</code>)
+                    الموظف المعصرةون يدخلون باسم مستخدم بسيط (مثل: <code className="font-mono bg-muted px-1.5 py-0.5 rounded">ahmad</code>)
                   </span>
                 )}
               </div>
               {!millCode && (
                 <p className="text-xs text-destructive mt-2 text-right">
-                  ⚠️ يجب تعيين رمز المعصرة قبل إنشاء حسابات الكاشير لضمان عدم التعارض مع معاصر أخرى.
+                  ⚠️ يجب تعيين رمز المعصرة قبل إنشاء حسابات الموظف المعصرة لضمان عدم التعارض مع معاصر أخرى.
                 </p>
               )}
             </CardContent>
@@ -1048,7 +1048,7 @@ export default function MillDetails() {
               <div>
                 <CardTitle className="flex items-center gap-2 text-lg text-right">
                   <UserCheck className="h-5 w-5 text-primary" />
-                  <span>حسابات الموظفين والكاشير (Sub-Accounts)</span>
+                  <span>حسابات الموظفين والموظف المعصرة (Sub-Accounts)</span>
                 </CardTitle>
                 <CardDescription className="text-right">
                   حسابات دخول مستقلة (اسم مستخدم/بريد وكلمة مرور) بصلاحيات محصورة في: الطابور، الفوترة، وطباعة الفواتير فقط.
@@ -1060,33 +1060,33 @@ export default function MillDetails() {
                 <DialogTrigger asChild>
                   <Button className="gap-2">
                     <Plus className="h-4 w-4" />
-                    <span>إنشاء حساب كاشير جديد</span>
+                    <span>إنشاء حساب موظف المعصرة جديد</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent dir="rtl" className="text-right sm:max-w-[450px]">
                   <DialogHeader className="text-right sm:text-right">
-                    <DialogTitle className="text-right">إنشاء حساب موظف / كاشير جديد</DialogTitle>
+                    <DialogTitle className="text-right">إنشاء حساب موظف / موظف المعصرة جديد</DialogTitle>
                     <DialogDescription className="text-right">
                       سيحصل هذا الحساب على صلاحيات الطابور، إصدار الفواتير، وطباعة الفواتير فقط الخاصة بهذه المعصرة.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-3 text-right">
                     <div className="space-y-2">
-                      <Label className="text-right block">اسم الموظف / الكاشير *</Label>
-                      <Input 
-                        value={newEmployee.name} 
-                        onChange={(e) => setNewEmployee(p => ({ ...p, name: e.target.value }))} 
-                        placeholder="مثال: أحمد الكاشير" 
+                      <Label className="text-right block">اسم الموظف / الموظف المعصرة *</Label>
+                      <Input
+                        value={newEmployee.name}
+                        onChange={(e) => setNewEmployee(p => ({ ...p, name: e.target.value }))}
+                        placeholder="مثال: أحمد الموظف المعصرة"
                         className="text-right"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-right block">اسم المستخدم (Username) *</Label>
-                      <Input 
+                      <Input
                         type="text"
-                        value={newEmployee.username} 
-                        onChange={(e) => setNewEmployee(p => ({ ...p, username: e.target.value }))} 
-                        placeholder="مثال: ahmad أو cashier1" 
+                        value={newEmployee.username}
+                        onChange={(e) => setNewEmployee(p => ({ ...p, username: e.target.value }))}
+                        placeholder="مثال: ahmad أو cashier1"
                         dir="ltr"
                         className="text-left font-mono"
                       />
@@ -1095,11 +1095,11 @@ export default function MillDetails() {
                     <div className="space-y-2">
                       <Label className="text-right block">كلمة المرور *</Label>
                       <div className="relative">
-                        <Input 
+                        <Input
                           type={showNewPassword ? "text" : "password"}
-                          value={newEmployee.password} 
-                          onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))} 
-                          placeholder="أدخل كلمة المرور (مثال: 123456)" 
+                          value={newEmployee.password}
+                          onChange={(e) => setNewEmployee(p => ({ ...p, password: e.target.value }))}
+                          placeholder="أدخل كلمة المرور (مثال: 123456)"
                           dir="ltr"
                           className="text-left font-mono pe-10"
                         />
@@ -1116,7 +1116,7 @@ export default function MillDetails() {
                   </div>
                   <DialogFooter>
                     <Button onClick={handleCreateEmployee} disabled={creatingEmployee} className="w-full">
-                      {creatingEmployee ? "جارٍ إنشاء الحساب..." : "تأكيد وإنشاء حساب الكاشير"}
+                      {creatingEmployee ? "جارٍ إنشاء الحساب..." : "تأكيد وإنشاء حساب الموظف المعصرة"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -1126,28 +1126,28 @@ export default function MillDetails() {
               <Dialog open={!!editingEmployee} onOpenChange={(o) => !o && setEditingEmployee(null)}>
                 <DialogContent dir="rtl" className="text-right sm:max-w-[450px]">
                   <DialogHeader className="text-right sm:text-right">
-                    <DialogTitle className="text-right">تعديل حساب الكاشير</DialogTitle>
+                    <DialogTitle className="text-right">تعديل حساب الموظف المعصرة</DialogTitle>
                     <DialogDescription className="text-right">
                       يمكنك تعديل اسم الموظف، وضبط أحرف اسم المستخدم (Capital / Small)، وتعيين أو إظهار كلمة المرور.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-3 text-right">
                     <div className="space-y-2">
-                      <Label className="text-right block">اسم الموظف / الكاشير *</Label>
-                      <Input 
-                        value={editForm.name} 
-                        onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))} 
-                        placeholder="مثال: Casher" 
+                      <Label className="text-right block">اسم الموظف / الموظف المعصرة *</Label>
+                      <Input
+                        value={editForm.name}
+                        onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))}
+                        placeholder="مثال: Casher"
                         className="text-right"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-right block">اسم المستخدم (Username) *</Label>
-                      <Input 
+                      <Input
                         type="text"
-                        value={editForm.username} 
-                        onChange={(e) => setEditForm(p => ({ ...p, username: e.target.value }))} 
-                        placeholder="مثال: Casherraef2" 
+                        value={editForm.username}
+                        onChange={(e) => setEditForm(p => ({ ...p, username: e.target.value }))}
+                        placeholder="مثال: Casherraef2"
                         dir="ltr"
                         className="text-left font-mono"
                       />
@@ -1156,11 +1156,11 @@ export default function MillDetails() {
                     <div className="space-y-2">
                       <Label className="text-right block">كلمة المرور *</Label>
                       <div className="relative">
-                        <Input 
+                        <Input
                           type={showEditPassword ? "text" : "password"}
-                          value={editForm.password} 
-                          onChange={(e) => setEditForm(p => ({ ...p, password: e.target.value }))} 
-                          placeholder="أدخل كلمة المرور" 
+                          value={editForm.password}
+                          onChange={(e) => setEditForm(p => ({ ...p, password: e.target.value }))}
+                          placeholder="أدخل كلمة المرور"
                           dir="ltr"
                           className="text-left font-mono pe-10"
                         />
@@ -1188,9 +1188,9 @@ export default function MillDetails() {
               <AlertDialog open={!!deleteTargetEmployee} onOpenChange={(o) => !o && setDeleteTargetEmployee(null)}>
                 <AlertDialogContent dir="rtl">
                   <AlertDialogHeader>
-                    <AlertDialogTitle>تأكيد حذف حساب الكاشير</AlertDialogTitle>
+                    <AlertDialogTitle>تأكيد حذف حساب الموظف المعصرة</AlertDialogTitle>
                     <AlertDialogDescription>
-                      هل أنت متأكد من حذف حساب الكاشير <strong>{deleteTargetEmployee?.display_name || deleteTargetEmployee?.phone}</strong>؟ لن يتمكن من تسجيل الدخول للنظام بعد الحذف.
+                      هل أنت متأكد من حذف حساب الموظف المعصرة <strong>{deleteTargetEmployee?.display_name || deleteTargetEmployee?.phone}</strong>؟ لن يتمكن من تسجيل الدخول للنظام بعد الحذف.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter className="gap-2">
@@ -1229,7 +1229,7 @@ export default function MillDetails() {
 
                     return (
                       <TableRow key={empKey}>
-                        <TableCell className="font-bold text-foreground text-right">{safeText(emp.display_name, 'موظف كاشير')}</TableCell>
+                        <TableCell className="font-bold text-foreground text-right">{safeText(emp.display_name, 'موظف المعصرة')}</TableCell>
                         <TableCell className="font-mono text-xs font-semibold text-primary text-right">
                           <div className="flex items-center gap-1 justify-start">
                             <span>{displayUser}</span>
@@ -1348,7 +1348,7 @@ export default function MillDetails() {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              title="حذف / تعطيل حساب الكاشير"
+                              title="حذف / تعطيل حساب الموظف المعصرة"
                               onClick={() => setDeleteTargetEmployee(emp)}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -1361,7 +1361,7 @@ export default function MillDetails() {
                   {employees.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                        لا توجد حسابات موظفين مسجلة لهذه المعصرة بعد. اضغط "إنشاء حساب كاشير جديد" لإنشاء أول حساب.
+                        لا توجد حسابات موظفين مسجلة لهذه المعصرة بعد. اضغط "إنشاء حساب موظف المعصرة جديد" لإنشاء أول حساب.
                       </TableCell>
                     </TableRow>
                   )}
@@ -1468,36 +1468,34 @@ export default function MillDetails() {
               </CardHeader>
               <CardContent className="space-y-4 text-right">
                 <div className="flex gap-3">
-                  <Button 
-                    onClick={() => updateSubscription('active')} 
+                  <Button
+                    onClick={() => updateSubscription('active')}
                     disabled={updating || status === 'active'}
-                    className={`flex-1 gap-2 transition-all font-bold ${
-                      status === 'active' 
-                        ? 'opacity-40 cursor-not-allowed bg-green-600/40 text-white' 
+                    className={`flex-1 gap-2 transition-all font-bold ${status === 'active'
+                        ? 'opacity-40 cursor-not-allowed bg-green-600/40 text-white'
                         : 'bg-green-600 hover:bg-green-700 text-white shadow-md ring-2 ring-green-500/40 hover:scale-[1.01]'
-                    }`}
+                      }`}
                   >
                     <ShieldCheck className="h-4 w-4" />
                     <span>تفعيل الحساب</span>
                   </Button>
-                  <Button 
+                  <Button
                     variant="destructive"
-                    onClick={() => updateSubscription('suspended')} 
+                    onClick={() => updateSubscription('suspended')}
                     disabled={updating || status === 'suspended'}
-                    className={`flex-1 gap-2 transition-all font-bold ${
-                      status === 'suspended'
+                    className={`flex-1 gap-2 transition-all font-bold ${status === 'suspended'
                         ? 'opacity-40 cursor-not-allowed bg-destructive/40 text-white'
                         : 'bg-red-600 hover:bg-red-700 text-white shadow-md ring-2 ring-red-500/40 hover:scale-[1.01]'
-                    }`}
+                      }`}
                   >
                     <ShieldAlert className="h-4 w-4" />
                     <span>إيقاف الحساب</span>
                   </Button>
                 </div>
-                
+
                 <div className="space-y-2 pt-2">
                   <Label className="text-sm font-medium text-right block">ملاحظات الاشتراك (خاصة بالإدارة)</Label>
-                  <Textarea 
+                  <Textarea
                     placeholder="سجل هنا أي ملاحظات إدارية أو اتفاقات..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -1506,9 +1504,9 @@ export default function MillDetails() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button 
-                  variant="outline" 
-                  className="w-full gap-2" 
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
                   onClick={saveNotes}
                   disabled={updating}
                 >
@@ -1540,10 +1538,10 @@ export default function MillDetails() {
                     <div className="space-y-4 py-3 text-right">
                       <div className="space-y-2">
                         <Label className="text-right block">المبلغ (₪) *</Label>
-                        <Input 
-                          type="number" 
+                        <Input
+                          type="number"
                           value={newPayment.amount}
-                          onChange={e => setNewPayment({...newPayment, amount: e.target.value})}
+                          onChange={e => setNewPayment({ ...newPayment, amount: e.target.value })}
                           placeholder="0.00"
                           dir="ltr"
                           className="text-left font-mono"
@@ -1551,19 +1549,19 @@ export default function MillDetails() {
                       </div>
                       <div className="space-y-2">
                         <Label className="text-right block">تاريخ الدفع *</Label>
-                        <Input 
-                          type="date" 
+                        <Input
+                          type="date"
                           value={newPayment.date}
-                          onChange={e => setNewPayment({...newPayment, date: e.target.value})}
+                          onChange={e => setNewPayment({ ...newPayment, date: e.target.value })}
                           dir="ltr"
                           className="text-left font-mono"
                         />
                       </div>
                       <div className="space-y-2">
                         <Label className="text-right block">ملاحظات الدفعة</Label>
-                        <Textarea 
+                        <Textarea
                           value={newPayment.notes}
-                          onChange={e => setNewPayment({...newPayment, notes: e.target.value})}
+                          onChange={e => setNewPayment({ ...newPayment, notes: e.target.value })}
                           placeholder="تفاصيل الحوالة أو السداد..."
                           className="text-right"
                         />
@@ -1581,10 +1579,10 @@ export default function MillDetails() {
                 <div className="flex items-center justify-between bg-muted/40 p-3 rounded-xl">
                   <Label htmlFor="monthlyFee" className="text-xs font-semibold">الاشتراك الشهري المتفق عليه:</Label>
                   <div className="flex items-center gap-1.5">
-                    <Input 
+                    <Input
                       id="monthlyFee"
-                      type="number" 
-                      value={monthlyFee} 
+                      type="number"
+                      value={monthlyFee}
                       onChange={e => setMonthlyFee(e.target.value)}
                       className="w-24 h-8 text-xs font-bold text-left font-mono"
                       dir="ltr"

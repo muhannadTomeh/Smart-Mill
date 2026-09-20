@@ -302,7 +302,7 @@ const Expenses = () => {
       p_idempotency_key: crypto.randomUUID(),
     });
     if (!error) {
-      toast({ title: "تم الإلغاء", description: "أُلغي المصروف وعُكست حركته النقدية بأمان" });
+      toast({ title: "تم الإلغاء", description: "تم إلغاء المصروف وعكس آثاره المالية بأمان" });
       setDeleteTarget(null);
       await Promise.all([
         fetchExpenses(),

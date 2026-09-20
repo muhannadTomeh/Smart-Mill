@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  ShoppingCart, TrendingUp, TrendingDown, Package, DollarSign, 
+import {
+  ShoppingCart, TrendingUp, TrendingDown, Package, DollarSign,
   Calendar, RefreshCw, Plus, Filter, X
 } from "lucide-react";
 import {
@@ -30,11 +30,17 @@ interface Transaction {
   total_price: number;
   party_name: string | null;
   notes: string | null;
-  payment_method: 'cash' | 'credit';
+  payment_method: 'cash' | 'credit' | 'partner';
   payable_id: string | null;
   status: 'active' | 'cancelled';
   created_at: string;
 }
+
+interface PartnerOption {
+  id: string;
+  name: string;
+}
+
 
 const OilTrading = () => {
   const { user, millId } = useAuth();
@@ -44,19 +50,20 @@ const OilTrading = () => {
   const selectedCurrency = currency || "₪";
   const { inventory, refetch: refetchInventory } = useInventory();
   const { cashBalance, refetch: refetchCashBalance } = useCashBalance();
-  
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [cancellingTransactionId, setCancellingTransactionId] = useState<string | null>(null);
-
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
   // Filter state
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
   const [newTransaction, setNewTransaction] = useState({
     type: 'buy' as 'buy' | 'sell',
-    paymentMethod: 'cash' as 'cash' | 'credit',
+    paymentMethod: 'cash' as 'cash' | 'credit' | 'partner',
+    partnerId: "",
     amount: "",
     price: "",
     partyName: "",
@@ -65,7 +72,7 @@ const OilTrading = () => {
 
   useEffect(() => {
     if (activeSeason) {
-      fetchTransactions();
+      fetchTransactions(); fetchPartners();
     } else {
       setTransactions([]);
       setLoading(false);
@@ -85,6 +92,25 @@ const OilTrading = () => {
 
     return () => { void supabase.removeChannel(channel); };
   }, [activeSeason?.id, millId]);
+
+  const fetchPartners = async () => {
+    const effectiveMillId = millId || activeSeason?.mill_id;
+    if (!effectiveMillId) return;
+
+    const { data, error } = await supabase
+      .from("partners")
+      .select("id, name")
+      .eq("mill_id", effectiveMillId)
+      .eq("active", true)
+      .order("name");
+
+    if (error) {
+      console.error("fetchPartners error:", error);
+      return;
+    }
+
+    setPartners((data || []) as PartnerOption[]);
+  };
 
   const fetchTransactions = async () => {
     if (!activeSeason) return;
@@ -112,7 +138,12 @@ const OilTrading = () => {
         total_price: Number(tx.total_price),
         party_name: tx.party_name,
         notes: tx.notes,
-        payment_method: tx.payment_method === 'credit' ? 'credit' : 'cash',
+        payment_method:
+          tx.payment_method === 'partner'
+            ? 'partner'
+            : tx.payment_method === 'credit'
+              ? 'credit'
+              : 'cash',
         payable_id: tx.payable_id ?? null,
         status: tx.status === 'cancelled' ? 'cancelled' : 'active',
         created_at: tx.created_at,
@@ -126,8 +157,17 @@ const OilTrading = () => {
   };
 
   const resetForm = () => {
-    setNewTransaction({ type: 'buy', paymentMethod: 'cash', amount: "", price: "", partyName: "", notes: "" });
+    setNewTransaction({
+      type: 'buy',
+      paymentMethod: 'cash',
+      partnerId: "",
+      amount: "",
+      price: "",
+      partyName: "",
+      notes: ""
+    });
   };
+
 
   const oilTradeErrorMessage = (message?: string) => {
     const code = message || "";
@@ -193,12 +233,25 @@ const OilTrading = () => {
       return;
     }
 
+    if (
+      newTransaction.type === 'buy' &&
+      newTransaction.paymentMethod === 'partner' &&
+      !newTransaction.partnerId
+    ) {
+      toast({
+        title: "اختر الشريك",
+        description: "يجب تحديد الشريك الذي دفع قيمة شراء الزيت.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const totalPrice = amount * price;
 
     if (newTransaction.type === 'sell' && amount > inventory.total_oil) {
       toast({
         title: "الكمية غير متوفرة",
-        description: `الكمية المتوفرة في المخزون: ${inventory.total_oil.toFixed(1)} كغم فقط`,
+        description: `الكمية المتوفرة في المخزون: ${Number(inventory.total_oil ?? 0).toFixed(1)} كغم فقط`,
         variant: "destructive"
       });
       return;
@@ -215,13 +268,26 @@ const OilTrading = () => {
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.rpc("record_oil_trade_command", {
+      const { error } = await (supabase.rpc as any)("record_oil_trade_command", {
         p_season_id: activeSeason.id,
         p_movement_type: newTransaction.type === 'buy' ? 'IN' : 'OUT',
         p_quantity: amount,
         p_unit_price: price,
-        p_payment_method: newTransaction.type === 'buy' ? newTransaction.paymentMethod : 'cash',
-        p_party_name: newTransaction.partyName.trim() || null,
+        p_payment_method:
+          newTransaction.type === 'buy'
+            ? newTransaction.paymentMethod
+            : 'cash',
+
+        p_partner_id:
+          newTransaction.paymentMethod === 'partner'
+            ? newTransaction.partnerId
+            : null,
+
+        p_party_name:
+          newTransaction.paymentMethod === 'partner'
+            ? null
+            : newTransaction.partyName.trim() || null,
+
         p_notes: newTransaction.notes.trim() || null,
         p_idempotency_key: crypto.randomUUID(),
       });
@@ -345,7 +411,9 @@ const OilTrading = () => {
             <div>
               <p className="text-xs text-muted-foreground font-medium">الزيت المتوفر بالمعصرة</p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
-                {inventory.total_oil.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">كغم</span>
+                {Number(inventory.total_oil ?? 0).toFixed(1)}
+
+                <span className="text-sm font-normal text-muted-foreground">كغم</span>
               </h3>
             </div>
             <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
@@ -426,7 +494,7 @@ const OilTrading = () => {
               <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-base font-semibold text-foreground">لا توجد عمليات مسجلة</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                {typeFilter !== "all" 
+                {typeFilter !== "all"
                   ? "لا توجد عمليات تطابق نوع الفلترة المحدد."
                   : "لم يتم تسجيل أي عملية بيع أو شراء في هذا الموسم حتى الآن."}
               </p>
@@ -471,11 +539,10 @@ const OilTrading = () => {
                       <TableCell className="text-right">
                         <Badge
                           variant="outline"
-                          className={`text-xs font-bold gap-1 ${
-                            tx.type === 'buy'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
-                              : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
-                          }`}
+                          className={`text-xs font-bold gap-1 ${tx.type === 'buy'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+                            : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
+                            }`}
                         >
                           {tx.type === 'buy' ? '📥 شراء زيت' : '📤 بيع زيت'}
                         </Badge>
@@ -542,124 +609,254 @@ const OilTrading = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {newTransaction.type === 'buy' && (
+          {/* Type Selection */}
+          <div>
+            <Label className="text-xs font-semibold">نوع العملية *</Label>
+
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setNewTransaction((p) => ({
+                    ...p,
+                    type: 'buy'
+                  }))
+                }
+                className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-xs sm:text-sm transition-all ${newTransaction.type === 'buy'
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                  : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
+                  }`}
+              >
+                <TrendingDown className="h-4 w-4 text-emerald-600" />
+                <span>📥 شراء زيت (إضافة)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setNewTransaction((p) => ({
+                    ...p,
+                    type: 'sell',
+                    paymentMethod: 'cash',
+                    partnerId: ""
+                  }))
+                }
+                className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-xs sm:text-sm transition-all ${newTransaction.type === 'sell'
+                  ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 ring-2 ring-blue-500/20'
+                  : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
+                  }`}
+              >
+                <TrendingUp className="h-4 w-4 text-blue-600" />
+                <span>📤 بيع زيت (خصم)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Payment Method */}
+          {newTransaction.type === 'buy' && (
             <div>
               <Label className="text-xs font-semibold">طريقة الدفع *</Label>
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <button type="button" onClick={() => setNewTransaction((p) => ({ ...p, paymentMethod: 'cash' }))} className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.paymentMethod === 'cash' ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground'}`}>نقدي</button>
-                <button type="button" onClick={() => setNewTransaction((p) => ({ ...p, paymentMethod: 'credit' }))} className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.paymentMethod === 'credit' ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground'}`}>آجل</button>
-              </div>
-              {newTransaction.paymentMethod === 'credit' && <p className="text-[11px] text-muted-foreground mt-2">سيُضاف الزيت إلى المخزون ويُنشأ مستحق للمورّد دون خصم نقدي.</p>}
-            </div>
-            )}
-            {/* Type Selection */}
-            <div>
-              <Label className="text-xs font-semibold">نوع العملية *</Label>
-              <div className="grid grid-cols-2 gap-3 mt-2">
+
+              <div className="grid grid-cols-3 gap-2 mt-2">
                 <button
                   type="button"
-                  onClick={() => setNewTransaction((p) => ({ ...p, type: 'buy' }))}
-                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-xs sm:text-sm transition-all ${
-                    newTransaction.type === 'buy'
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 ring-2 ring-emerald-500/20'
-                      : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
-                  }`}
+                  onClick={() =>
+                    setNewTransaction((p) => ({
+                      ...p,
+                      paymentMethod: 'cash',
+                      partnerId: ""
+                    }))
+                  }
+                  className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.paymentMethod === 'cash'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border/60 text-muted-foreground'
+                    }`}
                 >
-                  <TrendingDown className="h-4 w-4 text-emerald-600" />
-                  <span>📥 شراء زيت (إضافة)</span>
+                  نقدي
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setNewTransaction((p) => ({ ...p, type: 'sell', paymentMethod: 'cash' }))}
-                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-bold text-xs sm:text-sm transition-all ${
-                    newTransaction.type === 'sell'
-                      ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 ring-2 ring-blue-500/20'
-                      : 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground'
-                  }`}
+                  onClick={() =>
+                    setNewTransaction((p) => ({
+                      ...p,
+                      paymentMethod: 'credit',
+                      partnerId: ""
+                    }))
+                  }
+                  className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.paymentMethod === 'credit'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border/60 text-muted-foreground'
+                    }`}
                 >
-                  <TrendingUp className="h-4 w-4 text-blue-600" />
-                  <span>📤 بيع زيت (خصم)</span>
+                  آجل
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewTransaction((p) => ({
+                      ...p,
+                      paymentMethod: 'partner',
+                      partyName: ""
+                    }))
+                  }
+                  className={`p-3 rounded-xl border font-bold text-xs ${newTransaction.paymentMethod === 'partner'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border/60 text-muted-foreground'
+                    }`}
+                >
+                  دفع شريك
                 </button>
               </div>
+
+              {newTransaction.paymentMethod === 'credit' && (
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  سيُضاف الزيت للمخزون ويُنشأ مستحق للمورّد دون خصم الكاش.
+                </p>
+              )}
+
+              {newTransaction.paymentMethod === 'partner' && (
+                <div className="space-y-1.5 mt-3">
+                  <Label className="text-xs font-semibold">
+                    الشريك الذي دفع *
+                  </Label>
+
+                  <select
+                    value={newTransaction.partnerId}
+                    onChange={(e) =>
+                      setNewTransaction((p) => ({
+                        ...p,
+                        partnerId: e.target.value
+                      }))
+                    }
+                    className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+                  >
+                    <option value="">-- اختر الشريك --</option>
+
+                    {partners.map((partner) => (
+                      <option key={partner.id} value={partner.id}>
+                        {partner.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <p className="text-[11px] text-muted-foreground">
+                    لن يُخصم شيء من كاش المعصرة وسيُنشأ مستحق للشريك بقيمة الشراء.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Amount and Price */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">
+                الكمية (كغم) *
+              </Label>
+
+              <Input
+                type="number"
+                value={newTransaction.amount}
+                onChange={(e) =>
+                  setNewTransaction((p) => ({
+                    ...p,
+                    amount: e.target.value
+                  }))
+                }
+                placeholder="الكمية بالكيلوغرام..."
+                min="0"
+                step="0.1"
+                className="rounded-xl h-10 font-mono"
+              />
+
+              {newTransaction.type === 'sell' && (
+                <p className="text-[11px] text-muted-foreground">
+                  المتوفر للبيع:{" "}
+                  <strong>{inventory.total_oil.toFixed(1)} كغم</strong>
+                </p>
+              )}
             </div>
 
-            {/* Amount and Price */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">الكمية (كغم) *</Label>
-                <Input
-                  type="number"
-                  value={newTransaction.amount}
-                  onChange={(e) => setNewTransaction((p) => ({ ...p, amount: e.target.value }))}
-                  placeholder="الكمية بالكيلوغرام..."
-                  min="0"
-                  step="0.1"
-                  className="rounded-xl h-10 font-mono"
-                />
-                {newTransaction.type === 'sell' && (
-                  <p className="text-[11px] text-muted-foreground">
-                    المتوفر للبيع: <strong>{inventory.total_oil.toFixed(1)} كغم</strong>
-                  </p>
-                )}
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">
+                سعر الكيلوغرام ({selectedCurrency}) *
+              </Label>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">سعر الكيلوغرام ({selectedCurrency}) *</Label>
-                <Input
-                  type="number"
-                  value={newTransaction.price}
-                  onChange={(e) => setNewTransaction((p) => ({ ...p, price: e.target.value }))}
-                  placeholder="سعر الكيلو..."
-                  min="0"
-                  step="0.1"
-                  className="rounded-xl h-10 font-mono"
-                />
-                {newTransaction.type === 'buy' && (
-                  <p className="text-[11px] text-muted-foreground">
-                    الكاش المتوفر: <strong>{cashBalance.toLocaleString()} {selectedCurrency}</strong>
-                  </p>
-                )}
-              </div>
+              <Input
+                type="number"
+                value={newTransaction.price}
+                onChange={(e) =>
+                  setNewTransaction((p) => ({
+                    ...p,
+                    price: e.target.value
+                  }))
+                }
+                placeholder="سعر الكيلو..."
+                min="0"
+                step="0.1"
+                className="rounded-xl h-10 font-mono"
+              />
+
+              {newTransaction.type === 'buy' && (
+                <p className="text-[11px] text-muted-foreground">
+                  الكاش المتوفر:{" "}
+                  <strong>
+                    {cashBalance.toLocaleString()} {selectedCurrency}
+                  </strong>
+                </p>
+              )}
             </div>
+          </div>
+          {/* Calculated Total Display */}
+          {calculatedTotal > 0 && (
+            <div className="p-3.5 bg-primary/5 border border-primary/15 rounded-xl flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">إجمالي قيمة العملية:</span>
+              <span className="text-lg font-bold text-primary font-mono">
+                {calculatedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedCurrency}
+              </span>
+            </div>
+          )}
 
-            {/* Calculated Total Display */}
-            {calculatedTotal > 0 && (
-              <div className="p-3.5 bg-primary/5 border border-primary/15 rounded-xl flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground">إجمالي قيمة العملية:</span>
-                <span className="text-lg font-bold text-primary font-mono">
-                  {calculatedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedCurrency}
-                </span>
-              </div>
-            )}
-
-            {/* Party Name */}
+          {/* Party Name */}
+          {newTransaction.paymentMethod !== 'partner' && (
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">
                 {newTransaction.type === 'buy' && newTransaction.paymentMethod === 'credit'
                   ? 'اسم المورّد / الدائن *'
                   : `${newTransaction.type === 'buy' ? 'اسم المورّد / المزارع' : 'اسم المشتري / الزبون'} (اختياري)`}
               </Label>
+
               <Input
                 value={newTransaction.partyName}
-                onChange={(e) => setNewTransaction((p) => ({ ...p, partyName: e.target.value }))}
-                placeholder={newTransaction.type === 'buy' ? 'أدخل اسم المورّد...' : 'أدخل اسم المشتري...'}
+                onChange={(e) =>
+                  setNewTransaction((p) => ({
+                    ...p,
+                    partyName: e.target.value
+                  }))
+                }
+                placeholder={
+                  newTransaction.type === 'buy'
+                    ? 'أدخل اسم المورّد...'
+                    : 'أدخل اسم المشتري...'
+                }
                 className="rounded-xl h-10"
               />
             </div>
+          )}
 
-            {/* Notes */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">ملاحظات إضافية (اختياري)</Label>
-              <Input
-                value={newTransaction.notes}
-                onChange={(e) => setNewTransaction((p) => ({ ...p, notes: e.target.value }))}
-                placeholder="ملاحظات توضيحية حول العملية..."
-                className="rounded-xl h-10"
-              />
-            </div>
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">ملاحظات إضافية (اختياري)</Label>
+            <Input
+              value={newTransaction.notes}
+              onChange={(e) => setNewTransaction((p) => ({ ...p, notes: e.target.value }))}
+              placeholder="ملاحظات توضيحية حول العملية..."
+              className="rounded-xl h-10"
+            />
           </div>
+
 
           <DialogFooter className="gap-2 pt-2 border-t border-border/60">
             <Button

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSearchParams } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,12 @@ interface Supplier {
   created_at: string;
 }
 
+interface Partner {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
 interface SettlementHistoryItem {
   id: string;
   payable_id: string;
@@ -80,6 +87,24 @@ interface SettlementHistoryItem {
   reversed: boolean;
 }
 
+interface Receivable {
+  id: string;
+  mill_id: string;
+  season_id: string;
+  type: "due_from_partner" | "other";
+  partner_id?: string | null;
+  debtor_name: string;
+  original_amount: number;
+  collected_amount: number;
+  remaining_amount: number;
+  source_type: "manual" | "oil_sale";
+  source_id?: string | null;
+  status: "unpaid" | "partially_paid" | "paid" | "cancelled";
+  reference_number?: string | null;
+  notes?: string | null;
+  created_at: string;
+}
+
 export default function Payables() {
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
@@ -87,6 +112,49 @@ export default function Payables() {
 
   const [payables, setPayables] = useState<Payable[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+
+  const [receivables, setReceivables] = useState<Receivable[]>([]);
+
+  const [addReceivableOpen, setAddReceivableOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const activeTab =
+    searchParams.get("tab") === "suppliers"
+      ? "suppliers"
+      : "payables";
+
+  const [newReceivable, setNewReceivable] = useState({
+    type: "due_from_partner" as "due_from_partner" | "other",
+    partnerId: "",
+    debtorName: "",
+    amount: "",
+    referenceNumber: "",
+    notes: "",
+  });
+
+  const [savingReceivable, setSavingReceivable] = useState(false);
+
+  const [collectTarget, setCollectTarget] = useState<Receivable | null>(null);
+  const [collectAmount, setCollectAmount] = useState("");
+  const [collectMethod, setCollectMethod] = useState<"cash" | "other">("cash");
+  const [collectNotes, setCollectNotes] = useState("");
+  const [collectLoading, setCollectLoading] = useState(false);
+
+  const [addManualPayableOpen, setAddManualPayableOpen] = useState(false);
+
+  const [manualPayable, setManualPayable] = useState({
+    type: "due_to_partner" as "due_to_partner" | "due_to_supplier" | "other",
+    partnerId: "",
+    supplierId: "",
+    creditorName: "",
+    amount: "",
+    referenceNumber: "",
+    notes: "",
+  });
+
+  const [savingManualPayable, setSavingManualPayable] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -105,6 +173,16 @@ export default function Payables() {
   const [addSupplierOpen, setAddSupplierOpen] = useState(false);
   const [newSupplier, setNewSupplier] = useState({ name: "", phone: "", address: "", notes: "" });
   const [savingSupplier, setSavingSupplier] = useState(false);
+  const [editSupplierOpen, setEditSupplierOpen] = useState(false);
+
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+
+  const [editSupplierForm, setEditSupplierForm] = useState({
+    name: "",
+    phone: "",
+  });
+
+  const [savingSupplierEdit, setSavingSupplierEdit] = useState(false);
 
   useEffect(() => {
     if (activeSeason) {
@@ -114,24 +192,50 @@ export default function Payables() {
 
   const fetchData = async () => {
     if (!activeSeason) return;
+
     setLoading(true);
+
     try {
-      const [payRes, supRes] = await Promise.all([
+      const effectiveMillId = millId || activeSeason.mill_id;
+
+      const [payRes, recRes, supRes, partnerRes] = await Promise.all([
         supabase
           .from("payables" as any)
           .select("*")
           .eq("season_id", activeSeason.id)
           .order("created_at", { ascending: false }),
+
+        supabase
+          .from("receivables" as any)
+          .select("*")
+          .eq("mill_id", effectiveMillId)
+          .order("created_at", { ascending: false }),
+
         supabase
           .from("suppliers" as any)
           .select("*")
-          .order("name", { ascending: true })
+          .eq("active", true)
+          .order("name", { ascending: true }),
+
+        supabase
+          .from("partners" as any)
+          .select("id, name, active")
+          .eq("active", true)
+          .order("name", { ascending: true }),
       ]);
 
-      if (payRes.data) setPayables(payRes.data as any);
-      if (supRes.data) setSuppliers(supRes.data as any);
-    } catch (err: any) {
-      console.error("Error fetching payables/suppliers:", err);
+      if (payRes.error) console.error("payables:", payRes.error);
+      if (recRes.error) console.error("receivables:", recRes.error);
+      if (supRes.error) console.error("suppliers:", supRes.error);
+      if (partnerRes.error) console.error("partners:", partnerRes.error);
+
+      setPayables((payRes.data || []) as any);
+      setReceivables((recRes.data || []) as any);
+      setSuppliers((supRes.data || []) as any);
+      setPartners((partnerRes.data || []) as any);
+
+    } catch (err) {
+      console.error("Error fetching debts data:", err);
     } finally {
       setLoading(false);
     }
@@ -222,6 +326,345 @@ export default function Payables() {
     }
   };
 
+  const handleAddReceivable = async () => {
+    if (!activeSeason) return;
+
+    const amount = parseFloat(newReceivable.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({
+        title: "مبلغ غير صحيح",
+        description: "أدخل مبلغًا أكبر من صفر.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      newReceivable.type === "due_from_partner" &&
+      !newReceivable.partnerId
+    ) {
+      toast({
+        title: "اختر الشريك",
+        description: "يجب تحديد الشريك المدين للمعصرة.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      newReceivable.type === "other" &&
+      !newReceivable.debtorName.trim()
+    ) {
+      toast({
+        title: "اسم المدين مطلوب",
+        description: "اكتب اسم الشخص أو الجهة.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSavingReceivable(true);
+
+    try {
+      const { error } = await (supabase.rpc as any)(
+        "create_manual_receivable_command",
+        {
+          p_season_id: activeSeason.id,
+          p_type: newReceivable.type,
+
+          p_debtor_name:
+            newReceivable.type === "other"
+              ? newReceivable.debtorName.trim()
+              : "",
+
+          p_amount: amount,
+
+          p_partner_id:
+            newReceivable.type === "due_from_partner"
+              ? newReceivable.partnerId
+              : null,
+
+          p_reference_number:
+            newReceivable.referenceNumber.trim() || null,
+
+          p_notes:
+            newReceivable.notes.trim() || null,
+
+          p_idempotency_key: crypto.randomUUID(),
+        }
+      );
+
+      if (error) throw error;
+
+      toast({
+        title: "تم تسجيل المستحق",
+        description: "تمت إضافة المبلغ المستحق للمعصرة.",
+      });
+
+      setNewReceivable({
+        type: "due_from_partner",
+        partnerId: "",
+        debtorName: "",
+        amount: "",
+        referenceNumber: "",
+        notes: "",
+      });
+
+      setAddReceivableOpen(false);
+
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+
+      toast({
+        title: "تعذر تسجيل المستحق",
+        description: err?.message || "حدث خطأ أثناء التسجيل.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingReceivable(false);
+    }
+  };
+
+
+  const handleCollectReceivable = async () => {
+    if (!activeSeason || !collectTarget) return;
+
+    const amount = parseFloat(collectAmount);
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      amount > collectTarget.remaining_amount
+    ) {
+      toast({
+        title: "مبلغ غير صحيح",
+        description: "تحقق من مبلغ التحصيل.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCollectLoading(true);
+
+    try {
+      const { error } = await (supabase.rpc as any)(
+        "collect_receivable_lifecycle_command",
+        {
+          p_receivable_id: collectTarget.id,
+
+          // الكاش يدخل في الموسم الحالي حتى لو الدين قديم
+          p_settlement_season_id: activeSeason.id,
+
+          p_amount: amount,
+          p_payment_method: collectMethod,
+          p_notes: collectNotes.trim() || null,
+          p_idempotency_key: crypto.randomUUID(),
+        }
+      );
+
+      if (error) throw error;
+
+      toast({
+        title: "تم التحصيل",
+        description:
+          collectMethod === "cash"
+            ? "تم تحصيل المبلغ وإضافته إلى كاش المعصرة."
+            : "تم تسجيل التحصيل بدون التأثير على الكاش.",
+      });
+
+      setCollectTarget(null);
+      setCollectAmount("");
+      setCollectNotes("");
+
+      await fetchData();
+    } catch (err: any) {
+      toast({
+        title: "تعذر التحصيل",
+        description: err?.message || "حدث خطأ أثناء التحصيل.",
+        variant: "destructive",
+      });
+    } finally {
+      setCollectLoading(false);
+    }
+  };
+
+
+
+  const handleAddManualPayable = async () => {
+    if (!activeSeason) return;
+
+    const amount = parseFloat(manualPayable.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({
+        title: "مبلغ غير صحيح",
+        description: "أدخل مبلغ دين أكبر من صفر.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      manualPayable.type === "due_to_partner" &&
+      !manualPayable.partnerId
+    ) {
+      toast({
+        title: "اختر الشريك",
+        description: "يجب تحديد الشريك صاحب المستحق.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      manualPayable.type === "due_to_supplier" &&
+      !manualPayable.supplierId
+    ) {
+      toast({
+        title: "اختر المورد",
+        description: "يجب تحديد المورد صاحب الدين.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      manualPayable.type === "other" &&
+      !manualPayable.creditorName.trim()
+    ) {
+      toast({
+        title: "اسم الدائن مطلوب",
+        description: "اكتب اسم الشخص أو الجهة صاحبة الدين.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSavingManualPayable(true);
+
+    try {
+      const { error } = await (supabase.rpc as any)(
+        "create_manual_payable_command",
+        {
+          p_season_id: activeSeason.id,
+          p_type: manualPayable.type,
+
+          p_creditor_name:
+            manualPayable.type === "other"
+              ? manualPayable.creditorName.trim()
+              : "",
+
+          p_amount: amount,
+
+          p_partner_id:
+            manualPayable.type === "due_to_partner"
+              ? manualPayable.partnerId
+              : null,
+
+          p_supplier_id:
+            manualPayable.type === "due_to_supplier"
+              ? manualPayable.supplierId
+              : null,
+
+          p_reference_number:
+            manualPayable.referenceNumber.trim() || null,
+
+          p_notes:
+            manualPayable.notes.trim() || null,
+
+          p_idempotency_key: crypto.randomUUID(),
+        }
+      );
+
+      if (error) throw error;
+
+      toast({
+        title: "تمت إضافة الدين",
+        description: "تم تسجيل الالتزام اليدوي بنجاح.",
+      });
+
+      setManualPayable({
+        type: "due_to_partner",
+        partnerId: "",
+        supplierId: "",
+        creditorName: "",
+        amount: "",
+        referenceNumber: "",
+        notes: "",
+      });
+
+      setAddManualPayableOpen(false);
+
+      await fetchData();
+    } catch (err: any) {
+      console.error("create_manual_payable_command error:", err);
+
+      toast({
+        title: "تعذر إضافة الدين",
+        description: err?.message || "حدث خطأ أثناء تسجيل الدين.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingManualPayable(false);
+    }
+  };
+
+  const openEditSupplier = (supplier: Supplier) => {
+    setEditingSupplier(supplier);
+
+    setEditSupplierForm({
+      name: supplier.name || "",
+      phone: supplier.phone || "",
+    });
+
+    setEditSupplierOpen(true);
+  };
+
+  const handleUpdateSupplier = async () => {
+    if (!editingSupplier) return;
+
+    if (!editSupplierForm.name.trim()) {
+      toast({
+        title: "اسم المورد مطلوب",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSavingSupplierEdit(true);
+
+    try {
+      const { error } = await supabase
+        .from("suppliers" as any)
+        .update({
+          name: editSupplierForm.name.trim(),
+          phone: editSupplierForm.phone.trim() || null,
+        })
+        .eq("id", editingSupplier.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "تم تحديث المورد",
+      });
+
+      setEditSupplierOpen(false);
+      setEditingSupplier(null);
+
+      await fetchData();
+    } catch (err: any) {
+      toast({
+        title: "تعذر تعديل المورد",
+        description: err.message || "حدث خطأ أثناء التعديل",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSupplierEdit(false);
+    }
+  };
+
   const handleAddSupplier = async () => {
     if (!newSupplier.name.trim()) {
       toast({ title: "تنبيه", description: "يرجى كتابة اسم المورد", variant: "destructive" });
@@ -279,16 +722,41 @@ export default function Payables() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <HandCoins className="h-6 w-6 text-primary" />
-            الموردين والالتزامات المالية
-          </h1>
+            الديون والذمم المالية           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            إدارة ديون الموردين ومستحقات الشركاء وجدولة سداد الالتزامات بدون ازدواجية
-          </p>
+            إدارة المبالغ المستحقة على المعصرة والمبالغ المستحقة لها          </p>
         </div>
-        <Button onClick={() => setAddSupplierOpen(true)} className="gap-1.5 shadow-sm">
-          <Plus className="h-4 w-4" />
-          إضافة مورد جديد
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+
+          <Button
+            onClick={() => setAddManualPayableOpen(true)}
+            className="gap-1.5 shadow-sm"
+          >
+            <HandCoins className="h-4 w-4" />
+            إضافة دين علينا
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => setAddReceivableOpen(true)}
+            className="gap-1.5 shadow-sm"
+          >
+            <ArrowDownLeft className="h-4 w-4" />
+            إضافة مستحق لنا
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => setAddSupplierOpen(true)}
+            className="gap-1.5 shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            إضافة مورد جديد
+          </Button>
+
+        </div>
+
+
       </div>
 
       {/* KPI Cards */}
@@ -334,10 +802,27 @@ export default function Payables() {
         </Card>
       </div>
 
-      <Tabs defaultValue="payables" className="w-full">
-        <TabsList className="grid grid-cols-2 max-w-md">
-          <TabsTrigger value="payables">سجل الالتزامات والديون</TabsTrigger>
-          <TabsTrigger value="suppliers">دليل الموردين المعتمدين</TabsTrigger>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setSearchParams(value === "suppliers" ? { tab: "suppliers" } : {});
+        }}
+        className="w-full"
+      >
+        <TabsList className="grid grid-cols-3 max-w-xl">
+
+          <TabsTrigger value="payables">
+            علينا
+          </TabsTrigger>
+
+          <TabsTrigger value="receivables">
+            لنا
+          </TabsTrigger>
+
+          <TabsTrigger value="suppliers">
+            الموردون
+          </TabsTrigger>
+
         </TabsList>
 
         {/* Tab 1: Payables List */}
@@ -450,20 +935,20 @@ export default function Payables() {
                           </TableCell>
                           <TableCell className="text-center">
                             <div className="flex justify-center gap-1">
-                            {p.status !== "paid" && p.status !== "cancelled" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setSettleTarget(p);
-                                  setSettleAmount(String(p.remaining_amount));
-                                }}
-                                className="h-7 text-xs gap-1 border-primary/40 hover:bg-primary/10 hover:text-primary"
-                              >
-                                <ArrowDownLeft className="h-3 w-3" />
-                                سداد دفعة
-                              </Button>
-                            )}
+                              {p.status !== "paid" && p.status !== "cancelled" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSettleTarget(p);
+                                    setSettleAmount(String(p.remaining_amount));
+                                  }}
+                                  className="h-7 text-xs gap-1 border-primary/40 hover:bg-primary/10 hover:text-primary"
+                                >
+                                  <ArrowDownLeft className="h-3 w-3" />
+                                  سداد دفعة
+                                </Button>
+                              )}
                               <Button size="sm" variant="ghost" onClick={() => openSettlementHistory(p)} className="h-7 text-xs gap-1">
                                 <RotateCcw className="h-3 w-3" /> سجل السداد
                               </Button>
@@ -478,6 +963,153 @@ export default function Payables() {
             </CardContent>
           </Card>
         </TabsContent>
+
+
+        <TabsContent value="receivables" className="space-y-4 pt-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">
+                المبالغ المستحقة للمعصرة
+              </CardTitle>
+
+              <CardDescription>
+                ذمم على الشركاء أو أشخاص وجهات أخرى
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              <div className="rounded-xl border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">
+                        المدين
+                      </TableHead>
+
+                      <TableHead className="text-right">
+                        النوع
+                      </TableHead>
+
+                      <TableHead className="text-right">
+                        الأصلي
+                      </TableHead>
+
+                      <TableHead className="text-right">
+                        المحصل
+                      </TableHead>
+
+                      <TableHead className="text-right">
+                        المتبقي
+                      </TableHead>
+
+                      <TableHead className="text-right">
+                        الحالة
+                      </TableHead>
+
+                      <TableHead className="text-right">
+                        التاريخ
+                      </TableHead>
+
+                      <TableHead className="text-center">
+                        إجراء
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+
+                  <TableBody>
+                    {receivables.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          لا توجد مبالغ مستحقة للمعصرة
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      receivables.map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell>
+                            <div className="font-semibold">
+                              {r.debtor_name}
+                            </div>
+
+                            {r.notes && (
+                              <div className="text-xs text-muted-foreground">
+                                {r.notes}
+                              </div>
+                            )}
+                          </TableCell>
+
+                          <TableCell>
+                            <Badge variant="outline">
+                              {r.type === "due_from_partner"
+                                ? "على شريك"
+                                : "ذمة أخرى"}
+                            </Badge>
+                          </TableCell>
+
+                          <TableCell>
+                            {Number(r.original_amount).toLocaleString()} ₪
+                          </TableCell>
+
+                          <TableCell className="text-emerald-600">
+                            {Number(r.collected_amount).toLocaleString()} ₪
+                          </TableCell>
+
+                          <TableCell className="font-bold text-rose-600">
+                            {Number(r.remaining_amount).toLocaleString()} ₪
+                          </TableCell>
+
+                          <TableCell>
+                            {r.status === "paid" ? (
+                              <Badge>محصل بالكامل</Badge>
+                            ) : r.status === "partially_paid" ? (
+                              <Badge variant="secondary">
+                                محصل جزئياً
+                              </Badge>
+                            ) : r.status === "cancelled" ? (
+                              <Badge variant="outline">
+                                ملغى
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive">
+                                غير محصل
+                              </Badge>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-xs">
+                            {formatDate(r.created_at)}
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            {r.status !== "paid" &&
+                              r.status !== "cancelled" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setCollectTarget(r);
+                                    setCollectAmount(
+                                      String(r.remaining_amount)
+                                    );
+                                  }}
+                                >
+                                  تحصيل
+                                </Button>
+                              )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
 
         {/* Tab 2: Suppliers Directory */}
         <TabsContent value="suppliers" className="space-y-4 pt-2">
@@ -501,12 +1133,13 @@ export default function Payables() {
                       <TableHead className="text-right">العنوان / المنطقة</TableHead>
                       <TableHead className="text-right">ملاحظات</TableHead>
                       <TableHead className="text-right">تاريخ الإضافة</TableHead>
+                      <TableHead className="text-center">إجراء</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {suppliers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                           لم يتم تسجيل أي موردين حتى الآن
                         </TableCell>
                       </TableRow>
@@ -533,6 +1166,16 @@ export default function Payables() {
                               "—"
                             )}
                           </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditSupplier(s)}
+                            >
+                              تعديل
+                            </Button>
+                          </TableCell>
+
                           <TableCell className="text-xs text-muted-foreground">{s.notes || "—"}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">{formatDate(s.created_at)}</TableCell>
                         </TableRow>
@@ -649,6 +1292,436 @@ export default function Payables() {
         </DialogContent>
       </Dialog>
 
+
+      {/* Add Manual Payable Modal */}
+      <Dialog
+        open={addManualPayableOpen}
+        onOpenChange={setAddManualPayableOpen}
+      >
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HandCoins className="h-5 w-5 text-primary" />
+              إضافة دين يدوي
+            </DialogTitle>
+
+            <DialogDescription>
+              تسجيل التزام مالي لا ينتج عن عملية أخرى داخل النظام.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+
+            <div className="space-y-1.5">
+              <Label>نوع الدين *</Label>
+
+              <Select
+                value={manualPayable.type}
+                onValueChange={(value) =>
+                  setManualPayable((p) => ({
+                    ...p,
+                    type: value as "due_to_partner" | "due_to_supplier" | "other",
+                    partnerId: "",
+                    supplierId: "",
+                    creditorName: "",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="due_to_partner">
+                    مستحق لشريك
+                  </SelectItem>
+
+                  <SelectItem value="due_to_supplier">
+                    مستحق لمورد
+                  </SelectItem>
+
+                  <SelectItem value="other">
+                    دين / التزام آخر
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {manualPayable.type === "due_to_partner" && (
+              <div className="space-y-1.5">
+                <Label>الشريك *</Label>
+
+                <Select
+                  value={manualPayable.partnerId}
+                  onValueChange={(value) =>
+                    setManualPayable((p) => ({
+                      ...p,
+                      partnerId: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الشريك" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    {partners.map((partner) => (
+                      <SelectItem
+                        key={partner.id}
+                        value={partner.id}
+                      >
+                        {partner.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {manualPayable.type === "due_to_supplier" && (
+              <div className="space-y-1.5">
+                <Label>المورد *</Label>
+
+                <Select
+                  value={manualPayable.supplierId}
+                  onValueChange={(value) =>
+                    setManualPayable((p) => ({
+                      ...p,
+                      supplierId: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر المورد" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    {suppliers
+                      .filter((supplier) => supplier.active)
+                      .map((supplier) => (
+                        <SelectItem
+                          key={supplier.id}
+                          value={supplier.id}
+                        >
+                          {supplier.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {manualPayable.type === "other" && (
+              <div className="space-y-1.5">
+                <Label>اسم الدائن *</Label>
+
+                <Input
+                  value={manualPayable.creditorName}
+                  onChange={(e) =>
+                    setManualPayable((p) => ({
+                      ...p,
+                      creditorName: e.target.value,
+                    }))
+                  }
+                  placeholder="اسم الشخص أو الجهة"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>المبلغ *</Label>
+
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={manualPayable.amount}
+                onChange={(e) =>
+                  setManualPayable((p) => ({
+                    ...p,
+                    amount: e.target.value,
+                  }))
+                }
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>رقم المرجع / الفاتورة</Label>
+
+              <Input
+                value={manualPayable.referenceNumber}
+                onChange={(e) =>
+                  setManualPayable((p) => ({
+                    ...p,
+                    referenceNumber: e.target.value,
+                  }))
+                }
+                placeholder="مثال: INV-1052"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>ملاحظات</Label>
+
+              <Textarea
+                value={manualPayable.notes}
+                onChange={(e) =>
+                  setManualPayable((p) => ({
+                    ...p,
+                    notes: e.target.value,
+                  }))
+                }
+                rows={3}
+                placeholder="سبب الدين أو تفاصيل إضافية..."
+              />
+            </div>
+
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+              هذه العملية لا تغيّر رصيد الكاش ولا المخزون؛
+              فقط تضيف التزامًا ماليًا.
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setAddManualPayableOpen(false)}
+              disabled={savingManualPayable}
+            >
+              إلغاء
+            </Button>
+
+            <Button
+              onClick={handleAddManualPayable}
+              disabled={savingManualPayable}
+            >
+              {savingManualPayable
+                ? "جاري الحفظ..."
+                : "حفظ الدين"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={addReceivableOpen}
+        onOpenChange={setAddReceivableOpen}
+      >
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>
+              إضافة مستحق لنا
+            </DialogTitle>
+
+            <DialogDescription>
+              تسجيل مبلغ مستحق للمعصرة على شريك أو جهة أخرى.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>نوع المدين</Label>
+
+              <Select
+                value={newReceivable.type}
+                onValueChange={(value) =>
+                  setNewReceivable((p) => ({
+                    ...p,
+                    type: value as
+                      | "due_from_partner"
+                      | "other",
+                    partnerId: "",
+                    debtorName: "",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="due_from_partner">
+                    شريك
+                  </SelectItem>
+
+                  <SelectItem value="other">
+                    شخص / جهة أخرى
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {newReceivable.type === "due_from_partner" ? (
+              <div className="space-y-1.5">
+                <Label>الشريك *</Label>
+
+                <Select
+                  value={newReceivable.partnerId}
+                  onValueChange={(value) =>
+                    setNewReceivable((p) => ({
+                      ...p,
+                      partnerId: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الشريك" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    {partners.map((partner) => (
+                      <SelectItem
+                        key={partner.id}
+                        value={partner.id}
+                      >
+                        {partner.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>اسم المدين *</Label>
+
+                <Input
+                  value={newReceivable.debtorName}
+                  onChange={(e) =>
+                    setNewReceivable((p) => ({
+                      ...p,
+                      debtorName: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>المبلغ *</Label>
+
+              <Input
+                type="number"
+                min="0.01"
+                value={newReceivable.amount}
+                onChange={(e) =>
+                  setNewReceivable((p) => ({
+                    ...p,
+                    amount: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>رقم المرجع</Label>
+
+              <Input
+                value={newReceivable.referenceNumber}
+                onChange={(e) =>
+                  setNewReceivable((p) => ({
+                    ...p,
+                    referenceNumber: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>ملاحظات</Label>
+
+              <Textarea
+                value={newReceivable.notes}
+                onChange={(e) =>
+                  setNewReceivable((p) => ({
+                    ...p,
+                    notes: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setAddReceivableOpen(false)
+              }
+            >
+              إلغاء
+            </Button>
+
+            <Button
+              onClick={handleAddReceivable}
+              disabled={savingReceivable}
+            >
+              {savingReceivable
+                ? "جاري الحفظ..."
+                : "حفظ المستحق"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+      <Dialog open={editSupplierOpen} onOpenChange={setEditSupplierOpen}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تعديل المورد</DialogTitle>
+            <DialogDescription>
+              تعديل اسم المورد أو رقم الهاتف
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>اسم المورد</Label>
+              <Input
+                value={editSupplierForm.name}
+                onChange={(e) =>
+                  setEditSupplierForm((p) => ({
+                    ...p,
+                    name: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>رقم الهاتف</Label>
+              <Input
+                value={editSupplierForm.phone}
+                onChange={(e) =>
+                  setEditSupplierForm((p) => ({
+                    ...p,
+                    phone: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setEditSupplierOpen(false)}
+              disabled={savingSupplierEdit}
+            >
+              إلغاء
+            </Button>
+
+            <Button
+              onClick={handleUpdateSupplier}
+              disabled={savingSupplierEdit}
+            >
+              {savingSupplierEdit ? "جاري الحفظ..." : "حفظ التعديلات"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       {/* Add Supplier Modal */}
       <Dialog open={addSupplierOpen} onOpenChange={setAddSupplierOpen}>
         <DialogContent className="max-w-md" dir="rtl">
@@ -708,6 +1781,113 @@ export default function Payables() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog
+        open={Boolean(collectTarget)}
+        onOpenChange={(open) =>
+          !open && setCollectTarget(null)
+        }
+      >
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>
+              تحصيل مستحق
+            </DialogTitle>
+
+            <DialogDescription>
+              المدين:{" "}
+              <strong>
+                {collectTarget?.debtor_name}
+              </strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          {collectTarget && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-xl bg-muted p-3">
+                <div className="flex justify-between">
+                  <span>المتبقي</span>
+
+                  <strong>
+                    {Number(
+                      collectTarget.remaining_amount
+                    ).toLocaleString()}{" "}
+                    ₪
+                  </strong>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>المبلغ المحصل</Label>
+
+                <Input
+                  type="number"
+                  value={collectAmount}
+                  onChange={(e) =>
+                    setCollectAmount(e.target.value)
+                  }
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>طريقة التحصيل</Label>
+
+                <Select
+                  value={collectMethod}
+                  onValueChange={(value) =>
+                    setCollectMethod(
+                      value as "cash" | "other"
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="cash">
+                      كاش المعصرة
+                    </SelectItem>
+
+                    <SelectItem value="other">
+                      تحويل / مصدر خارجي
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>ملاحظات</Label>
+
+                <Input
+                  value={collectNotes}
+                  onChange={(e) =>
+                    setCollectNotes(e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCollectTarget(null)}
+            >
+              إلغاء
+            </Button>
+
+            <Button
+              onClick={handleCollectReceivable}
+              disabled={collectLoading}
+            >
+              {collectLoading
+                ? "جاري التحصيل..."
+                : "تأكيد التحصيل"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

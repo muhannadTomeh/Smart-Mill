@@ -20,7 +20,7 @@ export interface AdminAccountItem {
  * Encryption key is NEVER accessible to the client or browser, and credentials are never loaded on page load.
  */
 export async function revealCredential(
-  userId: string, 
+  userId: string,
   credentialType: 'account_password' | 'admin_pin' = 'account_password'
 ): Promise<string | null> {
   if (!userId) return null;
@@ -28,10 +28,10 @@ export async function revealCredential(
   try {
     // Primary: Server-side Edge Function with secret-based AES-256-GCM
     const { data: edgeData, error: edgeError } = await supabase.functions.invoke('credential-vault', {
-      body: { 
-        action: 'reveal', 
+      body: {
+        action: 'reveal',
         user_id: userId,
-        credential_type: credentialType 
+        credential_type: credentialType
       }
     });
 
@@ -56,20 +56,20 @@ export async function revealCredential(
  * Stores or updates an encrypted credential (password or admin_pin) in the server Credential Vault.
  */
 export async function storeCredential(
-  userId: string, 
-  value: string, 
+  userId: string,
+  value: string,
   credentialType: 'account_password' | 'admin_pin' = 'account_password'
 ): Promise<void> {
   if (!userId || !value) return;
 
   try {
     const { data, error } = await supabase.functions.invoke('credential-vault', {
-      body: { 
-        action: 'store', 
-        user_id: userId, 
+      body: {
+        action: 'store',
+        user_id: userId,
         value,
         password: value,
-        credential_type: credentialType 
+        credential_type: credentialType
       }
     });
 
@@ -179,7 +179,7 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
         const isActive = mem.is_active !== false && p?.is_active !== false;
         accounts.push({
           user_id: mem.user_id,
-          display_name: p?.display_name || mem.display_username || "موظف كاشير",
+          display_name: p?.display_name || mem.display_username || "موظف المعصرة",
           username: mem.display_username || mem.username || p?.phone || "cashier",
           role: 'mill_employee',
           mill_id: mem.mill_id,
