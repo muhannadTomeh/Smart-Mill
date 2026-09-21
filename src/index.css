@@ -7,6 +7,23 @@ All colors MUST be HSL.
 */
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    min-width: 320px;
+    overflow-x: hidden;
+  }
+
+  @media (max-width: 639px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
   :root {
     --background: 88 33% 91%;
     --foreground: 120 23% 23%;

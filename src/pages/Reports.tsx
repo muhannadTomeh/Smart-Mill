@@ -161,10 +161,10 @@ export default function Reports() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <FileText className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">التقارير</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">التقارير</h1>
         </div>
         <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full min-[420px]:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -179,7 +179,7 @@ export default function Reports() {
       <p className="text-muted-foreground text-sm">تقرير {periodLabels[period]} — {activeSeason?.name || ""}</p>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">الزيت المنتج</CardTitle>

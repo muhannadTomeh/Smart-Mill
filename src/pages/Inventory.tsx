@@ -804,13 +804,13 @@ const Inventory = () => {
       </div>
 
       {/* Main Tabs Selection */}
-      <div className="flex border-b border-border/70 gap-2">
+      <div className="flex gap-2 overflow-x-auto border-b border-border/70 -mx-3 px-3 sm:mx-0 sm:px-0">
 
 
         <button
           type="button"
           onClick={() => setActiveMainTab("products")}
-          className={`pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeMainTab === "products"
+          className={`shrink-0 pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeMainTab === "products"
             ? "border-primary text-primary"
             : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
@@ -824,7 +824,7 @@ const Inventory = () => {
         <button
           type="button"
           onClick={() => setActiveMainTab("definitions")}
-          className={`pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeMainTab === "definitions" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          className={`shrink-0 pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeMainTab === "definitions" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
         >
           <Tag className="h-4 w-4" />
           <span>التعريف والتوريد</span>
@@ -833,7 +833,7 @@ const Inventory = () => {
         <button
           type="button"
           onClick={() => setActiveMainTab("oil")}
-          className={`pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeMainTab === "oil"
+          className={`shrink-0 pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeMainTab === "oil"
             ? "border-primary text-primary"
             : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
@@ -886,7 +886,7 @@ const Inventory = () => {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-[180px]"
+                className="w-full sm:w-[180px]"
               />
             </div>
           </div>
@@ -937,7 +937,7 @@ const Inventory = () => {
           </div>
 
           {/* Aggregated flows for the selected day */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-4 gap-3">
             <StatTile icon={ArrowDown} title="زيت داخل" value={`${oilTotals.in.toFixed(2)} كغم`} />
             <StatTile icon={ArrowUp} title="زيت خارج" value={`${oilTotals.out.toFixed(2)} كغم`} />
             <StatTile icon={ArrowDown} title="كاش داخل" value={`${cashTotals.in.toFixed(2)} ₪`} />

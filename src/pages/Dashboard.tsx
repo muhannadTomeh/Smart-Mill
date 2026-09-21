@@ -245,9 +245,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto animate-rise" dir="rtl">
+    <div className="space-y-6 sm:space-y-8 max-w-7xl mx-auto animate-rise" dir="rtl">
       {/* Header */}
-      <div className="relative overflow-hidden surface-card px-6 py-7">
+      <div className="relative overflow-hidden surface-card px-4 py-5 sm:px-6 sm:py-7">
         <div className="absolute inset-0 glow-gradient pointer-events-none" />
         <div className="relative flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -255,7 +255,7 @@ export default function Dashboard() {
               {activeSeason?.name ?? "الموسم الحالي"}
             </p>
 
-            <h1 className="text-3xl font-bold text-foreground mt-1.5">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mt-1.5">
               ملخص المعصرة
             </h1>
 
@@ -269,7 +269,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid: 5 Core Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {statCards.map((card, i) => (
           <div
             key={i}
@@ -278,7 +278,7 @@ export default function Dashboard() {
                 ? () => navigate("/inventory")
                 : undefined
             }
-            className={`surface-card p-5 hover:-translate-y-0.5 hover:shadow-olive transition-all duration-300 ${card.label === "مخزون البضائع" ? "cursor-pointer" : ""
+            className={`surface-card p-4 sm:p-5 hover:-translate-y-0.5 hover:shadow-olive transition-all duration-300 ${card.label === "مخزون البضائع" ? "cursor-pointer" : ""
               }`}
           >
 
