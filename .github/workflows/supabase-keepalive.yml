@@ -1,0 +1,44 @@
+name: Keep Supabase Active
+
+on:
+  schedule:
+    # يعمل مرتين يومياً بتوقيت UTC
+    - cron: "17 5,17 * * *"
+
+  # يسمح بتشغيله يدوياً للاختبار
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    name: Ping Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Call keepalive function
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+
+        shell: bash
+
+        run: |
+          set -euo pipefail
+
+          for attempt in 1 2 3; do
+            response="$(curl \
+              --silent \
+              --show-error \
+              --fail-with-body \
+              --request POST \
+              "${SUPABASE_URL}/rest/v1/rpc/keepalive" \
+              --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
+              --header "Content-Type: application/json" \
+              --data '{}')"
+
+            echo "Attempt ${attempt}: ${response}"
+            sleep 5
+          done
