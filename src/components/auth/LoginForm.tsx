@@ -49,7 +49,6 @@ const LoginForm = ({ loading, onSubmit, onNavigate }: LoginFormProps) => {
               type="text"
               value={usernameOrEmail}
               onChange={(e) => setUsernameOrEmail(e.target.value)}
-              placeholder="مثال: ahmed أو cashier1"
               className="pr-10 h-12"
               autoCapitalize="none"
               autoCorrect="off"
