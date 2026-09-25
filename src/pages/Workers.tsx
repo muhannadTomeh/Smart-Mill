@@ -7,6 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import { UserCheck, Plus, DollarSign, Pencil, ClipboardList, Search, Filter, Archive, AlertTriangle, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,6 +56,19 @@ interface WorkerPayment {
   created_at: string;
   status: "active" | "reversed";
   reversal_reason: string | null;
+  payment_source: "cash_vault" | "partner_paid";
+  partner_id: string | null;
+}
+
+interface PartnerOption {
+  id: string;
+  name: string;
+}
+
+
+interface Partner {
+  id: string;
+  name: string;
 }
 
 const Workers = () => {
@@ -59,6 +80,10 @@ const Workers = () => {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecord[]>([]);
   const [payments, setPayments] = useState<WorkerPayment[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [paymentSource, setPaymentSource] =
+    useState<"cash_vault" | "partner_paid">("cash_vault");
+  const [paymentPartnerId, setPaymentPartnerId] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -103,6 +128,7 @@ const Workers = () => {
       fetchWorkers();
       fetchRecords();
       fetchPayments();
+      fetchPartners();
     } else {
       setLoading(false);
     }
@@ -142,6 +168,25 @@ const Workers = () => {
     if (!error && data) {
       setPayments((data as WorkerPayment[]) || []);
     }
+  };
+
+  const fetchPartners = async () => {
+    const effectiveMillId = millId || activeSeason?.mill_id;
+    if (!effectiveMillId) return;
+
+    const { data, error } = await supabase
+      .from("partners")
+      .select("id, name")
+      .eq("mill_id", effectiveMillId)
+      .eq("active", true)
+      .order("name");
+
+    if (error) {
+      console.error("fetchPartners error:", error);
+      return;
+    }
+
+    setPartners((data || []) as Partner[]);
   };
 
   const addWorker = async () => {
@@ -246,29 +291,88 @@ const Workers = () => {
     fetchPayments();
   };
 
-  const payWorker = async (worker: Worker, amount: number, notes: string, onDone: () => void) => {
+  const payWorker = async (
+    worker: Worker,
+    amount: number,
+    notes: string,
+    onDone: () => void
+  ) => {
     if (isEmployee) {
-      toast({ title: "غير مصرح", description: "دفع أجور العمال متاح لمالك المعصرة فقط.", variant: "destructive" });
+      toast({
+        title: "غير مصرح",
+        description: "دفع أجور العمال متاح لمالك المعصرة فقط.",
+        variant: "destructive",
+      });
       return;
     }
-    if (amount <= 0) return;
-    
-    const { error } = await (supabase.rpc as any)("pay_worker_command", {
-      p_season_id: activeSeason!.id,
-      p_worker_id: worker.id,
-      p_amount: amount,
-      p_notes: notes.trim() || null,
-      p_idempotency_key: crypto.randomUUID(),
-    });
+
+    if (!activeSeason || amount <= 0) return;
+
+    if (paymentSource === "partner_paid" && !paymentPartnerId) {
+      toast({
+        title: "اختر الشريك",
+        description: "يجب تحديد الشريك الذي دفع أجرة العامل.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const { error } = await (supabase.rpc as any)(
+      "pay_worker_with_source_command",
+      {
+        p_season_id: activeSeason.id,
+        p_worker_id: worker.id,
+        p_amount: amount,
+        p_notes: notes.trim() || null,
+        p_payment_source: paymentSource,
+        p_partner_id:
+          paymentSource === "partner_paid"
+            ? paymentPartnerId
+            : null,
+        p_idempotency_key: crypto.randomUUID(),
+      }
+    );
 
     if (error) {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "تم الدفع", description: `تم دفع ${amount} شيكل للعامل ${worker.name}` });
-      fetchWorkers();
-      fetchPayments();
-      onDone();
+      toast({
+        title: "خطأ في دفع الأجرة",
+        description: error.message,
+        variant: "destructive",
+      });
+
+      setIsSubmitting(false);
+      return;
     }
+
+    const selectedPartner = partners.find(
+      (partner) => partner.id === paymentPartnerId
+    );
+
+    toast({
+      title: "تم الدفع",
+      description:
+        paymentSource === "partner_paid"
+          ? `تم دفع ${amount} شيكل للعامل ${worker.name} بواسطة الشريك ${selectedPartner?.name || ""}`
+          : `تم دفع ${amount} شيكل للعامل ${worker.name} من صندوق المعصرة`,
+    });
+
+    await Promise.all([
+      fetchWorkers(),
+      fetchPayments(),
+    ]);
+
+    // تصفير حقول الدفع بعد نجاح العملية
+    setPayAmount("");
+    setPayNotes("");
+    setPayFromListAmount("");
+    setPayFromListNotes("");
+    setPaymentSource("cash_vault");
+    setPaymentPartnerId("");
+    setIsSubmitting(false);
+
+    onDone();
   };
 
   const registerWork = async () => {
@@ -315,6 +419,8 @@ const Workers = () => {
     setPayAmount("");
     setPayNotes("");
     setPayDialogOpen(true);
+    setPaymentSource("cash_vault");
+    setPaymentPartnerId("");
   };
 
   const startPayFromList = (worker: Worker) => {
@@ -322,6 +428,8 @@ const Workers = () => {
     setPayFromListAmount("");
     setPayFromListNotes("");
     setPayFromListOpen(true);
+    setPaymentSource("cash_vault");
+    setPaymentPartnerId("");
   };
 
   const selectedWorkerForReg = workers.find(w => w.id === selectedWorkerId);
@@ -614,7 +722,7 @@ const Workers = () => {
               </CardTitle>
               <CardDescription>ملخص المستحقات والمدفوعات لكل عامل</CardDescription>
             </CardHeader>
-           <CardContent className="space-y-6">
+            <CardContent className="space-y-6">
               {workers.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground">لا يوجد عمال.</p>
               ) : (
@@ -679,6 +787,7 @@ const Workers = () => {
                           <TableRow>
                             <TableHead className="text-right">العامل</TableHead>
                             <TableHead className="text-right">المبلغ</TableHead>
+                            <TableHead className="text-right">مصدر الدفع</TableHead>
                             <TableHead className="text-right">ملاحظات</TableHead>
                             <TableHead className="text-right">التاريخ</TableHead>
                             <TableHead className="text-right">الحالة</TableHead>
@@ -692,6 +801,14 @@ const Workers = () => {
                               <TableRow key={payment.id}>
                                 <TableCell className="text-right font-medium">{w?.name || '—'}</TableCell>
                                 <TableCell className="text-right">{payment.amount} ش</TableCell>
+                                <TableCell className="text-right">
+                                  {payment.payment_source === "partner_paid"
+                                    ? `الشريك: ${partners.find((partner) => partner.id === payment.partner_id)?.name ||
+                                    "غير معروف"
+                                    }`
+                                    : "صندوق المعصرة"}
+                                </TableCell>
+
                                 <TableCell className="text-right text-muted-foreground text-xs">{payment.notes || '—'}</TableCell>
                                 <TableCell className="text-right font-mono text-xs">{formatDate(payment.created_at)}</TableCell>
                                 <TableCell className="text-right"><Badge variant={payment.status === "active" ? "default" : "secondary"}>{payment.status === "active" ? "فعالة" : "معكوسة"}</Badge></TableCell>
@@ -766,6 +883,60 @@ const Workers = () => {
               <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="المبلغ" min="0"
                 max={payingWorker ? payingWorker.total_earned - payingWorker.total_paid : 0} />
             </div>
+
+            <div>
+              <Label>مصدر الدفع</Label>
+
+              <Select
+                value={paymentSource}
+                onValueChange={(value: "cash_vault" | "partner_paid") => {
+                  setPaymentSource(value);
+
+                  if (value === "cash_vault") {
+                    setPaymentPartnerId("");
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر مصدر الدفع" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="cash_vault">
+                    نقدي من صندوق المعصرة
+                  </SelectItem>
+
+                  <SelectItem value="partner_paid">
+                    دفعه شريك
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {paymentSource === "partner_paid" && (
+              <div>
+                <Label>الشريك الذي دفع</Label>
+
+                <Select
+                  value={paymentPartnerId}
+                  onValueChange={setPaymentPartnerId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الشريك" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    {partners.map((partner) => (
+                      <SelectItem key={partner.id} value={partner.id}>
+                        {partner.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+
             <div>
               <Label>ملاحظات (اختياري)</Label>
               <Input value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="ملاحظات..." />
@@ -774,7 +945,10 @@ const Workers = () => {
               <Button variant="outline" onClick={() => setPayDialogOpen(false)}>إلغاء</Button>
               {payingWorker && (
                 <Button variant="outline" onClick={() => payWorker(payingWorker, payingWorker.total_earned - payingWorker.total_paid, payNotes, () => { setPayDialogOpen(false); })}
-                  disabled={payingWorker.total_earned - payingWorker.total_paid <= 0}>
+                  disabled={
+                    isSubmitting ||
+                    payingWorker.total_earned - payingWorker.total_paid <= 0
+                  }>
                   دفع الكل
                 </Button>
               )}
@@ -796,10 +970,66 @@ const Workers = () => {
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
+
+
+
               <Label>المبلغ</Label>
               <Input type="number" value={payFromListAmount} onChange={e => setPayFromListAmount(e.target.value)} placeholder="المبلغ" min="0"
                 max={payFromListWorker ? payFromListWorker.total_earned - payFromListWorker.total_paid : 0} />
             </div>
+            <div>
+              <Label>مصدر الدفع</Label>
+
+              <Select
+                value={paymentSource}
+                onValueChange={(value: "cash_vault" | "partner_paid") => {
+                  setPaymentSource(value);
+
+                  if (value === "cash_vault") {
+                    setPaymentPartnerId("");
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر مصدر الدفع" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="cash_vault">
+                    نقدي من صندوق المعصرة
+                  </SelectItem>
+
+                  <SelectItem value="partner_paid">
+                    دفعه شريك
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {paymentSource === "partner_paid" && (
+              <div>
+                <Label>الشريك الذي دفع</Label>
+
+                <Select
+                  value={paymentPartnerId}
+                  onValueChange={setPaymentPartnerId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الشريك" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    {partners.map((partner) => (
+                      <SelectItem key={partner.id} value={partner.id}>
+                        {partner.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+
             <div>
               <Label>ملاحظات (اختياري)</Label>
               <Input value={payFromListNotes} onChange={e => setPayFromListNotes(e.target.value)} placeholder="ملاحظات..." />
@@ -807,7 +1037,12 @@ const Workers = () => {
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => setPayFromListOpen(false)}>إلغاء</Button>
               <Button onClick={() => payFromListWorker && payWorker(payFromListWorker, parseFloat(payFromListAmount) || 0, payFromListNotes, () => { setPayFromListOpen(false); })}
-                disabled={!payFromListAmount || parseFloat(payFromListAmount) <= 0}>
+                disabled={
+                  isSubmitting ||
+                  !payFromListAmount ||
+                  parseFloat(payFromListAmount) <= 0 ||
+                  (paymentSource === "partner_paid" && !paymentPartnerId)
+                }>
                 <DollarSign className="h-4 w-4 me-1" />دفع
               </Button>
             </DialogFooter>
