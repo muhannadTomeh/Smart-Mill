@@ -119,9 +119,11 @@ export default function Payables() {
   const [addReceivableOpen, setAddReceivableOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const requestedTab = searchParams.get("tab");
+
   const activeTab =
-    searchParams.get("tab") === "suppliers"
-      ? "suppliers"
+    requestedTab === "receivables" || requestedTab === "suppliers"
+      ? requestedTab
       : "payables";
 
   const [newReceivable, setNewReceivable] = useState({
@@ -805,7 +807,7 @@ export default function Payables() {
       <Tabs
         value={activeTab}
         onValueChange={(value) => {
-          setSearchParams(value === "suppliers" ? { tab: "suppliers" } : {});
+          setSearchParams(value === "payables" ? {} : { tab: value });
         }}
         className="w-full"
       >
