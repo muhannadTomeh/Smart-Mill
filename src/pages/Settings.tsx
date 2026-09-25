@@ -493,15 +493,16 @@ export default function Settings() {
   }, [user]);
 
   useEffect(() => {
-    if (!loading) {
-      setForm({
-        return_percent: String(settings.return_percent),
-        oil_sell_price: String(settings.oil_sell_price),
-        oil_buy_price: String(settings.oil_buy_price),
-        cash_return_cost: String(settings.cash_return_cost)
-      });
-    }
-  }, [loading, settings]);
+    if (!activeSeason) return;
+
+    setForm({
+      return_percent: String(activeSeason.return_percent ?? ""),
+      oil_sell_price: String(activeSeason.oil_sell_price ?? ""),
+      oil_buy_price: String(activeSeason.oil_buy_price ?? ""),
+      cash_return_cost: String(activeSeason.cash_return_cost ?? ""),
+    });
+  }, [activeSeason?.id]);
+
 
   useEffect(() => {
     if (activeSeason) {
@@ -558,10 +559,18 @@ export default function Settings() {
       oil_buy_price: parseFloat(form.oil_buy_price),
       cash_return_cost: parseFloat(form.cash_return_cost),
     }).eq("id", activeSeason.id);
-    if (!error) {
-      await refetchSeasons();
-      toast({ title: "تم الحفظ", description: "تم حفظ إعدادات المعصرة والعملة بنجاح" });
+    if (error) {
+      toast({
+        title: "فشل الحفظ",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
     }
+
+    await refetchSeasons();
+    toast({ title: "تم الحفظ", description: "تم حفظ إعدادات المعصرة والعملة بنجاح" });
+
   };
 
   const updateAdminPin = async () => {
