@@ -168,7 +168,8 @@ export default function Dashboard() {
       icon: DollarSign,
       tone: "text-primary",
       bg: "bg-primary/10",
-      sensitive: true
+      sensitive: true,
+      maskedValue: "•••• ₪",
     },
 
     {
@@ -177,7 +178,9 @@ export default function Dashboard() {
       value: `${(Number(inventory?.total_oil) || 0).toFixed(1)} كغم`,
       icon: Droplets,
       tone: "text-[hsl(var(--primary-glow))]",
-      bg: "bg-[hsl(var(--primary-glow))]/12"
+      bg: "bg-[hsl(var(--primary-glow))]/12",
+      sensitive: true,
+      maskedValue: "•••• كغم",
     },
 
     {
@@ -204,8 +207,7 @@ export default function Dashboard() {
       value: `${stats.todayExpenses} ₪`,
       icon: Wallet,
       tone: "text-destructive",
-      bg: "bg-destructive/10",
-      sensitive: true
+      bg: "bg-destructive/10"
     },
   ];
 
@@ -304,7 +306,7 @@ export default function Dashboard() {
             <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span className="text-2xl font-display font-bold text-foreground leading-none">
-                {card.sensitive && !showSensitive ? "•••• ₪" : card.value}
+                {card.sensitive && !showSensitive ? card.maskedValue : card.value}
               </span>
               <span className="text-[11px] text-muted-foreground/70">{card.hint}</span>
             </div>
