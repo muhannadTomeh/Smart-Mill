@@ -230,8 +230,20 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       }
     }
 
+    toast.success(shouldPrint ? "تم حفظ الفاتورة وإرسال أمر الطباعة" : "تم تأكيد الفاتورة بنجاح", {
+      description: selected.label,
+    });
+
+    const invoicedId = customer.id;
+    setSaving(false);
+    onOpenChange(false);
+    onCompleted(invoicedId);
+
+    // `window.print()` can block the browser until the print dialog is dismissed.
+    // Close the invoice sheet and update the queue first, then begin printing on
+    // the following event-loop turn so the completed invoice cannot trap the UI.
     if (shouldPrint) {
-      printThermalReceipt({
+      const receipt = {
         customer_name: customer.name,
         customer_phone: customer.phone,
         oil_produced: oilProduced,
@@ -242,17 +254,12 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
         cash_amount: selected.cashAmount,
         total_display: selected.label,
         season_name: activeSeason?.name,
-      }, millName);
+      };
+
+      window.setTimeout(() => {
+        printThermalReceipt(receipt, millName);
+      }, 0);
     }
-
-    toast.success(shouldPrint ? "تم حفظ الفاتورة وإرسال أمر الطباعة" : "تم تأكيد الفاتورة بنجاح", {
-      description: selected.label,
-    });
-
-    const invoicedId = customer.id;
-    setSaving(false);
-    onOpenChange(false);
-    onCompleted(invoicedId);
   };
 
   const paymentCards: { type: PaymentType; icon: any; title: string; color: string; bg: string; ring: string }[] = [
