@@ -46,6 +46,9 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   const [containerCounts, setContainerCounts] = useState<Record<string, number>>({});
   const [paymentType, setPaymentType] = useState<PaymentType | null>(null);
   const [customMixedOil, setCustomMixedOil] = useState<number | null>(null);
+  const [mixedOilInput, setMixedOilInput] = useState("");
+  const [mixedCashInput, setMixedCashInput] = useState("");
+  const [editingMixedField, setEditingMixedField] = useState<"oil" | "cash" | null>(null);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -58,6 +61,9 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       setContainerCounts({});
       setPaymentType(null);
       setCustomMixedOil(null);
+      setMixedOilInput("");
+      setMixedCashInput("");
+      setEditingMixedField(null);
     }
   }, [open, activeSeason?.id]);
 
@@ -120,6 +126,29 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   };
 
   const addOil = (delta: number) => setOilProduced((v) => Math.max(0, +(v + delta).toFixed(2)));
+
+  const clearMixedInputDrafts = () => {
+    setMixedOilInput("");
+    setMixedCashInput("");
+    setEditingMixedField(null);
+  };
+
+  const applyMixedOil = (amount: number) => {
+    setCustomMixedOil(Math.max(0, amount));
+    clearMixedInputDrafts();
+  };
+
+  const applyMixedCash = (amount: number) => {
+    if (!calc) return;
+    const breakdown = calculateCustomMixedFromCash(
+      oilProduced,
+      totalContainerCost,
+      settings,
+      Math.max(0, amount)
+    );
+    setCustomMixedOil(breakdown.oilAmount);
+    clearMixedInputDrafts();
+  };
 
   const millName = profile?.mill_name || localStorage.getItem("mill_name") || "المعصرة الذكية";
 
@@ -405,7 +434,10 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => setCustomMixedOil(null)}
+                          onClick={() => {
+                            setCustomMixedOil(null);
+                            clearMixedInputDrafts();
+                          }}
                           className="h-7 px-2 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-400"
                         >
                           <RotateCcw className="h-3.5 w-3.5 me-1" />
@@ -430,22 +462,29 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                             onClick={() => {
                               const cur = calc.mixed.oilAmount;
                               const next = Math.max(0, +(cur - 0.5).toFixed(2));
-                              setCustomMixedOil(next);
+                              applyMixedOil(next);
                             }}
                             disabled={calc.mixed.oilAmount <= 0}
                           >
                             <Minus className="h-4 w-4" />
                           </Button>
                           <Input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max={calc.oilOnly.oilAmount}
-                            value={calc.mixed.oilAmount}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value);
-                              setCustomMixedOil(isNaN(val) ? 0 : Math.max(0, val));
+                            type="text"
+                            inputMode="decimal"
+                            value={editingMixedField === "oil" ? mixedOilInput : calc.mixed.oilAmount.toFixed(2)}
+                            onFocus={() => {
+                              setEditingMixedField("oil");
+                              setMixedOilInput(String(calc.mixed.oilAmount));
                             }}
+                            onChange={(e) => {
+                              const raw = toLatinDigits(e.target.value).replace(/,/g, ".");
+                              if (!/^\d*\.?\d*$/.test(raw)) return;
+                              setMixedOilInput(raw);
+                              if (!raw || raw === ".") return;
+                              const val = Number(raw);
+                              if (Number.isFinite(val)) setCustomMixedOil(Math.max(0, val));
+                            }}
+                            onBlur={() => setEditingMixedField((field) => field === "oil" ? null : field)}
                             className="text-center font-bold text-base h-9 text-amber-700 dark:text-amber-400 font-mono"
                             lang="en-US"
                             dir="ltr"
@@ -458,7 +497,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                             onClick={() => {
                               const cur = calc.mixed.oilAmount;
                               const next = Math.min(calc.oilOnly.oilAmount, +(cur + 0.5).toFixed(2));
-                              setCustomMixedOil(next);
+                              applyMixedOil(next);
                             }}
                             disabled={calc.mixed.oilAmount >= calc.oilOnly.oilAmount}
                           >
@@ -473,7 +512,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                               variant="outline"
                               size="sm"
                               className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                              onClick={() => setCustomMixedOil(v)}
+                              onClick={() => applyMixedOil(v)}
                             >
                               {v} كغم
                             </Button>
@@ -483,7 +522,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                             variant="outline"
                             size="sm"
                             className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                            onClick={() => setCustomMixedOil(Math.floor(calc.defaultMixed.oilAmount))}
+                            onClick={() => applyMixedOil(Math.floor(calc.defaultMixed.oilAmount))}
                           >
                             {Math.floor(calc.defaultMixed.oilAmount)} كغم
                           </Button>
@@ -505,25 +544,32 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                             onClick={() => {
                               const cur = calc.mixed.cashAmount;
                               const next = Math.max(0, +(cur - 5).toFixed(2));
-                              const res = calculateCustomMixedFromCash(oilProduced, totalContainerCost, settings, next);
-                              setCustomMixedOil(res.oilAmount);
+                              applyMixedCash(next);
                             }}
                             disabled={calc.mixed.cashAmount <= 0}
                           >
                             <Minus className="h-4 w-4" />
                           </Button>
                           <Input
-                            type="number"
-                            step="1"
-                            min="0"
-                            max={calc.cashOnly.cashAmount}
-                            value={calc.mixed.cashAmount}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value);
-                              const next = isNaN(val) ? 0 : Math.max(0, val);
-                              const res = calculateCustomMixedFromCash(oilProduced, totalContainerCost, settings, next);
-                              setCustomMixedOil(res.oilAmount);
+                            type="text"
+                            inputMode="decimal"
+                            value={editingMixedField === "cash" ? mixedCashInput : calc.mixed.cashAmount.toFixed(2)}
+                            onFocus={() => {
+                              setEditingMixedField("cash");
+                              setMixedCashInput(String(calc.mixed.cashAmount));
                             }}
+                            onChange={(e) => {
+                              const raw = toLatinDigits(e.target.value).replace(/,/g, ".");
+                              if (!/^\d*\.?\d*$/.test(raw)) return;
+                              setMixedCashInput(raw);
+                              if (!raw || raw === ".") return;
+                              const val = Number(raw);
+                              if (Number.isFinite(val)) {
+                                const breakdown = calculateCustomMixedFromCash(oilProduced, totalContainerCost, settings, Math.max(0, val));
+                                setCustomMixedOil(breakdown.oilAmount);
+                              }
+                            }}
+                            onBlur={() => setEditingMixedField((field) => field === "cash" ? null : field)}
                             className="text-center font-bold text-base h-9 text-amber-700 dark:text-amber-400"
                           />
                           <Button
@@ -534,8 +580,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                             onClick={() => {
                               const cur = calc.mixed.cashAmount;
                               const next = Math.min(calc.cashOnly.cashAmount, +(cur + 5).toFixed(2));
-                              const res = calculateCustomMixedFromCash(oilProduced, totalContainerCost, settings, next);
-                              setCustomMixedOil(res.oilAmount);
+                              applyMixedCash(next);
                             }}
                             disabled={calc.mixed.cashAmount >= calc.cashOnly.cashAmount}
                           >
