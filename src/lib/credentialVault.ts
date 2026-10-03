@@ -215,6 +215,9 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
  */
 async function extractEdgeFunctionError(edgeErr: any, defaultMsg: string): Promise<string> {
   if (!edgeErr) return defaultMsg;
+  if (edgeErr.context?.status === 429) {
+    return "تم الوصول إلى الحد المؤقت لكشف بيانات الاعتماد. حاول بعد 10 دقائق.";
+  }
   let msg = edgeErr.message || defaultMsg;
   if (edgeErr.context && typeof edgeErr.context.json === 'function') {
     try {

@@ -281,15 +281,7 @@ export default function AdminIndex() {
 
   const handleCopyAccountPassword = async (acc: AdminAccountItem) => {
     const key = acc.user_id;
-    let pass = decryptedAccountPasswords[key];
-    if (!pass) {
-      try {
-        pass = (await revealCredential(acc.user_id, 'account_password')) || "";
-        if (pass) {
-          setDecryptedAccountPasswords((p) => ({ ...p, [key]: pass }));
-        }
-      } catch { }
-    }
+    const pass = decryptedAccountPasswords[key];
     if (pass) {
       navigator.clipboard.writeText(pass);
       toast.success("تم نسخ كلمة المرور إلى الحافظة");
@@ -335,15 +327,7 @@ export default function AdminIndex() {
 
   const handleCopyAccountPin = async (acc: AdminAccountItem) => {
     const key = acc.user_id;
-    let pin = decryptedAccountPins[key];
-    if (!pin) {
-      try {
-        pin = (await revealCredential(acc.user_id, 'admin_pin')) || "";
-        if (pin) {
-          setDecryptedAccountPins((p) => ({ ...p, [key]: pin }));
-        }
-      } catch { }
-    }
+    const pin = decryptedAccountPins[key];
     if (pin) {
       navigator.clipboard.writeText(pin);
       toast.success("تم نسخ PIN لوحة الإدارة إلى الحافظة");
@@ -353,21 +337,12 @@ export default function AdminIndex() {
   };
 
   // Open Edit Account Modal
-  const handleOpenAccountEdit = async (acc: AdminAccountItem) => {
+  const handleOpenAccountEdit = (acc: AdminAccountItem) => {
     setEditingAccount(acc);
-    let pass = decryptedAccountPasswords[acc.user_id] || "";
-    if (!pass) {
-      try {
-        pass = (await revealCredential(acc.user_id)) || "";
-        if (pass) {
-          setDecryptedAccountPasswords((p) => ({ ...p, [acc.user_id]: pass }));
-        }
-      } catch { }
-    }
     setEditAccountForm({
       name: acc.display_name,
       username: acc.username,
-      password: pass,
+      password: "",
       millName: acc.role === "mill_owner" ? (acc.mill_name || "") : "",
     });
     setShowEditAccountPassword(false);
