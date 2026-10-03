@@ -107,6 +107,14 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
       if (m.id) millsMap.set(m.id, m);
     });
 
+    const membershipsByUser = new Map<string, any[]>();
+    (membershipsRes.data || []).forEach((membership: any) => {
+      if (!membership.user_id) return;
+      const existing = membershipsByUser.get(membership.user_id) || [];
+      existing.push(membership);
+      membershipsByUser.set(membership.user_id, existing);
+    });
+
     // Fetch profiles for all unique user IDs
     const userIds = new Set<string>();
     (adminRolesRes.data || []).forEach((r: any) => userIds.add(r.user_id));
@@ -153,11 +161,13 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
     (millsRes.data || []).forEach((m: any) => {
       if (m.owner_user_id && !adminIds.has(m.owner_user_id)) {
         const p = profilesMap.get(m.owner_user_id);
+        const ownerMembership = (membershipsByUser.get(m.owner_user_id) || [])
+          .find((membership: any) => membership.mill_id === m.id && membership.role === 'mill_owner');
         const isActive = p?.is_active !== false;
         accounts.push({
           user_id: m.owner_user_id,
           display_name: p?.display_name || m.name || "صاحب المعصرة",
-          username: m.mill_code || p?.phone || "owner",
+          username: ownerMembership?.username || p?.phone || m.mill_code || "owner",
           role: 'mill_owner',
           mill_id: m.id,
           mill_name: m.name,
@@ -180,7 +190,7 @@ export async function fetchAllAdminAccounts(): Promise<AdminAccountItem[]> {
         accounts.push({
           user_id: mem.user_id,
           display_name: p?.display_name || mem.display_username || "موظف المعصرة",
-          username: mem.display_username || mem.username || p?.phone || "cashier",
+          username: mem.username || p?.phone || "cashier",
           role: 'mill_employee',
           mill_id: mem.mill_id,
           mill_name: mill?.name || "معصرة",

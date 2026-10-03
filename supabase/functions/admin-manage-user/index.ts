@@ -614,6 +614,44 @@ serve(async (req) => {
         );
       }
 
+      const cleanUsername = rawUsername === undefined
+        ? null
+        : String(rawUsername || '').trim().toLowerCase();
+
+      if (cleanUsername !== null && (!/^[a-z0-9_.-]{2,64}$/.test(cleanUsername))) {
+        return new Response(
+          JSON.stringify({ error: 'اسم المستخدم يجب أن يكون من 2 إلى 64 حرفاً إنجليزياً أو رقماً، ويسمح بالنقطة والشرطة فقط' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: targetMembership, error: targetMembershipError } = await supabaseAdmin
+        .from('mill_memberships')
+        .select('mill_id, role')
+        .eq('user_id', targetUserId)
+        .in('role', ['mill_owner', 'mill_employee'])
+        .maybeSingle();
+
+      if (targetMembershipError) throw targetMembershipError;
+
+      if (cleanUsername) {
+        const { data: duplicateMembership, error: duplicateError } = await supabaseAdmin
+          .from('mill_memberships')
+          .select('user_id')
+          .ilike('username', cleanUsername)
+          .neq('user_id', targetUserId)
+          .limit(1)
+          .maybeSingle();
+
+        if (duplicateError) throw duplicateError;
+        if (duplicateMembership) {
+          return new Response(
+            JSON.stringify({ error: `اسم المستخدم "${cleanUsername}" مستخدم بالفعل` }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       // A mill name is stored on the canonical `mills` record. Do not confuse
       // it with the owner's username used for login.
       if (rawMillName !== undefined) {
@@ -656,16 +694,49 @@ serve(async (req) => {
 
       const updates: any = {};
       if (rawName) updates.display_name = rawName.trim();
-      if (rawUsername) updates.phone = rawUsername.trim();
+      if (cleanUsername) updates.phone = cleanUsername;
 
       if (Object.keys(updates).length > 0) {
-        await Promise.all([
+        const [{ error: profileUpdateError }, { error: membershipUpdateError }] = await Promise.all([
           supabaseAdmin.from('profiles').update({ ...updates, updated_at: new Date().toISOString() }).eq('user_id', targetUserId),
           supabaseAdmin.from('mill_memberships').update({
-            display_username: updates.display_name || updates.phone,
-            username: updates.phone ? updates.phone.toLowerCase() : undefined
+            display_username: updates.display_name,
+            username: cleanUsername || undefined
           }).eq('user_id', targetUserId)
         ]);
+
+        if (profileUpdateError || membershipUpdateError) {
+          throw profileUpdateError || membershipUpdateError;
+        }
+      }
+
+      if (cleanUsername && targetMembership) {
+        let authEmail = `${cleanUsername}@smartmill.com`;
+
+        if (targetMembership.role === 'mill_employee') {
+          const { data: mill, error: millLookupError } = await supabaseAdmin
+            .from('mills')
+            .select('mill_code')
+            .eq('id', targetMembership.mill_id)
+            .single();
+          if (millLookupError) throw millLookupError;
+          const millCode = String(mill?.mill_code || 'mill').toLowerCase().replace(/[^a-z0-9]/g, '');
+          authEmail = `${millCode}_${cleanUsername}@smartmill.com`;
+        }
+
+        const { error: authUsernameError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+          email: authEmail,
+          email_confirm: true,
+        });
+        if (authUsernameError) throw authUsernameError;
+
+        if (targetMembership.role === 'mill_owner') {
+          const { error: millCodeError } = await supabaseAdmin
+            .from('mills')
+            .update({ mill_code: cleanUsername, updated_at: new Date().toISOString() })
+            .eq('id', targetMembership.mill_id);
+          if (millCodeError) throw millCodeError;
+        }
       }
 
       // If password provided, update auth and vault
