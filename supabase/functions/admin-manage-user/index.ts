@@ -18,6 +18,20 @@ async function encryptVaultPassword(plainText: string, secret: string): Promise<
   return `${ivB64}:${cipherB64}`;
 }
 
+function accountError(error: any): { code: string; message: string } {
+  const raw = String(error?.message || error || '');
+  if (/idx_profiles_mill_code_unique|mill_code.*unique|duplicate key|already.*registered|email.*exists/i.test(raw)) {
+    return { code: 'USERNAME_TAKEN', message: 'The username is already in use.' };
+  }
+  if (/password.*(weak|short)|weak_password/i.test(raw)) {
+    return { code: 'WEAK_PASSWORD', message: 'The password does not meet the security requirements.' };
+  }
+  if (/check constraint|invalid input|violates.*check/i.test(raw)) {
+    return { code: 'INVALID_ACCOUNT_DATA', message: 'One or more account fields are invalid.' };
+  }
+  return { code: 'ACCOUNT_CREATE_FAILED', message: 'The account operation could not be completed.' };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -143,17 +157,21 @@ serve(async (req) => {
         );
       }
 
-      // Check unique mill_code / username in mills
-      const { data: existingMill } = await supabaseAdmin
-        .from('mills')
-        .select('id')
-        .eq('mill_code', cleanUsername)
-        .maybeSingle();
+      // Check every canonical/legacy identifier before creating Auth records.
+      // This prevents a late database constraint error and a partial account.
+      const [existingMillResult, existingProfileResult, existingMembershipResult] = await Promise.all([
+        supabaseAdmin.from('mills').select('id').ilike('mill_code', cleanUsername).limit(1).maybeSingle(),
+        supabaseAdmin.from('profiles').select('user_id').ilike('mill_code', cleanUsername).limit(1).maybeSingle(),
+        supabaseAdmin.from('mill_memberships').select('user_id').ilike('username', cleanUsername).limit(1).maybeSingle(),
+      ]);
 
-      if (existingMill) {
+      const lookupError = existingMillResult.error || existingProfileResult.error || existingMembershipResult.error;
+      if (lookupError) throw lookupError;
+
+      if (existingMillResult.data || existingProfileResult.data || existingMembershipResult.data) {
         return new Response(
-          JSON.stringify({ error: `اسم المستخدم / رمز المعصرة "${cleanUsername}" مستخدم بالفعل` }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ code: 'USERNAME_TAKEN', error: 'The username is already in use.' }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } }
         );
       }
 
@@ -296,7 +314,11 @@ serve(async (req) => {
             console.error('Failed to rollback user:', cleanupErr);
           }
         }
-        throw stepErr;
+        const friendly = accountError(stepErr);
+        return new Response(
+          JSON.stringify({ code: friendly.code, error: friendly.message }),
+          { status: friendly.code === 'USERNAME_TAKEN' ? 409 : 400, headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } }
+        );
       }
     }
 
@@ -695,6 +717,7 @@ serve(async (req) => {
       const updates: any = {};
       if (rawName) updates.display_name = rawName.trim();
       if (cleanUsername) updates.phone = cleanUsername;
+      if (cleanUsername && targetMembership?.role === 'mill_owner') updates.mill_code = cleanUsername;
 
       if (Object.keys(updates).length > 0) {
         const [{ error: profileUpdateError }, { error: membershipUpdateError }] = await Promise.all([

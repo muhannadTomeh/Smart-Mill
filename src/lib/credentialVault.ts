@@ -222,7 +222,8 @@ async function extractEdgeFunctionError(edgeErr: any, defaultMsg: string): Promi
   if (edgeErr.context && typeof edgeErr.context.json === 'function') {
     try {
       const body = await edgeErr.context.json();
-      if (body?.error) return String(body.error);
+      if (body?.code) return friendlyAccountError(String(body.code), body?.error);
+      if (body?.error) return friendlyAccountError(undefined, String(body.error));
     } catch { }
   }
   if (edgeErr.context && typeof edgeErr.context.text === 'function') {
@@ -231,13 +232,36 @@ async function extractEdgeFunctionError(edgeErr: any, defaultMsg: string): Promi
       if (text) {
         try {
           const parsed = JSON.parse(text);
-          if (parsed?.error) return String(parsed.error);
+          if (parsed?.code) return friendlyAccountError(String(parsed.code), parsed?.error);
+          if (parsed?.error) return friendlyAccountError(undefined, String(parsed.error));
         } catch { }
         return text;
       }
     } catch { }
   }
-  return msg;
+  return friendlyAccountError(undefined, msg);
+}
+
+function friendlyAccountError(code?: string, rawMessage?: unknown): string {
+  const message = String(rawMessage || "");
+  const messages: Record<string, string> = {
+    USERNAME_TAKEN: "اسم المستخدم مستخدم بالفعل. اختر اسم مستخدم آخر.",
+    INVALID_USERNAME: "اسم المستخدم غير صالح. استخدم أحرفًا إنجليزية وأرقامًا، ويمكن استخدام النقطة أو الشرطة.",
+    WEAK_PASSWORD: "كلمة المرور ضعيفة. استخدم 8 أحرف على الأقل مع أرقام وحروف.",
+    INVALID_ACCOUNT_DATA: "بعض بيانات الحساب ناقصة أو غير صالحة. راجع الحقول المطلوبة.",
+    MILL_NOT_FOUND: "لم يتم العثور على المعصرة المرتبطة بهذا الحساب.",
+    UNAUTHORIZED: "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+    ACCOUNT_CREATE_FAILED: "تعذر إنشاء الحساب. لم يتم حفظ أي حساب جزئي؛ راجع البيانات وحاول مجددًا.",
+    ACCOUNT_UPDATE_FAILED: "تعذر تحديث الحساب. راجع البيانات وحاول مجددًا.",
+  };
+  if (code && messages[code]) return messages[code];
+
+  if (/idx_profiles_mill_code_unique|mill_code.*unique|duplicate key|already.*registered|email.*exists/i.test(message)) {
+    return messages.USERNAME_TAKEN;
+  }
+  if (/password.*(weak|short)|weak_password/i.test(message)) return messages.WEAK_PASSWORD;
+  if (/check constraint|invalid input|violates.*check/i.test(message)) return messages.INVALID_ACCOUNT_DATA;
+  return message || "حدث خطأ غير متوقع. حاول مرة أخرى، وإذا استمرت المشكلة تواصل مع الدعم الفني.";
 }
 
 /**
@@ -280,7 +304,7 @@ export async function createMillOwnerAccount(params: {
   }
 
   if (edgeData?.error) {
-    throw new Error(edgeData.error);
+    throw new Error(friendlyAccountError(edgeData.code, edgeData.error));
   }
 
   if (edgeData?.success) {
@@ -330,7 +354,7 @@ export async function createEmployeeAccount(params: {
   }
 
   if (edgeData?.error) {
-    throw new Error(edgeData.error);
+    throw new Error(friendlyAccountError(edgeData.code, edgeData.error));
   }
 
   if (edgeData?.success) {
