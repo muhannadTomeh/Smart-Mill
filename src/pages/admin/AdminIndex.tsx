@@ -89,7 +89,7 @@ export default function AdminIndex() {
   const pinHideTimersRef = useRef<Record<string, any>>({});
 
   const [editingAccount, setEditingAccount] = useState<AdminAccountItem | null>(null);
-  const [editAccountForm, setEditAccountForm] = useState({ name: "", username: "", password: "" });
+  const [editAccountForm, setEditAccountForm] = useState({ name: "", username: "", password: "", millName: "" });
   const [showEditAccountPassword, setShowEditAccountPassword] = useState(false);
   const [savingAccountEdit, setSavingAccountEdit] = useState(false);
 
@@ -368,6 +368,7 @@ export default function AdminIndex() {
       name: acc.display_name,
       username: acc.username,
       password: pass,
+      millName: acc.role === "mill_owner" ? (acc.mill_name || "") : "",
     });
     setShowEditAccountPassword(false);
   };
@@ -385,7 +386,8 @@ export default function AdminIndex() {
         editingAccount.user_id,
         editAccountForm.name.trim(),
         editAccountForm.username.trim(),
-        editAccountForm.password.trim() || undefined
+        editAccountForm.password.trim() || undefined,
+        editingAccount.role === "mill_owner" ? editAccountForm.millName.trim() : undefined
       );
 
       if (editAccountForm.password.trim()) {
@@ -1446,6 +1448,17 @@ export default function AdminIndex() {
                 className="text-right h-9 text-sm"
               />
             </div>
+            {editingAccount?.role === "mill_owner" && (
+              <div className="space-y-1.5">
+                <Label className="text-right block text-xs font-semibold">اسم المعصرة *</Label>
+                <Input
+                  value={editAccountForm.millName}
+                  onChange={(e) => setEditAccountForm((p) => ({ ...p, millName: e.target.value }))}
+                  className="text-right h-9 text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground">هذا الحقل يغيّر اسم المعصرة فقط، ولا يغيّر اسم المستخدم للدخول.</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-right block text-xs font-semibold">اسم المستخدم للدخول (Username) *</Label>
               <Input

@@ -596,7 +596,7 @@ serve(async (req) => {
     // ACTION: UPDATE_USER
     // ==========================================
     if (action === 'update_user') {
-      const { user_id: targetUserId, display_name: rawName, username: rawUsername, password: rawPassword } = body;
+      const { user_id: targetUserId, display_name: rawName, username: rawUsername, password: rawPassword, mill_name: rawMillName } = body;
 
       if (!targetUserId) {
         return new Response(
@@ -612,6 +612,46 @@ serve(async (req) => {
           JSON.stringify({ error: 'غير مصرح لك بتعديل بيانات هذا الحساب' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
+      }
+
+      // A mill name is stored on the canonical `mills` record. Do not confuse
+      // it with the owner's username used for login.
+      if (rawMillName !== undefined) {
+        const millName = String(rawMillName || '').trim();
+        if (!isPlatformAdmin) {
+          return new Response(
+            JSON.stringify({ error: 'غير مصرح لك بتعديل اسم المعصرة' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        if (!millName || millName.length > 120) {
+          return new Response(
+            JSON.stringify({ error: 'اسم المعصرة مطلوب ويجب ألا يتجاوز 120 حرفاً' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data: ownerMembership, error: ownerMembershipError } = await supabaseAdmin
+          .from('mill_memberships')
+          .select('mill_id')
+          .eq('user_id', targetUserId)
+          .eq('role', 'mill_owner')
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (ownerMembershipError || !ownerMembership?.mill_id) {
+          return new Response(
+            JSON.stringify({ error: 'لم يتم العثور على معصرة مرتبطة بهذا الحساب' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const [{ error: millError }, { error: profileError }] = await Promise.all([
+          supabaseAdmin.from('mills').update({ name: millName, updated_at: new Date().toISOString() }).eq('id', ownerMembership.mill_id),
+          supabaseAdmin.from('profiles').update({ mill_name: millName, updated_at: new Date().toISOString() }).eq('user_id', targetUserId),
+        ]);
+
+        if (millError || profileError) throw millError || profileError;
       }
 
       const updates: any = {};

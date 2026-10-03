@@ -380,7 +380,8 @@ export async function updateUserAccount(
   userId: string,
   displayName: string,
   username: string,
-  password?: string
+  password?: string,
+  millName?: string
 ): Promise<void> {
   const cleanUsername = username.trim();
   const cleanName = displayName.trim();
@@ -394,7 +395,8 @@ export async function updateUserAccount(
         user_id: userId,
         display_name: cleanName,
         username: cleanUsername,
-        password: cleanPass || undefined
+        password: cleanPass || undefined,
+        mill_name: millName?.trim() || undefined
       }
     });
 
@@ -410,6 +412,12 @@ export async function updateUserAccount(
   }
 
   // 2. Fallback: Database RPC
+  // Renaming a mill must go through the authorized Edge Function so the
+  // canonical `mills` row and the owner's profile change together.
+  if (millName?.trim()) {
+    throw new Error("تعذر تحديث اسم المعصرة عبر الخادم. يرجى المحاولة لاحقاً.");
+  }
+
   try {
     const { error } = await supabase.rpc('admin_update_user_credentials', {
       p_user_id: userId,
