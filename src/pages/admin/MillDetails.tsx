@@ -25,6 +25,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeUsernameToEmail, getDisplayUsername } from "@/lib/authUtils";
 import {
+  getCashReturnPricingLabel,
+  normalizeCashReturnPricingMode,
+} from "@/lib/cashReturnPricing";
+import {
   revealCredential,
   updateUserAccount,
   deleteUserAccount,
@@ -831,6 +835,9 @@ export default function MillDetails() {
               <div>
                 <p className="font-bold text-base">{millData.currentSeason.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">نسبة الرد: {millData.currentSeason.return_percent}%</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  الرد النقدي: {getCashReturnPricingLabel(normalizeCashReturnPricingMode(millData.currentSeason.cash_return_pricing_mode))}
+                </p>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">لا يوجد موسم نشط</p>

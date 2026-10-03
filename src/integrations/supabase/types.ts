@@ -2009,6 +2009,7 @@ export type Database = {
       seasons: {
         Row: {
           cash_return_cost: number
+          cash_return_pricing_mode: string
           created_at: string
           display_settings: Json | null
           end_date: string | null
@@ -2027,6 +2028,7 @@ export type Database = {
         }
         Insert: {
           cash_return_cost?: number
+          cash_return_pricing_mode?: string
           created_at?: string
           display_settings?: Json | null
           end_date?: string | null
@@ -2045,6 +2047,7 @@ export type Database = {
         }
         Update: {
           cash_return_cost?: number
+          cash_return_pricing_mode?: string
           created_at?: string
           display_settings?: Json | null
           end_date?: string | null
@@ -2918,6 +2921,8 @@ export type Database = {
       get_public_season_display: {
         Args: { p_season_id: string }
         Returns: {
+          cash_return_cost: number
+          cash_return_pricing_mode: string
           display_settings: Json
           metal_container_price: number
           name: string

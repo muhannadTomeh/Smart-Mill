@@ -2,6 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { parseEstimatedMinutes, parseStartedAt } from "@/lib/queueUtils";
+import {
+  getCashReturnPricingLabel,
+  normalizeCashReturnPricingMode,
+} from "@/lib/cashReturnPricing";
 
 
 interface QueueItem {
@@ -27,6 +31,8 @@ interface SeasonInfo {
   oil_buy_price: number;
   oil_sell_price: number;
   return_percent: number;
+  cash_return_cost: number;
+  cash_return_pricing_mode: string;
   plastic_container_price: number;
   metal_container_price: number;
   display_settings?: DisplaySettings | null;
@@ -193,8 +199,15 @@ export default function PublicQueueDisplay() {
       return displaySettings.custom_faqs;
     }
     if (season) {
+      const cashPricingMode = normalizeCashReturnPricingMode(
+        season.cash_return_pricing_mode,
+      );
+      const cashPricingDescription = cashPricingMode === "fixed_per_produced_kg"
+        ? `${season.cash_return_cost} ₪ لكل كغم زيت منتج`
+        : getCashReturnPricingLabel(cashPricingMode);
       return [
         { q: "كيف يُحسب الرد؟", a: `${season.return_percent}% من كمية الزيت المنتج` },
+        { q: "كيف يُحسب الرد النقدي؟", a: cashPricingDescription },
         { q: "سعر تنكة البلاستيك؟", a: `${season.plastic_container_price} ₪` },
         { q: "سعر تنكة الحديد؟", a: `${season.metal_container_price} ₪` },
         { q: "هل يمكن تأجيل الدور؟", a: "نعم، بالتنسيق مع مسؤول الطابور" },

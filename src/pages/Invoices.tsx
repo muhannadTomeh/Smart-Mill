@@ -35,6 +35,11 @@ import {
   calculateCustomMixedFromOil,
   type PaymentBreakdown
 } from "@/lib/invoiceCalculations";
+import {
+  calculateCashReturnAmount,
+  calculateOilReturnQuantity,
+  getCashReturnPricingLabel,
+} from "@/lib/cashReturnPricing";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
 
@@ -542,10 +547,10 @@ export default function Invoices() {
                 {invoiceData.oilProduced > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
                     <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                      {((invoiceData.oilProduced * settings.return_percent) / 100).toFixed(2)} كغم
+                      {calculateOilReturnQuantity(invoiceData.oilProduced, settings.return_percent).toFixed(2)} كغم
                     </Badge>
                     <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                      {(invoiceData.oilProduced * settings.cash_return_cost).toFixed(2)} {currency}
+                      {calculateCashReturnAmount(invoiceData.oilProduced, settings).toFixed(2)} {currency}
                     </Badge>
                   </div>
                 )}
@@ -668,7 +673,7 @@ export default function Invoices() {
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-bold text-foreground">طريقة دفع الأجرة</Label>
                   <span className="text-xs text-primary font-semibold">
-                    نسبة الرد: {settings.return_percent}% | سعر الكاش: {settings.cash_return_cost} {currency}
+                    نسبة الرد: {settings.return_percent}% | {getCashReturnPricingLabel(settings.cash_return_pricing_mode)}
                   </span>
                 </div>
 

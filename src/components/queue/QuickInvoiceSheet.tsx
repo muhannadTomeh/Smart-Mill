@@ -17,6 +17,10 @@ import { useInventory } from "@/hooks/useInventory";
 import { useCurrency } from "@/hooks/useCurrency";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
+import {
+  calculateCashReturnAmount,
+  calculateOilReturnQuantity,
+} from "@/lib/cashReturnPricing";
 
 interface ContainerType {
   id: string;
@@ -317,10 +321,10 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
               {oilProduced > 0 && (
                 <div className="ms-auto flex items-center gap-1.5 flex-wrap justify-end">
                   <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                    {((oilProduced * settings.return_percent) / 100).toFixed(2)} كغم
+                    {calculateOilReturnQuantity(oilProduced, settings.return_percent).toFixed(2)} كغم
                   </Badge>
                   <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                    {(oilProduced * settings.cash_return_cost).toFixed(2)} {currency}
+                    {calculateCashReturnAmount(oilProduced, settings).toFixed(2)} {currency}
                   </Badge>
                 </div>
               )}

@@ -12,6 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Settings as SettingsIcon, Save, Plus, Trash2, Key, LogOut,
   ShieldCheck, Building2, MapPin, User, Phone, Globe, UserCheck,
@@ -28,6 +29,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { Link, useSearchParams } from "react-router-dom";
 import { storeCredential } from "@/lib/credentialVault";
+import {
+  calculateCashReturnAmount,
+  calculateOilReturnQuantity,
+  DEFAULT_CASH_RETURN_PRICING_MODE,
+  normalizeCashReturnPricingMode,
+  type CashReturnPricingMode,
+} from "@/lib/cashReturnPricing";
 
 import {
   DynamicDisplayItem,
@@ -129,11 +137,18 @@ export default function Settings() {
   });
   const [savingProfile, setSavingProfile] = useState(false);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    return_percent: string;
+    oil_sell_price: string;
+    oil_buy_price: string;
+    cash_return_cost: string;
+    cash_return_pricing_mode: CashReturnPricingMode;
+  }>({
     return_percent: "",
     oil_sell_price: "",
     oil_buy_price: "",
-    cash_return_cost: ""
+    cash_return_cost: "",
+    cash_return_pricing_mode: DEFAULT_CASH_RETURN_PRICING_MODE,
   });
 
 
@@ -500,6 +515,9 @@ export default function Settings() {
       oil_sell_price: String(activeSeason.oil_sell_price ?? ""),
       oil_buy_price: String(activeSeason.oil_buy_price ?? ""),
       cash_return_cost: String(activeSeason.cash_return_cost ?? ""),
+      cash_return_pricing_mode: normalizeCashReturnPricingMode(
+        activeSeason.cash_return_pricing_mode,
+      ),
     });
   }, [activeSeason?.id]);
 
@@ -552,12 +570,27 @@ export default function Settings() {
 
   const saveSettings = async () => {
     if (!activeSeason) return;
+    const numericValues = [
+      form.return_percent,
+      form.oil_sell_price,
+      form.oil_buy_price,
+      form.cash_return_cost,
+    ].map(Number);
+    if (numericValues.some((value) => !Number.isFinite(value) || value < 0)) {
+      toast({
+        title: "تعذر الحفظ",
+        description: "يجب إدخال قيم رقمية صحيحة وغير سالبة للأسعار ونسبة الرد.",
+        variant: "destructive",
+      });
+      return;
+    }
     setCurrency(selectedCurrency);
     const { error } = await supabase.from("seasons").update({
-      return_percent: parseFloat(form.return_percent),
-      oil_sell_price: parseFloat(form.oil_sell_price),
-      oil_buy_price: parseFloat(form.oil_buy_price),
-      cash_return_cost: parseFloat(form.cash_return_cost),
+      return_percent: numericValues[0],
+      oil_sell_price: numericValues[1],
+      oil_buy_price: numericValues[2],
+      cash_return_cost: numericValues[3],
+      cash_return_pricing_mode: form.cash_return_pricing_mode,
     }).eq("id", activeSeason.id);
     if (error) {
       toast({
@@ -761,6 +794,22 @@ export default function Settings() {
       setSearchParams({});
     }
   };
+
+  const cashReturnPreviewSettings = {
+    return_percent: Number(form.return_percent) || 0,
+    oil_sell_price: Number(form.oil_sell_price) || 0,
+    oil_buy_price: Number(form.oil_buy_price) || 0,
+    cash_return_cost: Number(form.cash_return_cost) || 0,
+    cash_return_pricing_mode: form.cash_return_pricing_mode,
+  };
+  const cashReturnPreviewOil = calculateOilReturnQuantity(
+    100,
+    cashReturnPreviewSettings.return_percent,
+  );
+  const cashReturnPreviewAmount = calculateCashReturnAmount(
+    100,
+    cashReturnPreviewSettings,
+  );
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12" dir="rtl">
@@ -1150,9 +1199,9 @@ export default function Settings() {
             <CardDescription>الثوابت المستخدمة في حساب الفواتير ونسب الرد والأسعار</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pt-6">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="max-w-xl space-y-2">
               <div className="space-y-2">
-                <Label className="text-xs font-semibold">نسبة الرد (%)</Label>
+                <Label className="text-xs font-semibold">نسبة الرد بالزيت (%)</Label>
                 <Input
                   type="number"
                   value={form.return_percent}
@@ -1162,17 +1211,92 @@ export default function Settings() {
                   className="rounded-xl"
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold">تكلفة الرد نقداً ({selectedCurrency}/كغم)</Label>
-                <Input
-                  type="number"
-                  value={form.cash_return_cost}
-                  onChange={(e) => setForm((p) => ({ ...p, cash_return_cost: e.target.value }))}
-                  min="0"
-                  step="0.1"
-                  className="rounded-xl"
-                />
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <Label className="font-bold">طريقة حساب تكلفة الرد عند الدفع النقدي</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  اختر معادلة واحدة. تتحدث النتيجة فورًا عند تغيير نسبة الرد أو أسعار الزيت.
+                </p>
               </div>
+              <RadioGroup
+                value={form.cash_return_pricing_mode}
+                onValueChange={(value) =>
+                  setForm((previous) => ({
+                    ...previous,
+                    cash_return_pricing_mode: value as CashReturnPricingMode,
+                  }))
+                }
+                className="grid gap-3 lg:grid-cols-3"
+              >
+                <Label
+                  htmlFor="cash-return-fixed"
+                  className={cn(
+                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 transition-colors",
+                    form.cash_return_pricing_mode === "fixed_per_produced_kg"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50",
+                  )}
+                >
+                  <span className="flex items-center gap-2 font-semibold">
+                    <RadioGroupItem id="cash-return-fixed" value="fixed_per_produced_kg" />
+                    مبلغ ثابت لكل كغم زيت منتج
+                  </span>
+                  <Input
+                    type="number"
+                    value={form.cash_return_cost}
+                    onChange={(event) =>
+                      setForm((previous) => ({ ...previous, cash_return_cost: event.target.value }))
+                    }
+                    onClick={(event) => event.stopPropagation()}
+                    min="0"
+                    step="0.1"
+                    disabled={form.cash_return_pricing_mode !== "fixed_per_produced_kg"}
+                    aria-label={`التكلفة الثابتة (${selectedCurrency}/كغم زيت منتج)`}
+                    className="rounded-xl"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    كمية الزيت المنتج × {form.cash_return_cost || "0"} {selectedCurrency}
+                  </span>
+                </Label>
+
+                <Label
+                  htmlFor="cash-return-buy-price"
+                  className={cn(
+                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 transition-colors",
+                    form.cash_return_pricing_mode === "oil_return_at_buy_price"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50",
+                  )}
+                >
+                  <span className="flex items-center gap-2 font-semibold">
+                    <RadioGroupItem id="cash-return-buy-price" value="oil_return_at_buy_price" />
+                    حسب سعر شراء الزيت
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    كمية الرد بالزيت × {form.oil_buy_price || "0"} {selectedCurrency}
+                  </span>
+                </Label>
+
+                <Label
+                  htmlFor="cash-return-sell-price"
+                  className={cn(
+                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 transition-colors",
+                    form.cash_return_pricing_mode === "oil_return_at_sell_price"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50",
+                  )}
+                >
+                  <span className="flex items-center gap-2 font-semibold">
+                    <RadioGroupItem id="cash-return-sell-price" value="oil_return_at_sell_price" />
+                    حسب سعر بيع الزيت
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    كمية الرد بالزيت × {form.oil_sell_price || "0"} {selectedCurrency}
+                  </span>
+                </Label>
+              </RadioGroup>
             </div>
 
             <Separator />
@@ -1200,6 +1324,15 @@ export default function Settings() {
                   className="rounded-xl"
                 />
               </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+              <p className="font-bold">مثال مباشر على إنتاج 100 كغم زيت</p>
+              <p className="mt-1 text-muted-foreground">
+                رد الزيت: <strong className="text-foreground">{cashReturnPreviewOil.toFixed(2)} كغم</strong>
+                {" · "}
+                الرد النقدي: <strong className="text-foreground">{cashReturnPreviewAmount.toFixed(2)} {selectedCurrency}</strong>
+              </p>
             </div>
 
             <div className="pt-2 flex items-center justify-between border-t border-border/50">

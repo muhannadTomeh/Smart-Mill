@@ -1,4 +1,8 @@
 import type { MillSettings } from "@/hooks/useSettings";
+import {
+  calculateCashReturnAmount,
+  calculateOilReturnQuantity,
+} from "@/lib/cashReturnPricing";
 
 export type PaymentType = "oil" | "cash" | "mixed";
 
@@ -27,10 +31,10 @@ export function calculatePaymentOptions(
   containerCost: number,
   settings: MillSettings
 ): PaymentOptions {
-  const oilReturn = (oilProduced * settings.return_percent) / 100;
+  const oilReturn = calculateOilReturnQuantity(oilProduced, settings.return_percent);
   const containerOilEquiv = containerCost / settings.oil_buy_price;
   const totalOilPayment = oilReturn + containerOilEquiv;
-  const cashReturn = oilProduced * settings.cash_return_cost;
+  const cashReturn = calculateCashReturnAmount(oilProduced, settings);
   const totalCashPayment = cashReturn + containerCost;
 
   return {
@@ -75,10 +79,10 @@ export function calculateCustomMixedFromOil(
   settings: MillSettings,
   customOil: number
 ): PaymentBreakdown {
-  const oilReturn = (oilProduced * settings.return_percent) / 100;
+  const oilReturn = calculateOilReturnQuantity(oilProduced, settings.return_percent);
   const containerOilEquiv = settings.oil_buy_price > 0 ? containerCost / settings.oil_buy_price : 0;
   const totalOilPayment = oilReturn + containerOilEquiv;
-  const cashReturn = oilProduced * settings.cash_return_cost;
+  const cashReturn = calculateCashReturnAmount(oilProduced, settings);
 
   const pressingCashRate = oilReturn > 0 ? cashReturn / oilReturn : (settings.oil_sell_price || 25);
   const containerCashRate = settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 23);
@@ -115,10 +119,10 @@ export function calculateCustomMixedFromCash(
   settings: MillSettings,
   customCash: number
 ): PaymentBreakdown {
-  const oilReturn = (oilProduced * settings.return_percent) / 100;
+  const oilReturn = calculateOilReturnQuantity(oilProduced, settings.return_percent);
   const containerOilEquiv = settings.oil_buy_price > 0 ? containerCost / settings.oil_buy_price : 0;
   const totalOilPayment = oilReturn + containerOilEquiv;
-  const cashReturn = oilProduced * settings.cash_return_cost;
+  const cashReturn = calculateCashReturnAmount(oilProduced, settings);
   const totalCashPayment = cashReturn + containerCost;
 
   const pressingCashRate = oilReturn > 0 ? cashReturn / oilReturn : (settings.oil_sell_price || 25);

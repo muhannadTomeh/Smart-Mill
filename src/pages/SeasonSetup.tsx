@@ -9,6 +9,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DEFAULT_CASH_RETURN_PRICING_MODE,
+  normalizeCashReturnPricingMode,
+} from "@/lib/cashReturnPricing";
 
 export default function SeasonSetup() {
   const { user, millId } = useAuth();
@@ -26,6 +30,7 @@ export default function SeasonSetup() {
     oil_sell_price: "25",
     oil_buy_price: "23",
     cash_return_cost: "1.5",
+    cash_return_pricing_mode: DEFAULT_CASH_RETURN_PRICING_MODE,
     plastic_container_price: "10",
     metal_container_price: "15",
   });
@@ -43,6 +48,9 @@ export default function SeasonSetup() {
           oil_sell_price: String(season.oil_sell_price),
           oil_buy_price: String(season.oil_buy_price),
           cash_return_cost: String(season.cash_return_cost),
+          cash_return_pricing_mode: normalizeCashReturnPricingMode(
+            season.cash_return_pricing_mode,
+          ),
           plastic_container_price: String(season.plastic_container_price),
           metal_container_price: String(season.metal_container_price),
         });
@@ -55,6 +63,9 @@ export default function SeasonSetup() {
         oil_sell_price: String(last.oil_sell_price ?? 25),
         oil_buy_price: String(last.oil_buy_price ?? 23),
         cash_return_cost: String(last.cash_return_cost ?? 1.5),
+        cash_return_pricing_mode: normalizeCashReturnPricingMode(
+          last.cash_return_pricing_mode,
+        ),
         plastic_container_price: String(last.plastic_container_price ?? 10),
         metal_container_price: String(last.metal_container_price ?? 15),
       }));
@@ -78,6 +89,7 @@ export default function SeasonSetup() {
       oil_sell_price: parseFloat(form.oil_sell_price) || 25,
       oil_buy_price: parseFloat(form.oil_buy_price) || 23,
       cash_return_cost: parseFloat(form.cash_return_cost) || 1.5,
+      cash_return_pricing_mode: form.cash_return_pricing_mode,
       plastic_container_price: parseFloat(form.plastic_container_price) || 10,
       metal_container_price: parseFloat(form.metal_container_price) || 15,
     };

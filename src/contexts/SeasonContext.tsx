@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { CashReturnPricingMode } from "@/lib/cashReturnPricing";
 
 export interface Season {
   id: string;
@@ -14,6 +15,7 @@ export interface Season {
   oil_sell_price: number;
   oil_buy_price: number;
   cash_return_cost: number;
+  cash_return_pricing_mode?: CashReturnPricingMode;
   plastic_container_price: number;
   metal_container_price: number;
   created_at: string;

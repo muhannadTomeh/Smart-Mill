@@ -13,7 +13,7 @@ export default defineTool({
     const supabase = supabaseForUser(ctx);
     const { data, error } = await supabase
       .from("seasons")
-      .select("id,name,status,start_date,end_date,return_percent,oil_buy_price,oil_sell_price,cash_return_cost,plastic_container_price,metal_container_price")
+      .select("id,name,status,start_date,end_date,return_percent,oil_buy_price,oil_sell_price,cash_return_cost,cash_return_pricing_mode,plastic_container_price,metal_container_price")
       .order("created_at", { ascending: false });
     if (error) return errorResult(error.message);
     return textResult({ seasons: data ?? [] });
