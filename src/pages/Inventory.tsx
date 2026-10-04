@@ -314,30 +314,36 @@ const Inventory = () => {
   };
 
   const fetchProductsData = async () => {
+    if (!activeSeason) return;
     setLoadingProducts(true);
     const purchaseStartDate = new Date(`${purchaseDate}T00:00:00`);
     const purchaseEndDate = new Date(`${purchaseDate}T00:00:00`);
     purchaseEndDate.setDate(purchaseEndDate.getDate() + 1);
     try {
-      const [prodsRes, supsRes, partsRes, movesRes, purchasesRes, salesRes] = await Promise.all([
-        supabase.from("products" as any).select("*").eq("active", true).order("name"),
+      const effectiveMillId = millId || activeSeason.mill_id;
+      const [prodsRes, balancesRes, supsRes, partsRes, movesRes, purchasesRes, salesRes] = await Promise.all([
+        supabase.from("products" as any).select("*").eq("mill_id", effectiveMillId).eq("active", true).order("name"),
+        supabase.from("product_season_balances" as any)
+          .select("product_id, current_stock")
+          .eq("mill_id", effectiveMillId)
+          .eq("season_id", activeSeason.id),
         supabase.from("suppliers" as any).select("id, name").eq("active", true).order("name"),
         supabase.from("partners" as any).select("id, name").eq("active", true).order("name"),
         supabase.from("product_stock_movements" as any)
           .select("*, products(name, unit)")
-          .eq("season_id", activeSeason?.id ?? "00000000-0000-0000-0000-000000000000")
+          .eq("season_id", activeSeason.id)
           .order("created_at", { ascending: false })
           .limit(50),
         supabase.from("product_purchases" as any)
           .select("*, products(name, unit), suppliers(name), partners(name)")
-          .eq("season_id", activeSeason?.id ?? "00000000-0000-0000-0000-000000000000")
+          .eq("season_id", activeSeason.id)
           .gte("created_at", purchaseStartDate.toISOString())
           .lt("created_at", purchaseEndDate.toISOString())
           .order("created_at", { ascending: false }),
 
         (supabase.from("product_sales" as any) as any)
           .select("*, products(name, unit)")
-          .eq("season_id", activeSeason?.id ?? "00000000-0000-0000-0000-000000000000")
+          .eq("season_id", activeSeason.id)
           .order("created_at", { ascending: false })
           .limit(50),
 
@@ -346,7 +352,24 @@ const Inventory = () => {
       ]);
 
 
-      if (prodsRes.data) setProducts(prodsRes.data as any);
+      if (prodsRes.error) throw prodsRes.error;
+      if (balancesRes.error) throw balancesRes.error;
+
+      const stockByProduct = new Map(
+        ((balancesRes.data || []) as Array<{ product_id: string; current_stock: number }>).map((balance) => [
+          balance.product_id,
+          Number(balance.current_stock) || 0,
+        ]),
+      );
+
+      if (prodsRes.data) {
+        setProducts(
+          (prodsRes.data as unknown as Product[]).map((product) => ({
+            ...product,
+            current_stock: stockByProduct.get(product.id) ?? 0,
+          })),
+        );
+      }
       if (supsRes.data) setSuppliers(supsRes.data as any);
       if (partsRes.data) setPartners(partsRes.data as any);
       if (movesRes.data) setStockMovements(movesRes.data as any);

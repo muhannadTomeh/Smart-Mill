@@ -53,7 +53,7 @@ export default function Dashboard() {
     if (!activeSeason) return;
     const effectiveMillId = millId || activeSeason.mill_id;
     const today = new Date().toISOString().split("T")[0];
-    const [waitingRes, doneQueueRes, doneInvoiceRes, expenseRes, productsRes] = await Promise.all([supabase
+    const [waitingRes, doneQueueRes, doneInvoiceRes, expenseRes, productsRes, productBalancesRes] = await Promise.all([supabase
       .from("queue")
       .select("id", { count: "exact", head: true })
       .eq("season_id", activeSeason.id)
@@ -78,17 +78,28 @@ export default function Dashboard() {
       .gte("created_at", today),
     supabase
       .from("products" as any)
-      .select("id,current_stock")
+      .select("id")
       .eq("mill_id", effectiveMillId)
       .eq("active", true),
+    supabase
+      .from("product_season_balances" as any)
+      .select("product_id,current_stock")
+      .eq("mill_id", effectiveMillId)
+      .eq("season_id", activeSeason.id),
 
     ]);
 
     const doneCount = Math.max(doneQueueRes.count || 0, doneInvoiceRes.count || 0);
     const products = (productsRes.data || []) as any[];
+    const stockByProduct = new Map(
+      ((productBalancesRes.data || []) as any[]).map((balance) => [
+        balance.product_id,
+        Number(balance.current_stock) || 0,
+      ]),
+    );
     const productCount = products.length;
     const lowStockCount = products.filter(
-      (p) => Number(p.current_stock) <= 5
+      (p) => (stockByProduct.get(p.id) ?? 0) <= 5
     ).length;
 
     setStats({
@@ -153,6 +164,18 @@ export default function Dashboard() {
         () => {
           void fetchStats();
         }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "product_stock_movements",
+          filter: `season_id=eq.${activeSeason.id}`,
+        },
+        () => {
+          void fetchStats();
+        },
       )
       .subscribe();
 
