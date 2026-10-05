@@ -389,6 +389,7 @@ export type Database = {
       customers: {
         Row: {
           active: boolean
+          available_in_invoices: boolean
           created_at: string
           id: string
           mill_id: string | null
@@ -400,6 +401,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          available_in_invoices?: boolean
           created_at?: string
           id?: string
           mill_id?: string | null
@@ -411,6 +413,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          available_in_invoices?: boolean
           created_at?: string
           id?: string
           mill_id?: string | null

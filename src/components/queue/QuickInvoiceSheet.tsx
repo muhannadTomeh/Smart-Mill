@@ -33,6 +33,7 @@ interface ContainerType {
   id: string;
   name: string;
   default_sale_price: number;
+  current_stock: number;
 }
 
 interface QuickInvoiceSheetProps {
@@ -80,18 +81,47 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
 
   const fetchContainerTypes = async () => {
     if (!activeSeason) return;
-    const { data } = await supabase
-      .from("products" as any)
-      .select("id, name, default_sale_price")
-      .eq("product_type", "container")
-      .eq("active", true)
-      .eq("mill_id", activeSeason.mill_id)
-      .order("created_at", { ascending: true });
-    const types = (data as ContainerType[]) || [];
-    setContainerTypes(types);
-    const counts: Record<string, number> = {};
-    types.forEach((t) => (counts[t.id] = 0));
-    setContainerCounts(counts);
+    try {
+      const [productsResult, balancesResult] = await Promise.all([
+        supabase
+          .from("products" as any)
+          .select("id, name, default_sale_price")
+          .eq("available_in_invoices", true)
+          .eq("active", true)
+          .eq("mill_id", activeSeason.mill_id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("product_season_balances" as any)
+          .select("product_id, current_stock")
+          .eq("mill_id", activeSeason.mill_id)
+          .eq("season_id", activeSeason.id),
+      ]);
+
+      if (productsResult.error) throw productsResult.error;
+      if (balancesResult.error) throw balancesResult.error;
+
+      const stockByProduct = new Map(
+        ((balancesResult.data || []) as Array<{ product_id: string; current_stock: number }>).map(
+          (balance) => [balance.product_id, Number(balance.current_stock) || 0],
+        ),
+      );
+      const types = ((productsResult.data || []) as Omit<ContainerType, "current_stock">[]).map(
+        (product) => ({
+          ...product,
+          default_sale_price: Number(product.default_sale_price) || 0,
+          current_stock: stockByProduct.get(product.id) ?? 0,
+        }),
+      );
+      setContainerTypes(types);
+      const counts: Record<string, number> = {};
+      types.forEach((type) => (counts[type.id] = 0));
+      setContainerCounts(counts);
+    } catch (error) {
+      console.error("fetch invoice products error", error);
+      toast.error("تعذر تحميل أصناف الفاتورة", {
+        description: getArabicErrorMessage(error, "تعذر تحميل الأصناف المتاحة في الفاتورة."),
+      });
+    }
   };
 
   const totalContainerCost = useMemo(() => {
@@ -118,7 +148,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
     return containerTypes
       .filter((ct) => (containerCounts[ct.id] || 0) > 0)
       .map((ct) => `${containerCounts[ct.id]} ${ct.name}`)
-      .join(" + ") || "بدون تنكات";
+      .join(" + ") || "بدون أصناف إضافية";
   }, [containerTypes, containerCounts]);
 
   const calc = useMemo(() => {
@@ -139,7 +169,12 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
   }, [oilProduced, totalContainerCost, settings, customMixedOil, currency]);
 
   const adjustContainer = (id: string, delta: number) => {
-    setContainerCounts((p) => ({ ...p, [id]: Math.max(0, (p[id] || 0) + delta) }));
+    const product = containerTypes.find((item) => item.id === id);
+    const maximum = product?.current_stock ?? 0;
+    setContainerCounts((current) => ({
+      ...current,
+      [id]: Math.min(maximum, Math.max(0, (current[id] || 0) + delta)),
+    }));
   };
 
   const addOil = (delta: number) => setOilProduced((v) => Math.max(0, +(v + delta).toFixed(2)));
@@ -379,7 +414,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
           <div className="space-y-3 rounded-xl border bg-card p-5">
             <div className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">2</span>
-              <Label className="text-lg font-semibold">التنكات</Label>
+              <Label className="text-lg font-semibold">التنكات والأصناف</Label>
               {totalContainerCost > 0 && (
                 <div className="ms-auto flex items-center gap-1.5 flex-wrap justify-end">
                   <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
@@ -392,21 +427,31 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
               )}
             </div>
             {containerTypes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">أضف أنواع تنكات من الإعدادات</p>
+              <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                لا توجد أصناف مفعّلة للفواتير. من صفحة «المخزون والبضائع» اختر
+                الصنف واضغط «إضافة إلى الفاتورة».
+              </p>
             ) : (
               <div className="space-y-2">
                 {containerTypes.map((ct) => (
                   <div key={ct.id} className="flex items-center gap-3 rounded-lg bg-muted/40 p-3">
                     <div className="flex-1">
                       <p className="font-medium">{ct.name}</p>
-                      <p className="text-xs text-muted-foreground">{ct.default_sale_price} {currency} / تنكة</p>
+                      <p className="text-xs text-muted-foreground">{ct.default_sale_price} {currency} / {ct.name}</p>
+                      <p className="text-xs text-muted-foreground">المتوفر هذا الموسم: {ct.current_stock}</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => adjustContainer(ct.id, -1)}>
                         <Minus className="h-4 w-4" />
                       </Button>
                       <span className="w-12 text-center text-xl font-bold">{containerCounts[ct.id] || 0}</span>
-                      <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => adjustContainer(ct.id, +1)}>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        className="h-9 w-9"
+                        onClick={() => adjustContainer(ct.id, +1)}
+                        disabled={(containerCounts[ct.id] || 0) >= ct.current_stock}
+                      >
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>

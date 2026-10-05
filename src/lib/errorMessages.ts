@@ -22,6 +22,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   PRODUCT_STOCK_MOVEMENT_QUANTITY_INVALID: "كمية حركة المخزون غير صحيحة.",
   PRODUCT_STOCK_ADJUSTMENT_INVALID: "أدخل كمية صحيحة غير صفرية لتعديل المخزون.",
   PRODUCT_STOCK_ADJUSTMENT_FORBIDDEN: "تعديل المخزون متاح لمالك المعصرة فقط.",
+  PRODUCT_INVOICE_AVAILABILITY_FORBIDDEN: "إضافة الأصناف إلى الفاتورة أو إخفاؤها متاحة لمالك المعصرة فقط.",
   PRODUCT_PURCHASE_INVALID: "تأكد من أن الكمية وسعر شراء الوحدة أكبر من صفر.",
   PRODUCT_PURCHASE_FORBIDDEN: "شراء البضاعة متاح لمالك المعصرة فقط.",
   PRODUCT_PURCHASE_NOT_FOUND: "عملية شراء البضاعة غير موجودة.",

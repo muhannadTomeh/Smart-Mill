@@ -5,12 +5,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Warehouse, Droplets, Wallet, ArrowUp, ArrowDown,
   ShoppingCart, Calendar,
   Package, Plus, RefreshCw, Layers, Tag,
   Handshake, Users, ArrowUpRight, ArrowDownLeft, Archive,
-  ChevronRight, ChevronLeft
+  ChevronRight, ChevronLeft, Eye, EyeOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -62,6 +63,7 @@ interface Product {
   sale_price?: number;
   current_stock: number;
   active: boolean;
+  available_in_invoices: boolean;
 }
 
 interface ProductMovement {
@@ -191,6 +193,7 @@ const Inventory = () => {
   const [addProductModalOpen, setAddProductModalOpen] = useState(false);
   const [submittingPurchase, setSubmittingPurchase] = useState(false);
   const [savingNewProduct, setSavingNewProduct] = useState(false);
+  const [updatingInvoiceProductId, setUpdatingInvoiceProductId] = useState<string | null>(null);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [submittingSale, setSubmittingSale] = useState(false);
   const [salesHistory, setSalesHistory] = useState<any[]>([]);
@@ -224,6 +227,7 @@ const Inventory = () => {
     unit: "قطعة",
     purchase_price: "0",
     sale_price: "0",
+    available_in_invoices: false,
   });
 
   useEffect(() => {
@@ -394,6 +398,47 @@ const Inventory = () => {
     }
     toast({ title: "تمت الأرشفة", description: `تمت أرشفة ${name} مع الاحتفاظ بالسجل التاريخي.` });
     await fetchProductsData();
+  };
+
+  const setProductInvoiceAvailability = async (product: Product) => {
+    const nextValue = !product.available_in_invoices;
+    setUpdatingInvoiceProductId(product.id);
+
+    try {
+      const { error } = await supabase.rpc(
+        "set_product_invoice_availability_command" as any,
+        {
+          p_product_id: product.id,
+          p_available: nextValue,
+        },
+      );
+
+      if (error) throw error;
+
+      setProducts((current) =>
+        current.map((item) =>
+          item.id === product.id
+            ? { ...item, available_in_invoices: nextValue }
+            : item,
+        ),
+      );
+
+      toast({
+        title: nextValue ? "تمت إضافة الصنف للفواتير" : "تم إخفاء الصنف من الفواتير",
+        description: nextValue
+          ? `سيظهر «${product.name}» في الفاتورة مع رصيده الخاص بالموسم الحالي.`
+          : `لن يظهر «${product.name}» في الفواتير الجديدة، وبقي تاريخه ومخزونه محفوظين.`,
+      });
+    } catch (error) {
+      console.error("setProductInvoiceAvailability error", error);
+      toast({
+        title: "تعذر تحديث ظهور الصنف",
+        description: getArabicErrorMessage(error, "تعذر تحديث ظهور الصنف في الفواتير."),
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingInvoiceProductId(null);
+    }
   };
 
   const cancelPurchase = async (purchase: any) => {
@@ -702,13 +747,22 @@ const Inventory = () => {
         default_sale_price: parseFloat(newProductForm.sale_price) || 0,
         current_stock: 0,
         active: true,
+        available_in_invoices: newProductForm.available_in_invoices,
       });
 
       if (error) throw error;
 
       toast({ title: "تمت الإضافة", description: `تمت إضافة الصنف "${newProductForm.name}" بنجاح.` });
       setAddProductModalOpen(false);
-      setNewProductForm({ name: "", product_type: "goods", description: "", unit: "قطعة", purchase_price: "0", sale_price: "0" });
+      setNewProductForm({
+        name: "",
+        product_type: "goods",
+        description: "",
+        unit: "قطعة",
+        purchase_price: "0",
+        sale_price: "0",
+        available_in_invoices: false,
+      });
       await fetchProductsData();
     } catch (err: any) {
       console.error("submitAddProduct error", err);
@@ -799,7 +853,11 @@ const Inventory = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setNewProductForm((p) => ({ ...p, product_type: "goods" }));
+                  setNewProductForm((p) => ({
+                    ...p,
+                    product_type: "goods",
+                    available_in_invoices: false,
+                  }));
                   setAddProductModalOpen(true);
                 }}
                 className="gap-1.5 rounded-xl text-xs h-9 font-semibold"
@@ -1340,6 +1398,11 @@ const Inventory = () => {
                           <div>
                             <h3 className="text-sm font-bold text-foreground">{p.name}</h3>
                             <span className="text-[11px] text-muted-foreground">الوحدة: {p.unit}</span>
+                            {p.available_in_invoices && (
+                              <Badge variant="outline" className="mt-1 block w-fit border-primary/30 bg-primary/5 text-[10px] text-primary">
+                                يظهر في الفاتورة
+                              </Badge>
+                            )}
                           </div>
                           <Badge
                             className={`text-[10px] ${isLow
@@ -1374,9 +1437,24 @@ const Inventory = () => {
                           </div>
                         </div>
 
-                        <Button variant="ghost" size="sm" className="w-full text-xs text-destructive" onClick={() => void archiveMasterData("product", p.id, p.name)}>
-                          <Archive className="h-3.5 w-3.5 me-1" /> أرشفة الصنف
-                        </Button>
+                        <div className="grid gap-2">
+                          <Button
+                            variant={p.available_in_invoices ? "secondary" : "outline"}
+                            size="sm"
+                            className="w-full text-xs"
+                            disabled={updatingInvoiceProductId === p.id}
+                            onClick={() => void setProductInvoiceAvailability(p)}
+                          >
+                            {p.available_in_invoices ? (
+                              <><EyeOff className="h-3.5 w-3.5 me-1" /> إخفاء من الفاتورة</>
+                            ) : (
+                              <><Eye className="h-3.5 w-3.5 me-1" /> إضافة إلى الفاتورة</>
+                            )}
+                          </Button>
+                          <Button variant="ghost" size="sm" className="w-full text-xs text-destructive" onClick={() => void archiveMasterData("product", p.id, p.name)}>
+                            <Archive className="h-3.5 w-3.5 me-1" /> أرشفة الصنف
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   );
@@ -1892,10 +1970,10 @@ const Inventory = () => {
               <CardDescription>تعريف الصنف لا يغيّر المخزون. الشراء وحده ينشئ حركة توريد ومخزوناً.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Button variant="outline" className="h-auto min-h-20 flex-col gap-2" onClick={() => { setNewProductForm((p) => ({ ...p, product_type: "container", unit: "قطعة" })); setAddProductModalOpen(true); }}>
+              <Button variant="outline" className="h-auto min-h-20 flex-col gap-2" onClick={() => { setNewProductForm((p) => ({ ...p, product_type: "container", unit: "قطعة", available_in_invoices: true })); setAddProductModalOpen(true); }}>
                 <Package className="h-5 w-5" /> + تعريف نوع تنك
               </Button>
-              <Button variant="outline" className="h-auto min-h-20 flex-col gap-2" onClick={() => { setNewProductForm((p) => ({ ...p, product_type: "goods", unit: "قطعة" })); setAddProductModalOpen(true); }}>
+              <Button variant="outline" className="h-auto min-h-20 flex-col gap-2" onClick={() => { setNewProductForm((p) => ({ ...p, product_type: "goods", unit: "قطعة", available_in_invoices: false })); setAddProductModalOpen(true); }}>
                 <Tag className="h-5 w-5" /> + تعريف بضاعة أخرى
               </Button>
               <Button
@@ -2000,6 +2078,27 @@ const Inventory = () => {
                   className="h-10 text-sm rounded-xl font-mono"
                 />
               </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-xl border bg-muted/30 p-3">
+              <div>
+                <Label htmlFor="new-product-invoices" className="text-sm font-semibold">
+                  إظهار الصنف في الفاتورة
+                </Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  سيُباع من داخل فاتورة العصر ويُخصم من مخزون الموسم تلقائيًا.
+                </p>
+              </div>
+              <Switch
+                id="new-product-invoices"
+                checked={newProductForm.available_in_invoices}
+                onCheckedChange={(checked) =>
+                  setNewProductForm((current) => ({
+                    ...current,
+                    available_in_invoices: checked,
+                  }))
+                }
+              />
             </div>
           </div>
 

@@ -499,7 +499,7 @@ const Customers = () => {
                   <TableRow>
                     <TableHead className="text-right">التاريخ</TableHead>
                     <TableHead className="text-right">كمية الزيت</TableHead>
-                    <TableHead className="text-right">التنكات</TableHead>
+                    <TableHead className="text-right">الأصناف المضافة</TableHead>
                     <TableHead className="text-right">طريقة الدفع</TableHead>
                     <TableHead className="text-right">الإجمالي</TableHead>
                     <TableHead className="text-left">الفاتورة</TableHead>

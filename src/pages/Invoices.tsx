@@ -54,6 +54,7 @@ interface ContainerType {
   id: string;
   name: string;
   default_sale_price: number;
+  current_stock: number;
 }
 
 const paymentLabel = (type: string) => {
@@ -129,18 +130,41 @@ export default function Invoices() {
     if (!activeSeason) return;
     try {
       const effectiveMillId = activeSeason.mill_id || millId;
-      let query = supabase
+      if (!effectiveMillId) return;
+      let productsQuery = supabase
         .from("products" as any)
         .select("id, name, default_sale_price")
-        .eq("product_type", "container")
+        .eq("available_in_invoices", true)
         .eq("active", true);
 
       if (effectiveMillId) {
-        query = query.eq("mill_id", effectiveMillId);
+        productsQuery = productsQuery.eq("mill_id", effectiveMillId);
       }
 
-      const { data } = await query.order("created_at", { ascending: true });
-      const types = (data as ContainerType[]) || [];
+      const [productsResult, balancesResult] = await Promise.all([
+        productsQuery.order("created_at", { ascending: true }),
+        supabase
+          .from("product_season_balances" as any)
+          .select("product_id, current_stock")
+          .eq("season_id", activeSeason.id)
+          .eq("mill_id", effectiveMillId),
+      ]);
+
+      if (productsResult.error) throw productsResult.error;
+      if (balancesResult.error) throw balancesResult.error;
+
+      const stockByProduct = new Map(
+        ((balancesResult.data || []) as Array<{ product_id: string; current_stock: number }>).map(
+          (balance) => [balance.product_id, Number(balance.current_stock) || 0],
+        ),
+      );
+      const types = ((productsResult.data || []) as Omit<ContainerType, "current_stock">[]).map(
+        (product) => ({
+          ...product,
+          default_sale_price: Number(product.default_sale_price) || 0,
+          current_stock: stockByProduct.get(product.id) ?? 0,
+        }),
+      );
       setContainerTypes(types);
       const counts: Record<string, number> = {};
       types.forEach(t => { counts[t.id] = 0; });
@@ -151,6 +175,11 @@ export default function Invoices() {
       });
     } catch (err) {
       console.error("Error fetching container types:", err);
+      toast({
+        title: "تعذر تحميل أصناف الفاتورة",
+        description: getArabicErrorMessage(err, "تعذر تحميل الأصناف المتاحة في الفاتورة."),
+        variant: "destructive",
+      });
     }
   };
 
@@ -334,7 +363,7 @@ export default function Invoices() {
 
       }
 
-      const containerSummary = getContainerSummary() || "بدون تنكات";
+      const containerSummary = getContainerSummary() || "بدون أصناف إضافية";
 
       const containerLines = containerTypes
         .filter((container) => (containerCounts[container.id] || 0) > 0)
@@ -412,8 +441,11 @@ export default function Invoices() {
       setIsCustomizingMixed(false);
       setDeferCashSettlement(false);
       setShowPreviewModal(false);
-      fetchQueueCustomers();
-      refetchInventory();
+      await Promise.all([
+        fetchQueueCustomers(),
+        fetchContainerTypes(),
+        refetchInventory(),
+      ]);
     } catch (err: any) {
       console.error("Invoice submit error:", err);
       console.error("saveInvoice unexpected error", err);
@@ -431,7 +463,7 @@ export default function Invoices() {
       customer_phone: invoiceData.customerPhone || null,
       oil_produced: invoiceData.oilProduced || 0,
       container_count: getTotalContainerCount(),
-      container_type: getContainerSummary() || "بدون تنكات",
+      container_type: getContainerSummary() || "بدون أصناف إضافية",
       payment_type: selectedPayment?.type || "oil",
       oil_amount: selectedPayment?.oilAmount || 0,
       cash_amount: selectedPayment?.cashAmount || 0,
@@ -602,10 +634,9 @@ export default function Invoices() {
             </div>
 
             {/* Containers */}
-            {containerTypes.length > 0 && (
-              <div className="space-y-3 pt-2">
+            <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold">عدد التنكات والعبوات</Label>
+                  <Label className="text-sm font-semibold">الأصناف المضافة للفاتورة</Label>
                   {getTotalContainerCost() > 0 ? (
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
@@ -617,11 +648,17 @@ export default function Invoices() {
                     </div>
                   ) : (
                     <span className="text-xs text-muted-foreground font-mono">
-                      إجمالي التنكات: {getTotalContainerCount()}
+                      إجمالي الأصناف: {getTotalContainerCount()}
                     </span>
                   )}
                 </div>
 
+                {containerTypes.length === 0 ? (
+                  <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                    لا توجد أصناف مفعّلة للفواتير. فعّل الصنف المطلوب من صفحة
+                    «المخزون والبضائع» عبر إجراء «إضافة إلى الفاتورة».
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {containerTypes.map((ct) => (
                     <div
@@ -631,6 +668,7 @@ export default function Invoices() {
                       <div className="overflow-hidden">
                         <p className="text-sm font-medium truncate">{ct.name}</p>
                         <p className="text-xs text-muted-foreground">{ct.default_sale_price} {currency} للواحدة</p>
+                        <p className="text-[11px] text-muted-foreground">المتوفر هذا الموسم: {ct.current_stock}</p>
                       </div>
                       <div className="flex items-center gap-1.5" dir="ltr">
                         <Button
@@ -653,7 +691,10 @@ export default function Invoices() {
                           onChange={(e) => {
                             const clean = toLatinDigits(e.target.value).replace(/\D/g, "");
                             const val = clean === "" ? 0 : parseInt(clean, 10);
-                            setContainerCounts(p => ({ ...p, [ct.id]: isNaN(val) ? 0 : Math.max(0, val) }));
+                            setContainerCounts(p => ({
+                              ...p,
+                              [ct.id]: isNaN(val) ? 0 : Math.min(ct.current_stock, Math.max(0, val)),
+                            }));
                           }}
                           min="0"
                           lang="en-US"
@@ -667,8 +708,11 @@ export default function Invoices() {
                           className="h-8 w-8 rounded-lg font-bold text-base"
                           onClick={() => {
                             const curr = containerCounts[ct.id] || 0;
-                            setContainerCounts(p => ({ ...p, [ct.id]: curr + 1 }));
+                            if (curr < ct.current_stock) {
+                              setContainerCounts(p => ({ ...p, [ct.id]: curr + 1 }));
+                            }
                           }}
+                          disabled={(containerCounts[ct.id] || 0) >= ct.current_stock}
                         >
                           +
                         </Button>
@@ -676,8 +720,8 @@ export default function Invoices() {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
-            )}
 
             {/* Notes */}
             <div className="space-y-1.5">

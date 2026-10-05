@@ -93,7 +93,7 @@ export function InvoicePreview({ data, millName = "المعصرة الذكية" 
 
           {data.container_count ? (
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">التنكات والعبوات:</span>
+              <span className="text-muted-foreground">الأصناف المضافة:</span>
               <span className="font-medium">
                 {data.container_count} ({data.container_type || "عبوة"})
               </span>

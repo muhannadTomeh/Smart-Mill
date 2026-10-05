@@ -310,7 +310,7 @@ export default function InvoicesHistory() {
                     <TableHead className="text-right">التاريخ والوقت</TableHead>
                     <TableHead className="text-right">اسم الزبون</TableHead>
                     <TableHead className="text-right">كمية الزيت</TableHead>
-                    <TableHead className="text-right">التنكات</TableHead>
+                    <TableHead className="text-right">الأصناف المضافة</TableHead>
                     <TableHead className="text-right">طريقة الدفع</TableHead>
                     <TableHead className="text-right">الإجمالي</TableHead>
                     <TableHead className="text-center w-36">الإجراءات</TableHead>
@@ -335,7 +335,7 @@ export default function InvoicesHistory() {
                       </TableCell>
 
                       <TableCell className="text-right text-xs text-muted-foreground">
-                        {inv.container_count > 0 ? `${inv.container_count} (${inv.container_type})` : "بدون تنكات"}
+                        {inv.container_count > 0 ? `${inv.container_count} (${inv.container_type})` : "بدون أصناف إضافية"}
                       </TableCell>
 
                       <TableCell className="text-right">

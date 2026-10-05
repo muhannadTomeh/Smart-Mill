@@ -272,7 +272,7 @@ export function printThermalReceipt(data: ThermalReceiptData, millName = "الم
 
   ${data.container_count ? `
   <div class="info-row">
-    <span class="info-label">التنكات (${data.container_type || "عبوات"}):</span>
+    <span class="info-label">الأصناف المضافة (${data.container_type || "عبوات"}):</span>
     <span class="info-value">${data.container_count} عبوة</span>
   </div>` : ''}
 
