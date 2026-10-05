@@ -33,6 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useCashBalance } from "@/hooks/useCashBalance";
@@ -121,7 +122,7 @@ export default function FinancialLedger() {
     if (error) {
       toast({
         title: "تعذر تحميل الدفتر المالي",
-        description: error.message,
+        description: getArabicErrorMessage(error, "تعذر تحميل الدفتر المالي."),
         variant: "destructive",
       });
     } else {

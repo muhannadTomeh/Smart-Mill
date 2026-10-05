@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 export interface DeletedInvoice {
   id: string;
@@ -140,7 +141,7 @@ export async function restoreDeletedInvoiceToQueue(
 
     if (error) {
       console.error("Failed to restore invoice to queue in Supabase:", error);
-      return { success: false, error: error.message };
+      return { success: false, error: getArabicErrorMessage(error, "تعذر استعادة الفاتورة المحذوفة.") };
     }
 
     // 2. Remove from deleted invoices pool
@@ -148,7 +149,7 @@ export async function restoreDeletedInvoiceToQueue(
     return { success: true };
   } catch (err: any) {
     console.error("Unexpected error restoring invoice:", err);
-    return { success: false, error: err?.message || "حدث خطأ غير متوقع أثناء الاسترجاع" };
+    return { success: false, error: getArabicErrorMessage(err, "حدث خطأ غير متوقع أثناء الاسترجاع.") };
   }
 }
 

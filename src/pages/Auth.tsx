@@ -9,6 +9,7 @@ import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
 import ForgotPasswordForm from "@/components/auth/ForgotPasswordForm";
 import { lookupCashierEmail } from "@/lib/authUtils";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 export type AuthView = "login" | "register" | "forgot-password";
 
@@ -161,7 +162,8 @@ const Auth = () => {
     });
     setLoading(false);
     if (error) {
-      toast({ title: "خطأ في إنشاء الحساب", description: error.message, variant: "destructive" });
+      console.error("signUp error", error);
+      toast({ title: "خطأ في إنشاء الحساب", description: getArabicErrorMessage(error, "تعذر إنشاء الحساب."), variant: "destructive" });
     } else {
       toast({
         title: "تم إنشاء الحساب بنجاح",
@@ -178,7 +180,8 @@ const Auth = () => {
     });
     setLoading(false);
     if (error) {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+      console.error("resetPassword error", error);
+      toast({ title: "تعذر إرسال رابط الاستعادة", description: getArabicErrorMessage(error, "تعذر إرسال رابط استعادة كلمة المرور."), variant: "destructive" });
     } else {
       toast({ title: "تم الإرسال", description: "تحقق من بريدك الإلكتروني لإعادة تعيين كلمة المرور" });
     }

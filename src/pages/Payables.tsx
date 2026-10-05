@@ -43,6 +43,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDate } from "@/lib/formatters";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface Payable {
   id: string;
@@ -282,9 +283,10 @@ export default function Payables() {
       setSettleNotes("");
       await fetchData();
     } catch (err: any) {
+      console.error("settlePayable error", err);
       toast({
         title: "فشل السداد",
-        description: err.message || "تعذر إتمام عملية السداد",
+        description: getArabicErrorMessage(err, "تعذر إتمام عملية السداد."),
         variant: "destructive",
       });
     } finally {
@@ -301,7 +303,8 @@ export default function Payables() {
       .eq("movement_type", "settlement")
       .order("created_at", { ascending: false });
     if (error) {
-      toast({ title: "تعذّر تحميل سجل السداد", description: error.message, variant: "destructive" });
+      console.error("loadSettlementHistory error", error);
+      toast({ title: "تعذّر تحميل سجل السداد", description: getArabicErrorMessage(error, "تعذر تحميل سجل السداد."), variant: "destructive" });
       return;
     }
     setSettlements((data || []) as SettlementHistoryItem[]);
@@ -322,7 +325,8 @@ export default function Payables() {
       if (historyTarget) await openSettlementHistory(historyTarget);
       await fetchData();
     } catch (err: any) {
-      toast({ title: "تعذّر عكس السداد", description: err.message || "تعذرت العملية", variant: "destructive" });
+      console.error("reversePayableSettlement error", err);
+      toast({ title: "تعذّر عكس السداد", description: getArabicErrorMessage(err, "تعذر عكس السداد."), variant: "destructive" });
     } finally {
       setReversingSettlement(null);
     }
@@ -421,7 +425,7 @@ export default function Payables() {
 
       toast({
         title: "تعذر تسجيل المستحق",
-        description: err?.message || "حدث خطأ أثناء التسجيل.",
+        description: getArabicErrorMessage(err, "حدث خطأ أثناء تسجيل الالتزام."),
         variant: "destructive",
       });
     } finally {
@@ -484,7 +488,7 @@ export default function Payables() {
     } catch (err: any) {
       toast({
         title: "تعذر التحصيل",
-        description: err?.message || "حدث خطأ أثناء التحصيل.",
+        description: getArabicErrorMessage(err, "حدث خطأ أثناء التحصيل."),
         variant: "destructive",
       });
     } finally {
@@ -605,7 +609,7 @@ export default function Payables() {
 
       toast({
         title: "تعذر إضافة الدين",
-        description: err?.message || "حدث خطأ أثناء تسجيل الدين.",
+        description: getArabicErrorMessage(err, "حدث خطأ أثناء تسجيل الدين."),
         variant: "destructive",
       });
     } finally {
@@ -657,9 +661,10 @@ export default function Payables() {
 
       await fetchData();
     } catch (err: any) {
+      console.error("updateSupplier error", err);
       toast({
         title: "تعذر تعديل المورد",
-        description: err.message || "حدث خطأ أثناء التعديل",
+        description: getArabicErrorMessage(err, "تعذر تعديل المورد."),
         variant: "destructive",
       });
     } finally {
@@ -694,7 +699,8 @@ export default function Payables() {
       setAddSupplierOpen(false);
       await fetchData();
     } catch (err: any) {
-      toast({ title: "خطأ", description: err.message || "تعذر إضافة المورد", variant: "destructive" });
+      console.error("addSupplier error", err);
+      toast({ title: "تعذر إضافة المورد", description: getArabicErrorMessage(err, "تعذر إضافة المورد."), variant: "destructive" });
     } finally {
       setSavingSupplier(false);
     }

@@ -20,6 +20,7 @@ import { useInventory } from "@/hooks/useInventory";
 import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatDate } from "@/lib/formatters";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface Transaction {
   id: string;
@@ -170,18 +171,7 @@ const OilTrading = () => {
 
 
   const oilTradeErrorMessage = (message?: string) => {
-    const code = message || "";
-    const messages: Record<string, string> = {
-      OIL_SALE_CREDIT_UNSUPPORTED: "بيع الزيت الآجل غير متاح حالياً.",
-      OIL_PURCHASE_CREDITOR_REQUIRED: "أدخل اسم المورد عند اختيار الشراء الآجل.",
-      INSUFFICIENT_OIL_STOCK: "كمية الزيت المطلوبة غير متوفرة في مخزون المعصرة.",
-      INSUFFICIENT_OIL_STOCK_FOR_CANCELLATION: "لا يمكن الإلغاء لأن الزيت استُخدم أو بيع لاحقاً وسيؤدي الإلغاء إلى مخزون سالب.",
-      DEPENDENT_SETTLEMENT_EXISTS: "لا يمكن إلغاء شراء الزيت الآجل قبل عكس جميع دفعات الالتزام المرتبطة به.",
-      OIL_TRADE_ALREADY_CANCELLED: "هذه العملية ملغاة بالفعل.",
-      CANCELLATION_REASON_REQUIRED: "سبب الإلغاء مطلوب.",
-      OIL_TRADE_CANCEL_FORBIDDEN: "لا تملك صلاحية إلغاء هذه العملية.",
-    };
-    return messages[code] || "تعذر تنفيذ العملية. حدّث الصفحة وحاول مجدداً.";
+    return getArabicErrorMessage(message, "تعذر تنفيذ عملية الزيت. حدّث الصفحة وحاول مجددًا.");
   };
 
   const addTransaction = async () => {

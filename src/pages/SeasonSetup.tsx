@@ -13,6 +13,7 @@ import {
   DEFAULT_CASH_RETURN_PRICING_MODE,
   normalizeCashReturnPricingMode,
 } from "@/lib/cashReturnPricing";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 export default function SeasonSetup() {
   const { user, millId } = useAuth();
@@ -97,7 +98,8 @@ export default function SeasonSetup() {
     if (isEdit) {
       const { error } = await supabase.from("seasons").update(payload).eq("id", id);
       if (error) {
-        toast({ title: "خطأ", description: error.message, variant: "destructive" });
+        console.error("createSeason error", error);
+        toast({ title: "تعذر إنشاء الموسم", description: getArabicErrorMessage(error, "تعذر إنشاء الموسم."), variant: "destructive" });
       } else {
         toast({ title: "تم الحفظ", description: "تم تحديث الموسم بنجاح" });
         await refetch();
@@ -121,7 +123,8 @@ export default function SeasonSetup() {
 
       const { error } = await supabase.from("seasons").insert({ ...payload, status: "active" }).select().single();
       if (error) {
-        toast({ title: "خطأ", description: error.message, variant: "destructive" });
+        console.error("saveSeason error", error);
+        toast({ title: "تعذر حفظ الموسم", description: getArabicErrorMessage(error, "تعذر حفظ الموسم."), variant: "destructive" });
       } else {
         toast({ title: "تم الإنشاء", description: `تم إنشاء ${form.name} وتفعيله` });
         await refetch();

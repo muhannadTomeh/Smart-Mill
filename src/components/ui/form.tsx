@@ -11,6 +11,7 @@ import {
 } from "react-hook-form"
 
 import { cn } from "@/lib/utils"
+import { getArabicErrorMessage } from "@/lib/errorMessages"
 import { Label } from "@/components/ui/label"
 
 const Form = FormProvider
@@ -145,7 +146,9 @@ const FormMessage = React.forwardRef<
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, children, ...props }, ref) => {
   const { error, formMessageId } = useFormField()
-  const body = error ? String(error?.message) : children
+  const body = error
+    ? getArabicErrorMessage(error, "القيمة المدخلة غير صحيحة. راجع الحقل ثم حاول مرة أخرى.")
+    : children
 
   if (!body) {
     return null

@@ -57,6 +57,7 @@ import {
   createMillOwnerAccount,
   AdminAccountItem
 } from "@/lib/credentialVault";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 export default function AdminIndex() {
   const [activeTab, setActiveTab] = useState<string>("mills");
@@ -214,7 +215,7 @@ export default function AdminIndex() {
       loadAccounts();
     } catch (error: any) {
       console.error("Error creating account:", error);
-      toast.error(error.message || "حدث خطأ أثناء إنشاء الحساب");
+      toast.error(getArabicErrorMessage(error, "حدث خطأ أثناء إنشاء الحساب."));
     } finally {
       setCreateLoading(false);
     }
@@ -273,7 +274,7 @@ export default function AdminIndex() {
         toast.info("لا توجد كلمة مرور مسجلة في الخزينة لهذا الحساب. اضغط زر المفتاح لتعيينها.");
       }
     } catch (err: any) {
-      toast.error(err.message || "تعذر فك تشفير كلمة المرور");
+      toast.error(getArabicErrorMessage(err, "تعذر فك تشفير كلمة المرور."));
     } finally {
       setDecryptingAccountLoading((p) => ({ ...p, [key]: false }));
     }
@@ -319,7 +320,7 @@ export default function AdminIndex() {
         toast.info("لا يوجد رمز PIN مسجل في الخزينة لهذا الحساب.");
       }
     } catch (err: any) {
-      toast.error(err.message || "تعذر فك تشفير رمز PIN");
+      toast.error(getArabicErrorMessage(err, "تعذر فك تشفير رمز PIN."));
     } finally {
       setDecryptingAccountPinLoading((p) => ({ ...p, [key]: false }));
     }
@@ -380,7 +381,7 @@ export default function AdminIndex() {
       await loadAccounts();
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || "تعذر حفظ التعديلات");
+      toast.error(getArabicErrorMessage(err, "تعذر حفظ التعديلات."));
     } finally {
       setSavingAccountEdit(false);
     }
@@ -397,7 +398,7 @@ export default function AdminIndex() {
       loadAccounts();
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || "تعذر حذف الحساب");
+      toast.error(getArabicErrorMessage(err, "تعذر حذف الحساب."));
     } finally {
       setDeletingAccount(false);
     }
@@ -1272,7 +1273,7 @@ export default function AdminIndex() {
                                     toast.success(newState ? `تم تفعيل الحساب: ${acc.display_name}` : `تم تعطيل الحساب: ${acc.display_name}`);
                                     loadAccounts();
                                   } catch (err: any) {
-                                    toast.error(err.message || "تعذر تعديل حالة الحساب");
+                                    toast.error(getArabicErrorMessage(err, "تعذر تعديل حالة الحساب."));
                                   }
                                 }}
                               >

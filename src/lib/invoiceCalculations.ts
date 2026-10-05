@@ -22,6 +22,33 @@ export interface PaymentOptions {
   mixed: PaymentBreakdown;
 }
 
+export function getContainerOilConversionPrice(settings: MillSettings): number {
+  return Number.isFinite(settings.oil_buy_price) && settings.oil_buy_price > 0
+    ? settings.oil_buy_price
+    : 0;
+}
+
+export function calculateContainerOilEquivalent(
+  containerCost: number,
+  settings: MillSettings,
+): number {
+  const safeContainerCost = Number.isFinite(containerCost) && containerCost > 0
+    ? containerCost
+    : 0;
+  const conversionPrice = getContainerOilConversionPrice(settings);
+
+  return safeContainerCost > 0 && conversionPrice > 0
+    ? safeContainerCost / conversionPrice
+    : 0;
+}
+
+export function canPayContainersWithOil(
+  containerCost: number,
+  settings: MillSettings,
+): boolean {
+  return containerCost <= 0 || getContainerOilConversionPrice(settings) > 0;
+}
+
 /**
  * المنطق الموحّد لحساب طرق الدفع الثلاث (زيت فقط / نقدي فقط / مختلط).
  * مصدر الحقيقة الوحيد — يستخدمه كل من صفحة الفواتير وورقة الفاتورة السريعة.
@@ -32,7 +59,7 @@ export function calculatePaymentOptions(
   settings: MillSettings
 ): PaymentOptions {
   const oilReturn = calculateOilReturnQuantity(oilProduced, settings.return_percent);
-  const containerOilEquiv = containerCost / settings.oil_buy_price;
+  const containerOilEquiv = calculateContainerOilEquivalent(containerCost, settings);
   const totalOilPayment = oilReturn + containerOilEquiv;
   const cashReturn = calculateCashReturnAmount(oilProduced, settings);
   const totalCashPayment = cashReturn + containerCost;
@@ -80,12 +107,12 @@ export function calculateCustomMixedFromOil(
   customOil: number
 ): PaymentBreakdown {
   const oilReturn = calculateOilReturnQuantity(oilProduced, settings.return_percent);
-  const containerOilEquiv = settings.oil_buy_price > 0 ? containerCost / settings.oil_buy_price : 0;
+  const containerOilEquiv = calculateContainerOilEquivalent(containerCost, settings);
   const totalOilPayment = oilReturn + containerOilEquiv;
   const cashReturn = calculateCashReturnAmount(oilProduced, settings);
 
   const pressingCashRate = oilReturn > 0 ? cashReturn / oilReturn : (settings.oil_sell_price || 25);
-  const containerCashRate = settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 23);
+  const containerCashRate = getContainerOilConversionPrice(settings);
 
   const clampedOil = Math.max(0, Math.min(totalOilPayment, customOil));
   let calculatedCash = 0;
@@ -120,15 +147,16 @@ export function calculateCustomMixedFromCash(
   customCash: number
 ): PaymentBreakdown {
   const oilReturn = calculateOilReturnQuantity(oilProduced, settings.return_percent);
-  const containerOilEquiv = settings.oil_buy_price > 0 ? containerCost / settings.oil_buy_price : 0;
+  const containerOilEquiv = calculateContainerOilEquivalent(containerCost, settings);
   const totalOilPayment = oilReturn + containerOilEquiv;
   const cashReturn = calculateCashReturnAmount(oilProduced, settings);
   const totalCashPayment = cashReturn + containerCost;
 
   const pressingCashRate = oilReturn > 0 ? cashReturn / oilReturn : (settings.oil_sell_price || 25);
-  const containerCashRate = settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 23);
+  const containerCashRate = getContainerOilConversionPrice(settings);
 
-  const clampedCash = Math.max(0, Math.min(totalCashPayment, customCash));
+  const minimumCash = containerCost > 0 && containerCashRate <= 0 ? containerCost : 0;
+  const clampedCash = Math.max(minimumCash, Math.min(totalCashPayment, customCash));
   let calculatedOil = 0;
 
   if (clampedCash <= containerCost) {

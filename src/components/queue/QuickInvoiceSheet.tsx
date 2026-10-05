@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { calculatePaymentOptions, calculateCustomMixedFromOil, calculateCustomMixedFromCash } from "@/lib/invoiceCalculations";
+import {
+  calculatePaymentOptions,
+  calculateCustomMixedFromOil,
+  calculateCustomMixedFromCash,
+  calculateContainerOilEquivalent,
+  canPayContainersWithOil,
+} from "@/lib/invoiceCalculations";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -17,6 +23,7 @@ import { useInventory } from "@/hooks/useInventory";
 import { useCurrency } from "@/hooks/useCurrency";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 import {
   calculateCashReturnAmount,
   calculateOilReturnQuantity,
@@ -91,10 +98,16 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
     return containerTypes.reduce((sum, ct) => sum + (containerCounts[ct.id] || 0) * ct.default_sale_price, 0);
   }, [containerTypes, containerCounts]);
 
-  const containerOilPrice = settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 25);
   const containerOilEquiv = useMemo(() => {
-    return totalContainerCost > 0 && containerOilPrice > 0 ? totalContainerCost / containerOilPrice : 0;
-  }, [totalContainerCost, containerOilPrice]);
+    return calculateContainerOilEquivalent(totalContainerCost, settings);
+  }, [totalContainerCost, settings]);
+  const canUseOilPayment = canPayContainersWithOil(totalContainerCost, settings);
+
+  useEffect(() => {
+    if (paymentType === "oil" && !canUseOilPayment) {
+      setPaymentType("mixed");
+    }
+  }, [paymentType, canUseOilPayment]);
 
   const totalContainerCount = useMemo(
     () => Object.values(containerCounts).reduce((s, v) => s + v, 0),
@@ -162,9 +175,20 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
       toast.error("يرجى إدخال كمية الزيت");
       return;
     }
-    setSaving(true);
-
     const selected = paymentType === "oil" ? calc.oilOnly : paymentType === "cash" ? calc.cashOnly : calc.mixed;
+    if (paymentType === "oil" && !canUseOilPayment) {
+      toast.error("تعذر الدفع بالزيت", {
+        description: "أدخل سعر شراء الزيت أولًا لتحويل قيمة التنكات إلى كمية زيت، أو اختر الدفع النقدي/المختلط.",
+      });
+      return;
+    }
+    if (![selected.oilAmount, selected.cashAmount].every(Number.isFinite)) {
+      toast.error("تعذر حساب الفاتورة", {
+        description: "تحقق من نسبة الرد والأسعار ثم أعد المحاولة.",
+      });
+      return;
+    }
+    setSaving(true);
 
     // New queue rows carry the canonical FK. Notes are read only for pre-migration rows.
     let customerId: string | null = (customer as any).customer_id || null;
@@ -229,7 +253,7 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
 
     if (error) {
       console.error("create_invoice_and_settle error", error);
-      toast.error(error.message || "حدث خطأ أثناء حفظ الفاتورة");
+      toast.error(getArabicErrorMessage(error, "حدث خطأ أثناء حفظ الفاتورة."));
       setSaving(false);
       return;
     }
@@ -406,11 +430,21 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                   {paymentCards.map((p) => {
                     const data = p.type === "oil" ? calc.oilOnly : p.type === "cash" ? calc.cashOnly : calc.mixed;
                     const selected = paymentType === p.type;
+                    const disabled = p.type === "oil" && !canUseOilPayment;
                     return (
                       <button
+                        type="button"
                         key={p.type}
-                        onClick={() => setPaymentType(p.type)}
-                        className={`${p.bg} rounded-xl p-4 text-right transition-all ${selected ? `ring-2 ${p.ring} scale-[1.02]` : "hover:scale-[1.01]"}`}
+                        disabled={disabled}
+                        onClick={() => !disabled && setPaymentType(p.type)}
+                        title={disabled ? "أدخل سعر شراء الزيت أولًا لتحويل قيمة التنكات إلى زيت" : undefined}
+                        className={`${p.bg} rounded-xl p-4 text-right transition-all ${
+                          disabled
+                            ? "cursor-not-allowed opacity-50"
+                            : selected
+                              ? `ring-2 ${p.ring} scale-[1.02]`
+                              : "hover:scale-[1.01]"
+                        }`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <p.icon className={`h-5 w-5 ${p.color}`} />
@@ -422,6 +456,11 @@ export function QuickInvoiceSheet({ open, onOpenChange, customer, onCompleted }:
                     );
                   })}
                 </div>
+                {!canUseOilPayment && (
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                    الدفع الكامل بالزيت غير متاح للتنكات قبل إدخال سعر شراء الزيت. الدفع النقدي والمختلط متاحان.
+                  </p>
+                )}
 
                 {/* Mixed payment customization panel */}
                 {paymentType === "mixed" && (

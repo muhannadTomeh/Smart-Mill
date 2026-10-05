@@ -22,6 +22,7 @@ import { DeletedInvoicesDialog } from "@/components/invoices/DeletedInvoicesDial
 import { useDeletedInvoices } from "@/hooks/useDeletedInvoices";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/contexts/RoleContext";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface InvoiceRecord {
   id: string;
@@ -82,7 +83,8 @@ export default function InvoicesHistory() {
       toast({ title: "تم إلغاء الفاتورة", description: "عُكست آثار الكاش والزيت والعبوات من المصدر بأمان." });
       await fetchInvoices();
     } catch (err: any) {
-      toast({ title: "تعذر إلغاء الفاتورة", description: err.message || "تعذرت العملية", variant: "destructive" });
+      console.error("cancelInvoice error", err);
+      toast({ title: "تعذر إلغاء الفاتورة", description: getArabicErrorMessage(err, "تعذر إلغاء الفاتورة."), variant: "destructive" });
     } finally {
       setCancellingInvoiceId(null);
     }
@@ -151,7 +153,8 @@ export default function InvoicesHistory() {
       toast({ title: "تم التحصيل", description: "سُجل القبض وربط بالفاتورة والذمة." });
       await fetchInvoices();
     } catch (err: any) {
-      toast({ title: "تعذر التحصيل", description: err.message || "تعذرت العملية", variant: "destructive" });
+      console.error("collectInvoiceReceivable error", err);
+      toast({ title: "تعذر التحصيل", description: getArabicErrorMessage(err, "تعذر تحصيل الدفعة."), variant: "destructive" });
     } finally {
       setCollectingInvoiceId(null);
     }
@@ -170,7 +173,8 @@ export default function InvoicesHistory() {
       toast({ title: "تم عكس التحصيل", description: "عاد الرصيد المستحق والكاش إلى حالتهما الصحيحة." });
       await fetchInvoices();
     } catch (err: any) {
-      toast({ title: "تعذر عكس التحصيل", description: err.message || "تعذرت العملية", variant: "destructive" });
+      console.error("reverseInvoiceCollection error", err);
+      toast({ title: "تعذر عكس التحصيل", description: getArabicErrorMessage(err, "تعذر عكس دفعة التحصيل."), variant: "destructive" });
     }
   };
 

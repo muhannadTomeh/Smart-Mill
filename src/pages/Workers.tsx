@@ -23,6 +23,7 @@ import { useRole } from "@/contexts/RoleContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { formatDate } from "@/lib/formatters";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface Worker {
   id: string;
@@ -218,7 +219,7 @@ const Workers = () => {
 
       if (error) {
         console.error("Error inserting worker:", error);
-        toast({ title: "خطأ في إضافة العامل", description: error.message, variant: "destructive" });
+        toast({ title: "خطأ في إضافة العامل", description: getArabicErrorMessage(error, "تعذر إضافة العامل."), variant: "destructive" });
         return;
       }
 
@@ -228,7 +229,7 @@ const Workers = () => {
       fetchWorkers();
     } catch (err: any) {
       console.error("Exception adding worker:", err);
-      toast({ title: "خطأ", description: err.message || "تعذر إضافة العامل", variant: "destructive" });
+      toast({ title: "تعذر إضافة العامل", description: getArabicErrorMessage(err, "تعذر إضافة العامل."), variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -249,7 +250,7 @@ const Workers = () => {
 
     if (error) {
       console.error("Error updating worker:", error);
-      toast({ title: "خطأ في التحديث", description: error.message, variant: "destructive" });
+      toast({ title: "خطأ في التحديث", description: getArabicErrorMessage(error, "تعذر تحديث بيانات العامل."), variant: "destructive" });
       return;
     }
 
@@ -263,7 +264,7 @@ const Workers = () => {
     if (!confirm(`هل تريد أرشفة العامل ${worker.name}؟ سيبقى تاريخه محفوظاً.`)) return;
     const { error } = await supabase.from("workers").update({ active: false }).eq("id", worker.id);
     if (error) {
-      toast({ title: "خطأ في الأرشفة", description: error.message, variant: "destructive" });
+      toast({ title: "خطأ في الأرشفة", description: getArabicErrorMessage(error, "تعذر أرشفة العامل."), variant: "destructive" });
     } else {
       toast({ title: "تمت الأرشفة", description: `تمت أرشفة العامل ${worker.name} مع الاحتفاظ بسجله` });
       fetchWorkers();
@@ -283,7 +284,7 @@ const Workers = () => {
       p_idempotency_key: crypto.randomUUID(),
     });
     if (error) {
-      toast({ title: "تعذر عكس الدفعة", description: error.message, variant: "destructive" });
+      toast({ title: "تعذر عكس الدفعة", description: getArabicErrorMessage(error, "تعذر عكس دفعة العامل."), variant: "destructive" });
       return;
     }
     toast({ title: "تم عكس الدفعة", description: "تمت إعادة الكاش وتحديث مستحقات العامل." });
@@ -338,7 +339,7 @@ const Workers = () => {
     if (error) {
       toast({
         title: "خطأ في دفع الأجرة",
-        description: error.message,
+        description: getArabicErrorMessage(error, "تعذر تسجيل دفعة العامل."),
         variant: "destructive",
       });
 
@@ -393,7 +394,7 @@ const Workers = () => {
     });
 
     if (error) {
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+      toast({ title: "تعذر تسجيل العمل", description: getArabicErrorMessage(error, "تعذر تسجيل عمل العامل."), variant: "destructive" });
     } else {
       toast({ title: "تم التسجيل", description: `تم تسجيل ${val} ${worker.type === 'hourly' ? 'ساعة' : 'شفت'} للعامل ${worker.name}` });
       setWorkValue("");

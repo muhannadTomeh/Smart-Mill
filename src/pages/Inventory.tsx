@@ -23,6 +23,7 @@ import { useRole } from "@/contexts/RoleContext";
 import { useToast } from "@/hooks/use-toast";
 import { Link, Navigate } from "react-router-dom";
 import { formatDate, formatNumber } from "@/lib/formatters";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface CashMovement {
   id: string;
@@ -387,7 +388,8 @@ const Inventory = () => {
     if (!window.confirm(`أرشفة ${name}؟ سيبقى تاريخه محفوظاً ولن يظهر في العمليات الجديدة.`)) return;
     const { error } = await supabase.rpc("archive_master_data_command", { p_entity: entity, p_id: id });
     if (error) {
-      toast({ title: "تعذرت الأرشفة", description: error.message, variant: "destructive" });
+      console.error("archiveMasterData error", error);
+      toast({ title: "تعذرت الأرشفة", description: getArabicErrorMessage(error, "تعذر أرشفة السجل."), variant: "destructive" });
       return;
     }
     toast({ title: "تمت الأرشفة", description: `تمت أرشفة ${name} مع الاحتفاظ بالسجل التاريخي.` });
@@ -407,14 +409,8 @@ const Inventory = () => {
       p_idempotency_key: crypto.randomUUID(),
     });
     if (error) {
-      const message = error.message.includes("DEPENDENT_SETTLEMENT_EXISTS")
-        ? "اعكس دفعات الالتزام المرتبطة أولاً."
-        : error.message.includes("INSUFFICIENT_STOCK_FOR_CANCELLATION")
-          ? "لا يمكن الإلغاء لأن المخزون الحالي لا يكفي لعكس الشراء."
-          : error.message.includes("PRODUCT_PURCHASE_ALREADY_CANCELLED")
-            ? "هذه العملية ملغاة بالفعل."
-            : "تعذر إلغاء عملية الشراء.";
-      toast({ title: "تعذر الإلغاء", description: message, variant: "destructive" });
+      console.error("cancelPurchase error", error);
+      toast({ title: "تعذر الإلغاء", description: getArabicErrorMessage(error, "تعذر إلغاء عملية الشراء."), variant: "destructive" });
       return;
     }
     toast({ title: "تم إلغاء عملية الشراء", description: "سُجلت حركات عكسية للكاش والمخزون دون حذف التاريخ." });
@@ -439,7 +435,8 @@ const Inventory = () => {
       p_idempotency_key: crypto.randomUUID(),
     });
     if (error) {
-      toast({ title: "تعذر تعديل الرصيد", description: error.message, variant: "destructive" });
+      console.error("adjustProductStock error", error);
+      toast({ title: "تعذر تعديل الرصيد", description: getArabicErrorMessage(error, "تعذر تعديل رصيد الصنف."), variant: "destructive" });
       return;
     }
     toast({ title: "تم تسجيل حركة المخزون" });
@@ -552,7 +549,7 @@ const Inventory = () => {
 
       toast({
         title: "فشل بيع البضاعة",
-        description: err?.message || "تعذر تسجيل عملية البيع.",
+        description: getArabicErrorMessage(err, "تعذر تسجيل عملية البيع."),
         variant: "destructive",
       });
 
@@ -583,11 +580,10 @@ const Inventory = () => {
     );
 
     if (error) {
+      console.error("cancelProductSale error", error);
       toast({
         title: "تعذر إلغاء البيع",
-        description: error.message?.includes("PRODUCT_SALE_ALREADY_CANCELLED")
-          ? "عملية البيع ملغاة بالفعل."
-          : "تعذر عكس عملية البيع.",
+        description: getArabicErrorMessage(error, "تعذر عكس عملية البيع."),
         variant: "destructive",
       });
       return;
@@ -676,21 +672,10 @@ const Inventory = () => {
         fetchReadModels(),
       ]);
     } catch (err: any) {
-      const errorMessage = String(err?.message || "");
-      const purchaseErrorMessage = errorMessage.includes("PRODUCT_PURCHASE_INVALID")
-        ? "تأكد من أن الكمية وسعر شراء الوحدة أكبر من صفر."
-        : errorMessage.includes("SUPPLIER_NOT_FOUND")
-          ? "يرجى اختيار مورد فعّال تابع لهذه المعصرة."
-          : errorMessage.includes("PARTNER_REQUIRED")
-            ? "يرجى اختيار شريك مسجل لعملية الدفع من شريك."
-            : errorMessage.includes("PARTNER_NOT_FOUND")
-              ? "الشريك المختار غير موجود في هذه المعصرة."
-              : errorMessage.includes("PRODUCT_PURCHASE_FORBIDDEN")
-                ? "هذه العملية متاحة لمالك المعصرة فقط."
-                : errorMessage || "تعذر إتمام الشراء";
+      console.error("submitProductPurchase error", err);
       toast({
         title: "خطأ في تسجيل الشراء",
-        description: purchaseErrorMessage,
+        description: getArabicErrorMessage(err, "تعذر إتمام عملية الشراء."),
         variant: "destructive",
       });
     } finally {
@@ -726,7 +711,8 @@ const Inventory = () => {
       setNewProductForm({ name: "", product_type: "goods", description: "", unit: "قطعة", purchase_price: "0", sale_price: "0" });
       await fetchProductsData();
     } catch (err: any) {
-      toast({ title: "خطأ", description: err.message || "تعذر حفظ الصنف", variant: "destructive" });
+      console.error("submitAddProduct error", err);
+      toast({ title: "تعذر حفظ الصنف", description: getArabicErrorMessage(err, "تعذر حفظ الصنف."), variant: "destructive" });
     } finally {
       setSavingNewProduct(false);
     }
@@ -739,7 +725,8 @@ const Inventory = () => {
     if (!Number.isFinite(amount) || amount <= 0) return;
     const { error } = await supabase.rpc("record_cash_opening_balance_command" as any, { p_season_id: activeSeason.id, p_amount: amount, p_notes: null, p_idempotency_key: crypto.randomUUID() });
     if (error) {
-      toast({ title: "تعذر تسجيل الرصيد الافتتاحي", description: error.message === "DUPLICATE_OPENING_BALANCE" ? "تم تسجيل الرصيد الافتتاحي مسبقاً" : error.message, variant: "destructive" });
+      console.error("setOpeningCashBalance error", error);
+      toast({ title: "تعذر تسجيل الرصيد الافتتاحي", description: getArabicErrorMessage(error, "تعذر تسجيل الرصيد النقدي الافتتاحي."), variant: "destructive" });
       return;
     }
     setCashOpeningBalanceExists(true);

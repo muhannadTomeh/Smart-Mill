@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { ToolContext } from "@lovable.dev/mcp-js";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 type RuntimeGlobals = typeof globalThis & {
   Deno?: { env?: { get?: (name: string) => string | undefined } };
@@ -74,7 +75,7 @@ export async function resolveSeasonId(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(getArabicErrorMessage(error, "تعذر تحديد الموسم النشط."));
   if (!data) throw new Error("لا يوجد موسم نشط. مرّر season_id صراحةً.");
   return data.id as string;
 }
@@ -87,5 +88,8 @@ export function textResult(payload: unknown) {
 }
 
 export function errorResult(message: string) {
-  return { content: [{ type: "text" as const, text: message }], isError: true };
+  return {
+    content: [{ type: "text" as const, text: getArabicErrorMessage(message) }],
+    isError: true,
+  };
 }

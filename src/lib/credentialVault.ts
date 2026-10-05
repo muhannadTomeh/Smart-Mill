@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 export interface AdminAccountItem {
   user_id: string;
@@ -48,7 +49,7 @@ export async function revealCredential(
     return edgeData?.value ?? edgeData?.password ?? null;
   } catch (err: any) {
     const label = credentialType === 'admin_pin' ? 'PIN لوحة الإدارة' : 'كلمة المرور';
-    throw new Error(err.message || `تعذر فك تشفير ${label} للحساب`);
+    throw new Error(getArabicErrorMessage(err, `تعذر فك تشفير ${label} للحساب.`));
   }
 }
 
@@ -76,7 +77,7 @@ export async function storeCredential(
     if (error || data?.error) {
       console.warn("Could not store credential via Edge Function:", error || data?.error);
       const label = credentialType === 'admin_pin' ? 'PIN لوحة الإدارة' : 'كلمة المرور';
-      throw new Error(data?.error || error?.message || `تعذر مزامنة ${label} في الخزنة المشفرة`);
+      throw new Error(getArabicErrorMessage(data?.error || error, `تعذر مزامنة ${label} في الخزنة المشفرة.`));
     }
   } catch (err) {
     console.warn("storeCredential exception:", err);
@@ -235,7 +236,7 @@ async function extractEdgeFunctionError(edgeErr: any, defaultMsg: string): Promi
           if (parsed?.code) return friendlyAccountError(String(parsed.code), parsed?.error);
           if (parsed?.error) return friendlyAccountError(undefined, String(parsed.error));
         } catch { }
-        return text;
+        return friendlyAccountError(undefined, text);
       }
     } catch { }
   }
@@ -261,7 +262,7 @@ function friendlyAccountError(code?: string, rawMessage?: unknown): string {
   }
   if (/password.*(weak|short)|weak_password/i.test(message)) return messages.WEAK_PASSWORD;
   if (/check constraint|invalid input|violates.*check/i.test(message)) return messages.INVALID_ACCOUNT_DATA;
-  return message || "حدث خطأ غير متوقع. حاول مرة أخرى، وإذا استمرت المشكلة تواصل مع الدعم الفني.";
+  return getArabicErrorMessage(message, "حدث خطأ غير متوقع. حاول مرة أخرى، وإذا استمرت المشكلة تواصل مع الدعم الفني.");
 }
 
 /**
@@ -482,7 +483,7 @@ export async function updateUserAccount(
       await storeCredential(userId, cleanPass);
     }
   } catch (err: any) {
-    throw new Error(err.message || "فشل تحديث بيانات الحساب");
+    throw new Error(getArabicErrorMessage(err, "فشل تحديث بيانات الحساب."));
   }
 }
 
@@ -500,6 +501,6 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     // Non-destructive deactivation
     await toggleUserAccountActive(userId, false);
   } catch (err: any) {
-    throw new Error(err.message || "فشل تعطيل الحساب");
+    throw new Error(getArabicErrorMessage(err, "فشل تعطيل الحساب."));
   }
 }

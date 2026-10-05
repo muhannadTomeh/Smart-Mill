@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback } fr
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface AdminWorkspaceContextType {
   isAdminWorkspace: boolean;
@@ -62,7 +63,7 @@ export const AdminWorkspaceProvider = ({ children }: { children: ReactNode }) =>
           console.warn("verify_admin_pin rpc error:", error);
           return {
             success: false,
-            error: error.message || "حدث خطأ أثناء التحقق من رمز PIN",
+            error: getArabicErrorMessage(error, "حدث خطأ أثناء التحقق من رمز PIN."),
           };
         }
 
@@ -80,7 +81,7 @@ export const AdminWorkspaceProvider = ({ children }: { children: ReactNode }) =>
       } catch (err: any) {
         return {
           success: false,
-          error: err.message || "حدث خطأ غير متوقع أثناء التحقق من رمز PIN",
+          error: getArabicErrorMessage(err, "حدث خطأ غير متوقع أثناء التحقق من رمز PIN."),
         };
       }
     },

@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeUsernameToEmail, getDisplayUsername } from "@/lib/authUtils";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 import {
   getCashReturnPricingLabel,
   normalizeCashReturnPricingMode,
@@ -275,7 +276,7 @@ export default function MillDetails() {
       setMillCode(safeProfile.mill_code);
     } catch (error: any) {
       console.error("Error fetching mill details:", error);
-      setFetchError(error.message || "حدث خطأ غير متوقع أثناء جلب بيانات المعصرة");
+      setFetchError(getArabicErrorMessage(error, "حدث خطأ غير متوقع أثناء جلب بيانات المعصرة."));
     } finally {
       setLoading(false);
     }
@@ -348,7 +349,7 @@ export default function MillDetails() {
       toast({
         variant: "destructive",
         title: "خطأ",
-        description: error.message || "فشل تحديث حالة الاشتراك",
+        description: getArabicErrorMessage(error, "فشل تحديث حالة الاشتراك."),
       });
     } finally {
       setUpdating(false);
@@ -490,7 +491,7 @@ export default function MillDetails() {
     } catch (err: any) {
       toast({
         title: "خطأ",
-        description: err.message?.includes("unique") ? "هذا الرمز مستخدم من معصرة أخرى، اختر رمزاً مختلفاً" : err.message || "فشل حفظ الرمز",
+        description: getArabicErrorMessage(err, "فشل حفظ الرمز."),
         variant: "destructive"
       });
     } finally {
@@ -532,7 +533,7 @@ export default function MillDetails() {
     } catch (err: any) {
       toast({
         title: "خطأ في جلب كلمة المرور",
-        description: err.message || "تعذر فك تشفير كلمة المرور",
+        description: getArabicErrorMessage(err, "تعذر فك تشفير كلمة المرور."),
         variant: "destructive"
       });
     } finally {
@@ -602,7 +603,7 @@ export default function MillDetails() {
     } catch (err: any) {
       toast({
         title: "خطأ في التحديث",
-        description: err.message || "تعذر تحديث بيانات الحساب",
+        description: getArabicErrorMessage(err, "تعذر تحديث بيانات الحساب."),
         variant: "destructive",
       });
     } finally {
@@ -628,7 +629,7 @@ export default function MillDetails() {
     } catch (err: any) {
       toast({
         title: "خطأ في الحذف",
-        description: err.message || "تعذر حذف الحساب",
+        description: getArabicErrorMessage(err, "تعذر حذف الحساب."),
         variant: "destructive",
       });
     } finally {
@@ -682,9 +683,7 @@ export default function MillDetails() {
     } catch (err: any) {
       toast({
         title: "خطأ في إنشاء الحساب",
-        description: err.message?.includes("already registered") || err.message?.includes("مستخدم مسبقاً")
-          ? "اسم المستخدم هذا موجود مسبقاً في هذه المعصرة"
-          : err.message || "تعذر إنشاء حساب الموظف المعصرة",
+        description: getArabicErrorMessage(err, "تعذر إنشاء حساب موظف المعصرة."),
         variant: "destructive"
       });
     } finally {
@@ -1330,7 +1329,7 @@ export default function MillDetails() {
                                 } catch (err: any) {
                                   toast({
                                     title: "خطأ",
-                                    description: err.message || "تعذر تغيير حالة الحساب",
+                                    description: getArabicErrorMessage(err, "تعذر تغيير حالة الحساب."),
                                     variant: "destructive",
                                   });
                                 }

@@ -29,10 +29,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useLocation } from "react-router-dom";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { InvoicePreview, type InvoicePreviewData } from "@/components/invoices/InvoicePreview";
 import {
   calculatePaymentOptions,
   calculateCustomMixedFromOil,
+  calculateContainerOilEquivalent,
+  canPayContainersWithOil,
   type PaymentBreakdown
 } from "@/lib/invoiceCalculations";
 import {
@@ -208,7 +211,9 @@ export default function Invoices() {
       { ...opts.oil, total: `${opts.oil.oilAmount.toFixed(2)} كغم زيت` },
       { ...opts.cash, total: `${opts.cash.cashAmount.toFixed(2)} ${currency}` },
       { ...opts.mixed, total: `${opts.mixed.oilAmount.toFixed(2)} كغم زيت + ${opts.mixed.cashAmount.toFixed(2)} ${currency}` },
-    ];
+    ].filter(
+      (method) => method.type !== "oil" || canPayContainersWithOil(totalContainerCost, settings),
+    );
     setPaymentMethods(methods);
 
     // Keep selection if still valid
@@ -260,6 +265,23 @@ export default function Invoices() {
     }
     if (!invoiceData.oilProduced || invoiceData.oilProduced <= 0) {
       toast({ title: "خطأ", description: "يرجى إدخال كمية الزيت المنتج بشكل صحيح", variant: "destructive" });
+      return;
+    }
+    const totalContainerCost = getTotalContainerCost();
+    if (selectedPayment.type === "oil" && !canPayContainersWithOil(totalContainerCost, settings)) {
+      toast({
+        title: "تعذر الدفع بالزيت",
+        description: "أدخل سعر شراء الزيت أولًا لتحويل قيمة التنكات إلى كمية زيت، أو اختر الدفع النقدي/المختلط.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (![selectedPayment.oilAmount, selectedPayment.cashAmount].every(Number.isFinite)) {
+      toast({
+        title: "تعذر حساب الفاتورة",
+        description: "تحقق من نسبة الرد والأسعار ثم أعد المحاولة.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -340,7 +362,11 @@ export default function Invoices() {
 
       if (error) {
         console.error("create_invoice_and_settle error", error);
-        toast({ title: "خطأ", description: error.message || "حدث خطأ أثناء حفظ الفاتورة", variant: "destructive" });
+        toast({
+          title: "تعذر حفظ الفاتورة",
+          description: getArabicErrorMessage(error, "حدث خطأ أثناء حفظ الفاتورة."),
+          variant: "destructive",
+        });
         return;
       }
 
@@ -390,7 +416,8 @@ export default function Invoices() {
       refetchInventory();
     } catch (err: any) {
       console.error("Invoice submit error:", err);
-      toast({ title: "خطأ غير متوقع", description: err?.message || "حدث خطأ أثناء حفظ الفاتورة", variant: "destructive" });
+      console.error("saveInvoice unexpected error", err);
+      toast({ title: "خطأ غير متوقع", description: getArabicErrorMessage(err, "حدث خطأ أثناء حفظ الفاتورة."), variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -582,7 +609,7 @@ export default function Invoices() {
                   {getTotalContainerCost() > 0 ? (
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
-                        {(getTotalContainerCost() / (settings.oil_buy_price > 0 ? settings.oil_buy_price : (settings.oil_sell_price || 25))).toFixed(2)} كغم
+                        {calculateContainerOilEquivalent(getTotalContainerCost(), settings).toFixed(2)} كغم
                       </Badge>
                       <Badge variant="secondary" className="font-mono text-xs font-semibold px-2.5 py-0.5">
                         {getTotalContainerCost().toFixed(2)} {currency}

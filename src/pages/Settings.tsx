@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { Link, useSearchParams } from "react-router-dom";
 import { storeCredential } from "@/lib/credentialVault";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 import {
   calculateCashReturnAmount,
   calculateOilReturnQuantity,
@@ -273,7 +274,8 @@ export default function Settings() {
       toast({ title: "تم الحفظ بنجاح", description: "تم تحديث وتطبيق إعدادات شاشة العرض العامة" });
       if (refetchSeasons) refetchSeasons();
     } catch (err: any) {
-      toast({ title: "خطأ", description: err.message || "تعذر حفظ إعدادات الشاشة", variant: "destructive" });
+      console.error("saveDisplaySettings error", err);
+      toast({ title: "تعذر حفظ إعدادات الشاشة", description: getArabicErrorMessage(err, "تعذر حفظ إعدادات الشاشة."), variant: "destructive" });
     } finally {
       setSavingDisplay(false);
     }
@@ -488,7 +490,8 @@ export default function Settings() {
 
       toast({ title: "تم الحفظ بنجاح", description: "تم تحديث بيانات المعصرة بنجاح" });
     } catch (err: any) {
-      toast({ title: "خطأ", description: err.message || "فشل حفظ بيانات المعصرة", variant: "destructive" });
+      console.error("saveMillSettings error", err);
+      toast({ title: "تعذر حفظ بيانات المعصرة", description: getArabicErrorMessage(err, "تعذر حفظ بيانات المعصرة."), variant: "destructive" });
     } finally {
       setSavingProfile(false);
     }
@@ -595,7 +598,7 @@ export default function Settings() {
     if (error) {
       toast({
         title: "فشل الحفظ",
-        description: error.message,
+        description: getArabicErrorMessage(error, "تعذر حفظ إعدادات الموسم."),
         variant: "destructive",
       });
       return;
@@ -670,7 +673,7 @@ export default function Settings() {
     } catch (error: any) {
       toast({
         title: "خطأ",
-        description: error.message || "فشل تحديث PIN لوحة الإدارة",
+        description: getArabicErrorMessage(error, "فشل تحديث رمز PIN للوحة الإدارة."),
         variant: "destructive"
       });
     } finally {
@@ -730,7 +733,7 @@ export default function Settings() {
     } catch (error: any) {
       toast({
         title: "خطأ",
-        description: error.message || "حدث خطأ أثناء تحديث كلمة المرور",
+        description: getArabicErrorMessage(error, "حدث خطأ أثناء تحديث كلمة المرور."),
         variant: "destructive"
       });
     } finally {

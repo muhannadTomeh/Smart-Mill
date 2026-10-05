@@ -2,6 +2,7 @@ import { Component, ErrorInfo, ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RotateCcw, Home, Trash2 } from "lucide-react";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface Props {
   children: ReactNode;
@@ -68,12 +69,12 @@ export class AppErrorBoundary extends Component<Props, State> {
 
               {this.state.error?.message && (
                 <div className="space-y-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground">تفاصيل الخطأ التقني:</span>
+                  <span className="text-xs font-semibold text-muted-foreground">تفاصيل الخطأ:</span>
                   <div
-                    className="p-3 bg-muted/80 border border-border rounded-xl text-xs font-mono text-destructive break-all text-left max-h-36 overflow-y-auto"
-                    dir="ltr"
+                    className="p-3 bg-muted/80 border border-border rounded-xl text-sm text-destructive text-right"
+                    dir="rtl"
                   >
-                    {this.state.error.name}: {this.state.error.message}
+                    {getArabicErrorMessage(this.state.error, "حدث خطأ أثناء عرض الصفحة. أعد تحميل الصفحة وحاول مرة أخرى.")}
                   </div>
                 </div>
               )}

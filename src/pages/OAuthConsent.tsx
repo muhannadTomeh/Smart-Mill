@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShieldCheck } from "lucide-react";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 type OAuthNamespace = {
   getAuthorizationDetails: (id: string) => Promise<{ data: any; error: any }>;
@@ -36,7 +37,8 @@ export default function OAuthConsent() {
       const { data, error } = await oauth().getAuthorizationDetails(authorizationId);
       if (!active) return;
       if (error) {
-        setError(error.message);
+        console.error("getAuthorizationDetails error", error);
+        setError(getArabicErrorMessage(error, "تعذر تحميل تفاصيل طلب التفويض."));
         return;
       }
       const immediate = data?.redirect_url ?? data?.redirect_to;
@@ -58,7 +60,8 @@ export default function OAuthConsent() {
       : await oauth().denyAuthorization(authorizationId);
     if (error) {
       setBusy(false);
-      setError(error.message);
+      console.error("authorization decision error", error);
+      setError(getArabicErrorMessage(error, "تعذر تنفيذ قرار التفويض."));
       return;
     }
     const target = data?.redirect_url ?? data?.redirect_to;

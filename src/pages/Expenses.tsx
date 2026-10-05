@@ -26,6 +26,7 @@ import { useInventory } from "@/hooks/useInventory";
 import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatDate, formatNumber } from "@/lib/formatters";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface Expense {
   id: string;
@@ -279,9 +280,10 @@ const Expenses = () => {
         refetchCashBalance(),
       ]);
     } catch (err: any) {
+      console.error("saveExpense error", err);
       toast({
         title: "خطأ في تسجيل المصروف",
-        description: err.message || "تعذر حفظ المصروف",
+        description: getArabicErrorMessage(err, "تعذر حفظ المصروف."),
         variant: "destructive",
       });
     } finally {
@@ -315,7 +317,8 @@ const Expenses = () => {
         EXPENSE_NOT_CANCELLABLE: "هذا المصروف ملغى بالفعل أو غير قابل للإلغاء.",
         EXPENSE_CANCEL_FORBIDDEN: "إلغاء المصروف متاح لمالك المعصرة فقط.",
       };
-      toast({ title: "تعذر إلغاء المصروف", description: messages[error.message] || "تعذر إلغاء المصروف.", variant: "destructive" });
+      console.error("cancelExpense error", error);
+      toast({ title: "تعذر إلغاء المصروف", description: messages[error.message] || getArabicErrorMessage(error, "تعذر إلغاء المصروف."), variant: "destructive" });
     }
   };
 

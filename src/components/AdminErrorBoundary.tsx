@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RotateCcw, ArrowRight } from "lucide-react";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface Props {
   children: ReactNode;
@@ -42,8 +43,8 @@ export class AdminErrorBoundary extends Component<Props, State> {
                 تعذر تحميل تفاصيل المعصرة بشكل كامل بسبب خطأ في البيانات.
               </p>
               {this.state.error?.message && (
-                <div className="p-3 bg-muted/60 rounded-lg text-xs font-mono text-muted-foreground break-all text-left" dir="ltr">
-                  {this.state.error.message}
+                <div className="p-3 bg-muted/60 rounded-lg text-sm text-muted-foreground text-right" dir="rtl">
+                  {getArabicErrorMessage(this.state.error, "تعذر عرض صفحة الإدارة. أعد تحميل الصفحة وحاول مرة أخرى.")}
                 </div>
               )}
             </CardContent>

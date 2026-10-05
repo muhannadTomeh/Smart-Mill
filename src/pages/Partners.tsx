@@ -33,6 +33,7 @@ import {
   AlertCircle,
   Archive
 } from "lucide-react";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSeason } from "@/contexts/SeasonContext";
@@ -131,7 +132,8 @@ export default function Partners() {
     if (!window.confirm(`أرشفة الشريك ${partner.name}؟ سيبقى تاريخه المالي محفوظاً.`)) return;
     const { error } = await supabase.rpc("archive_master_data_command", { p_entity: "partner", p_id: partner.id });
     if (error) {
-      toast({ title: "تعذرت الأرشفة", description: error.message, variant: "destructive" });
+      console.error("archivePartner error", error);
+      toast({ title: "تعذرت الأرشفة", description: getArabicErrorMessage(error, "تعذر أرشفة الشريك."), variant: "destructive" });
       return;
     }
     toast({ title: "تمت أرشفة الشريك", description: "بقيت الالتزامات والحركات التاريخية محفوظة." });
@@ -165,7 +167,8 @@ export default function Partners() {
       setAddPartnerOpen(false);
       await fetchPartners();
     } catch (err: any) {
-      toast({ title: "خطأ", description: err.message || "تعذر إضافة الشريك", variant: "destructive" });
+      console.error("addPartner error", err);
+      toast({ title: "تعذر إضافة الشريك", description: getArabicErrorMessage(err, "تعذر إضافة الشريك."), variant: "destructive" });
     } finally {
       setSavingPartner(false);
     }
@@ -204,7 +207,7 @@ export default function Partners() {
     } catch (err: any) {
       toast({
         title: "فشل العملية",
-        description: err.message || "تعذر تسجيل حركة الشريك",
+        description: getArabicErrorMessage(err, "تعذر تسجيل حركة الشريك."),
         variant: "destructive",
       });
     } finally {
@@ -235,7 +238,7 @@ export default function Partners() {
     } catch (err: any) {
       toast({
         title: "تعذر عكس الحركة",
-        description: err.message || "فشل عكس حركة الشريك",
+        description: getArabicErrorMessage(err, "تعذر عكس حركة الشريك."),
         variant: "destructive",
       });
     }

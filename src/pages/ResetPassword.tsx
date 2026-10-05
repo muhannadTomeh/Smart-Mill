@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { KeyRound } from "lucide-react";
 
 import { storeCredential } from "@/lib/credentialVault";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 const ResetPassword = () => {
   const [password, setPassword] = useState("");
@@ -43,7 +44,7 @@ const ResetPassword = () => {
     if (error) {
       toast({
         title: "خطأ",
-        description: error.message,
+        description: getArabicErrorMessage(error, "تعذر تحديث كلمة المرور."),
         variant: "destructive",
       });
     } else {

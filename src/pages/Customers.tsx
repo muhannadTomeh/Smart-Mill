@@ -19,6 +19,7 @@ import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface Customer {
   active?: boolean;
@@ -194,7 +195,8 @@ const Customers = () => {
       setAddDialogOpen(false);
       await fetchCustomers();
     } catch (err: any) {
-      toast({ title: "خطأ", description: err.message || "تعذر إضافة الزبون", variant: "destructive" });
+      console.error("addCustomer error", err);
+      toast({ title: "تعذر إضافة الزبون", description: getArabicErrorMessage(err, "تعذر إضافة الزبون."), variant: "destructive" });
     } finally {
       setSavingNewCust(false);
     }

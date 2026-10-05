@@ -23,6 +23,7 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { QuickInvoiceSheet } from "@/components/queue/QuickInvoiceSheet";
 import { printThermalQueueTicket } from "@/lib/thermalReceiptPrinter";
 import { saveDeletedInvoice } from "@/lib/deletedInvoices";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
 import {
   QueueItem,
   parseEstimatedMinutes,
@@ -328,7 +329,8 @@ const Queue = () => {
       toast.success(`تمت إضافة الزبون "${newCustomer.name.trim()}" برقم دور #${nextPosition}`);
       await fetchQueue();
     } else {
-      toast.error("تعذر إضافة الزبون: " + error.message);
+      console.error("addQueueCustomer error", error);
+      toast.error(getArabicErrorMessage(error, "تعذر إضافة الزبون إلى الطابور."));
     }
   };
 
@@ -451,7 +453,10 @@ const Queue = () => {
     });
 
     const { error } = await supabase.from("queue").update({ status: "completed" }).eq("id", id);
-    if (error) toast.error("تعذر إنهاء العصر: " + error.message);
+    if (error) {
+      console.error("finishMilling error", error);
+      toast.error(getArabicErrorMessage(error, "تعذر إنهاء عملية العصر."));
+    }
     else toast.success("تم الانتهاء من العصر — انتقل لقسم الفوترة");
     await fetchQueue();
   };
@@ -580,7 +585,10 @@ const Queue = () => {
       error = retry.error;
     }
 
-    if (error) toast.error("تعذر بدء العصر: " + error.message);
+    if (error) {
+      console.error("startMilling error", error);
+      toast.error(getArabicErrorMessage(error, "تعذر بدء عملية العصر."));
+    }
     else toast.success(`تم بدء العصر — الوقت التقديري: ${estMin} دقيقة`);
     await fetchQueue();
   };
@@ -626,7 +634,8 @@ const Queue = () => {
       .eq("id", id);
 
     if (error) {
-      toast.error("تعذر إرجاع الزبون: " + error.message);
+      console.error("returnQueueCustomer error", error);
+      toast.error(getArabicErrorMessage(error, "تعذر إرجاع الزبون إلى الطابور."));
     } else {
       toast.success(`تم إرجاع الزبون "${target.name}" إلى قائمة الانتظار`);
     }
@@ -754,7 +763,8 @@ const Queue = () => {
       toast.success(`تم تبديل الدور والمكان — أصبح دور "${sourceCustomer.name}" رقم #${newPosition}`);
     } catch (err: any) {
       console.error("Failed to apply reorder in database:", err);
-      toast.error("تعذر حفظ الترتيب الجديد في قاعدة البيانات: " + (err?.message || "خطأ غير معروف"));
+      console.error("reorderQueue error", err);
+      toast.error(getArabicErrorMessage(err, "تعذر حفظ ترتيب الطابور الجديد."));
       isReorderingRef.current = false;
       await fetchQueue();
       return;
