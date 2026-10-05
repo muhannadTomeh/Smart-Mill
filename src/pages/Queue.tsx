@@ -501,6 +501,13 @@ const Queue = () => {
     const deletedName = deleteTarget.name;
     const isWaitingForInvoice = deleteTarget.status === "completed";
 
+    const { error } = await supabase.from("queue").delete().eq("id", deleteTarget.id);
+    if (error) {
+      toast.error(getArabicErrorMessage(error, "تعذر حذف الدور وإعادة ترتيب الطابور."));
+      await fetchQueue();
+      return;
+    }
+
     // Save snapshot to deleted invoices (persisted for 24 hours)
     saveDeletedInvoice({
       id: deleteTarget.id,
@@ -518,7 +525,6 @@ const Queue = () => {
     });
 
     setAllItems((prev) => prev.filter((i) => i.id !== deleteTarget.id));
-    await supabase.from("queue").delete().eq("id", deleteTarget.id);
 
     toast.success(
       isWaitingForInvoice
