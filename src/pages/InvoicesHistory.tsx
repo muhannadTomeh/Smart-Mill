@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatTime } from "@/lib/formatters";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -25,6 +25,7 @@ import { useRole } from "@/contexts/RoleContext";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 
 interface InvoiceRecord {
   id: string;
@@ -332,32 +333,24 @@ export default function InvoicesHistory() {
               </SelectContent>
             </Select>
 
-            <div className="space-y-1">
-              <span className="text-[11px] text-muted-foreground">من تاريخ</span>
-              <Input
-                type="date"
-                value={dateFrom}
-                max={dateTo || undefined}
-                onChange={(event) => {
-                  setDateFrom(event.target.value);
-                  setInvoicePage(0);
-                }}
-                className="h-9 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <span className="text-[11px] text-muted-foreground">إلى تاريخ</span>
-              <Input
-                type="date"
-                value={dateTo}
-                min={dateFrom || undefined}
-                onChange={(event) => {
-                  setDateTo(event.target.value);
-                  setInvoicePage(0);
-                }}
-                className="h-9 text-xs"
-              />
-            </div>
+            <ClickableDateInput
+              label="من تاريخ"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(value) => {
+                setDateFrom(value);
+                setInvoicePage(0);
+              }}
+            />
+            <ClickableDateInput
+              label="إلى تاريخ"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(value) => {
+                setDateTo(value);
+                setInvoicePage(0);
+              }}
+            />
             <Button
               type="button"
               variant="ghost"
@@ -412,9 +405,12 @@ export default function InvoicesHistory() {
                   {invoices.map((inv) => (
                     <TableRow key={inv.id} className="hover:bg-muted/20">
                       <TableCell className="text-right text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1.5 font-mono">
+                        <div className="flex items-start gap-1.5 font-mono">
                           <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{formatDate(inv.created_at)}</span>
+                          <div>
+                            <div>{formatDate(inv.created_at)}</div>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground/80">{formatTime(inv.created_at)}</div>
+                          </div>
                         </div>
                       </TableCell>
 
@@ -579,7 +575,7 @@ export default function InvoicesHistory() {
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {receivableMovements.filter((movement) => movement.invoice_id === receivableHistoryInvoice?.id).map((movement) => (
               <div key={movement.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
-                <div><div className="font-medium">{Number(movement.amount).toLocaleString()} {currency}</div><div className="text-xs text-muted-foreground">{formatDate(movement.created_at)} · {movement.movement_type}</div></div>
+                <div><div className="font-medium">{Number(movement.amount).toLocaleString()} {currency}</div><div className="text-xs text-muted-foreground">{formatDate(movement.created_at)} · {formatTime(movement.created_at)} · {movement.movement_type}</div></div>
                 {movement.movement_type === "collection" && !receivableMovements.some((item) => item.reversal_of === movement.id) && !isEmployee && <Button size="sm" variant="outline" onClick={() => reverseCollection(movement)}>عكس</Button>}
               </div>
             ))}

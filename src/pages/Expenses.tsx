@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { 
   Sprout, Plus, Calendar, DollarSign, Trash2, Tag, Edit3, 
-  RefreshCw, X, Receipt, Wallet, Filter
+  RefreshCw, X, Receipt, Wallet, Filter, Search
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -25,8 +25,11 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatDate, formatNumber } from "@/lib/formatters";
+import { formatDate, formatNumber, formatTime } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { HistoryPagination } from "@/components/history/HistoryPagination";
+import { ClickableDateInput } from "@/components/history/ClickableDateInput";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 interface Expense {
   id: string;
@@ -101,7 +104,12 @@ const Expenses = () => {
   const [savingExpense, setSavingExpense] = useState(false);
 
   // Filter state
-  const [filter, setFilter] = useState({ category: "", dateFrom: "", dateTo: "" });
+  const [filter, setFilter] = useState({ category: "", paymentMethod: "", dateFrom: "", dateTo: "" });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [expensePage, setExpensePage] = useState(0);
+  const [expensePageSize, setExpensePageSize] = useState(10);
+  const [expenseCount, setExpenseCount] = useState(0);
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
 
   useEffect(() => {
@@ -112,17 +120,21 @@ const Expenses = () => {
 
   useEffect(() => {
     if (activeSeason) {
-      fetchExpenses();
       fetchCategories();
       fetchPartnersAndSuppliers();
     } else {
       setExpenses([]);
+      setExpenseCount(0);
       setCategories([]);
       setPartners([]);
       setSuppliers([]);
       setLoading(false);
     }
   }, [activeSeason?.id]);
+
+  useEffect(() => {
+    if (activeSeason) void fetchExpenses();
+  }, [activeSeason?.id, activeSeason?.mill_id, millId, user?.id, debouncedSearchTerm, filter.category, filter.paymentMethod, filter.dateFrom, filter.dateTo, expensePage, expensePageSize]);
 
   const fetchPartnersAndSuppliers = async () => {
     try {
@@ -163,7 +175,7 @@ const Expenses = () => {
     try {
       let query = supabase
         .from("expenses")
-        .select("*, partners(name), suppliers(name)")
+        .select("*, partners(name), suppliers(name)", { count: "exact" })
         .eq("season_id", activeSeason.id)
         .is("voided_at", null);
 
@@ -174,11 +186,39 @@ const Expenses = () => {
         query = query.eq("user_id", user.id);
       }
 
-      const { data, error } = await query.order("created_at", { ascending: false });
+      if (filter.category) query = query.eq("category", filter.category);
+      if (filter.paymentMethod) query = query.eq("payment_method", filter.paymentMethod);
+      if (filter.dateFrom) query = query.gte("created_at", new Date(`${filter.dateFrom}T00:00:00`).toISOString());
+      if (filter.dateTo) {
+        const dateToExclusive = new Date(`${filter.dateTo}T00:00:00`);
+        dateToExclusive.setDate(dateToExclusive.getDate() + 1);
+        query = query.lt("created_at", dateToExclusive.toISOString());
+      }
+
+      const safeSearch = debouncedSearchTerm.trim().replace(/[,()]/g, " ");
+      if (safeSearch) {
+        query = query.or(`category.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%`);
+      }
+
+      const from = expensePage * expensePageSize;
+      const { data, error, count } = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + expensePageSize - 1);
       if (error) {
         console.error("fetchExpenses error:", error);
+        setExpenses([]);
+        setExpenseCount(0);
+        return;
+      }
+      const resolvedCount = count || 0;
+      const maxPage = Math.max(0, Math.ceil(resolvedCount / expensePageSize) - 1);
+      if (expensePage > maxPage) {
+        setExpensePage(maxPage);
+        return;
       }
       setExpenses((data as Expense[]) || []);
+      setExpenseCount(resolvedCount);
     } finally {
       setLoading(false);
     }
@@ -330,14 +370,7 @@ const Expenses = () => {
     ])
   );
 
-  const filteredExpenses = expenses.filter((exp) => {
-    if (filter.category && exp.category !== filter.category) return false;
-    if (filter.dateFrom && new Date(exp.created_at) < new Date(filter.dateFrom)) return false;
-    if (filter.dateTo && new Date(exp.created_at) > new Date(filter.dateTo + "T23:59:59")) return false;
-    return true;
-  });
-
-  const getTotalExpenses = () => filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const getCurrentPageTotal = () => expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   const handleSelectQuickTag = (tag: string) => {
     if (isCustomMode) {
@@ -347,10 +380,12 @@ const Expenses = () => {
     }
   };
 
-  const hasActiveFilters = Boolean(filter.category || filter.dateFrom || filter.dateTo);
+  const hasActiveFilters = Boolean(searchTerm || filter.category || filter.paymentMethod || filter.dateFrom || filter.dateTo);
 
   const clearFilters = () => {
-    setFilter({ category: "", dateFrom: "", dateTo: "" });
+    setSearchTerm("");
+    setFilter({ category: "", paymentMethod: "", dateFrom: "", dateTo: "" });
+    setExpensePage(0);
   };
 
   const page = (
@@ -401,9 +436,9 @@ const Expenses = () => {
         <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground font-medium">إجمالي المصاريف المعروضة</p>
+              <p className="text-xs text-muted-foreground font-medium">إجمالي مصاريف الصفحة الحالية</p>
               <h3 className="text-2xl font-bold text-destructive font-mono mt-1">
-                {formatNumber(getTotalExpenses())} <span className="text-xs font-normal text-muted-foreground">{activeCurrency}</span>
+                {formatNumber(getCurrentPageTotal())} <span className="text-xs font-normal text-muted-foreground">{activeCurrency}</span>
               </h3>
             </div>
             <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive">
@@ -417,7 +452,7 @@ const Expenses = () => {
             <div>
               <p className="text-xs text-muted-foreground font-medium">إجمالي عدد المصاريف</p>
               <h3 className="text-2xl font-bold text-foreground font-mono mt-1">
-                {expenses.length} <span className="text-xs font-normal text-muted-foreground">مصروف</span>
+                {expenseCount} <span className="text-xs font-normal text-muted-foreground">مصروف</span>
               </h3>
             </div>
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -449,63 +484,90 @@ const Expenses = () => {
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <Receipt className="h-4 w-4 text-primary" />
                 <span>سجل المصاريف</span>
+                <Badge variant="secondary">{expenseCount.toLocaleString("ar-u-nu-latn")}</Badge>
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                عرض ومراجعة كافة المصاريف التشغيلية ومصادر تمويلها خلال الموسم
+                تظهر 10 مصاريف افتراضيًا مع البحث والفلترة حسب النوع والتمويل والتاريخ
               </CardDescription>
             </div>
 
-            {/* Filter Controls Bar */}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <div className="flex items-center gap-1.5 bg-muted/30 border border-border/60 rounded-xl px-2.5 py-1">
+            {/* Server-side filters */}
+            <div className="grid w-full gap-2 rounded-xl border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-6 md:max-w-4xl">
+              <div className="relative self-end sm:col-span-2">
+                <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={searchTerm}
+                  onChange={(event) => {
+                    setSearchTerm(event.target.value);
+                    setExpensePage(0);
+                  }}
+                  placeholder="بحث بنوع المصروف أو الوصف..."
+                  className="h-9 pe-9 text-xs"
+                />
+              </div>
+
+              <div className="flex h-9 self-end items-center gap-1.5 rounded-md border bg-background px-3">
                 <Filter className="h-3.5 w-3.5 text-muted-foreground" />
                 <select
                   value={filter.category}
-                  onChange={(e) => setFilter((p) => ({ ...p, category: e.target.value }))}
-                  className="h-7 text-xs bg-transparent border-0 focus:ring-0 text-foreground cursor-pointer"
+                  onChange={(event) => {
+                    setFilter((previous) => ({ ...previous, category: event.target.value }));
+                    setExpensePage(0);
+                  }}
+                  className="h-full min-w-0 flex-1 bg-transparent text-xs outline-none"
                 >
-                  <option value="">جميع الأنواع</option>
+                  <option value="">كل الأنواع</option>
                   {allFilterCategories.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
+                    <option key={name} value={name}>{name}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="flex items-center gap-1.5 bg-muted/30 border border-border/60 rounded-xl px-2.5 py-1">
-                <span className="text-[11px] text-muted-foreground">من:</span>
-                <input
-                  type="date"
-                  dir="ltr"
-                  value={filter.dateFrom}
-                  onChange={(e) => setFilter((p) => ({ ...p, dateFrom: e.target.value }))}
-                  className="h-7 text-xs bg-transparent border-0 text-foreground"
-                />
-              </div>
+              <select
+                value={filter.paymentMethod}
+                onChange={(event) => {
+                  setFilter((previous) => ({ ...previous, paymentMethod: event.target.value }));
+                  setExpensePage(0);
+                }}
+                className="h-9 self-end rounded-md border border-input bg-background px-3 text-xs outline-none"
+              >
+                <option value="">كل طرق التمويل</option>
+                <option value="cash">نقدي</option>
+                <option value="credit">آجل</option>
+                <option value="partner">دفع شريك</option>
+              </select>
 
-              <div className="flex items-center gap-1.5 bg-muted/30 border border-border/60 rounded-xl px-2.5 py-1">
-                <span className="text-[11px] text-muted-foreground">إلى:</span>
-                <input
-                  type="date"
-                  dir="ltr"
-                  value={filter.dateTo}
-                  onChange={(e) => setFilter((p) => ({ ...p, dateTo: e.target.value }))}
-                  className="h-7 text-xs bg-transparent border-0 text-foreground"
-                />
-              </div>
+              <ClickableDateInput
+                label="من تاريخ"
+                value={filter.dateFrom}
+                max={filter.dateTo || undefined}
+                onChange={(value) => {
+                  setFilter((previous) => ({ ...previous, dateFrom: value }));
+                  setExpensePage(0);
+                }}
+              />
 
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  <span>إلغاء الفلاتر</span>
-                </Button>
-              )}
+              <ClickableDateInput
+                label="إلى تاريخ"
+                value={filter.dateTo}
+                min={filter.dateFrom || undefined}
+                onChange={(value) => {
+                  setFilter((previous) => ({ ...previous, dateTo: value }));
+                  setExpensePage(0);
+                }}
+              />
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                disabled={!hasActiveFilters}
+                className="h-9 self-end px-2 text-xs text-muted-foreground hover:text-foreground gap-1 lg:col-start-6"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>مسح</span>
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -516,7 +578,7 @@ const Expenses = () => {
               <RefreshCw className="h-6 w-6 animate-spin text-primary" />
               <p className="text-xs">جارٍ تحميل سجل المصاريف...</p>
             </div>
-          ) : filteredExpenses.length === 0 ? (
+          ) : expenses.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground px-4">
               <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-base font-semibold text-foreground">لا توجد مصاريف مسجلة</p>
@@ -552,12 +614,15 @@ const Expenses = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredExpenses.map((exp) => (
+                  {expenses.map((exp) => (
                     <TableRow key={exp.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell className="text-right text-xs font-mono">
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <div className="flex items-start gap-1.5 text-muted-foreground">
                           <Calendar className="h-3.5 w-3.5" />
-                          <span>{formatDate(exp.created_at)}</span>
+                          <div>
+                            <div>{formatDate(exp.created_at)}</div>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground/80">{formatTime(exp.created_at)}</div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -603,6 +668,16 @@ const Expenses = () => {
                   ))}
                 </TableBody>
               </Table>
+              <HistoryPagination
+                page={expensePage}
+                pageSize={expensePageSize}
+                totalCount={expenseCount}
+                onPageChange={setExpensePage}
+                onPageSizeChange={(pageSize) => {
+                  setExpensePageSize(pageSize);
+                  setExpensePage(0);
+                }}
+              />
             </div>
           )}
         </CardContent>

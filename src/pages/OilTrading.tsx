@@ -19,10 +19,11 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatTime } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 
 interface Transaction {
   id: string;
@@ -518,32 +519,24 @@ const OilTrading = () => {
                 <option value="sell">بيع زيت</option>
               </select>
             </div>
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">من تاريخ</Label>
-              <Input
-                type="date"
-                value={historyDateFrom}
-                max={historyDateTo || undefined}
-                onChange={(event) => {
-                  setHistoryDateFrom(event.target.value);
-                  setHistoryPage(0);
-                }}
-                className="h-9 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">إلى تاريخ</Label>
-              <Input
-                type="date"
-                value={historyDateTo}
-                min={historyDateFrom || undefined}
-                onChange={(event) => {
-                  setHistoryDateTo(event.target.value);
-                  setHistoryPage(0);
-                }}
-                className="h-9 text-xs"
-              />
-            </div>
+            <ClickableDateInput
+              label="من تاريخ"
+              value={historyDateFrom}
+              max={historyDateTo || undefined}
+              onChange={(value) => {
+                setHistoryDateFrom(value);
+                setHistoryPage(0);
+              }}
+            />
+            <ClickableDateInput
+              label="إلى تاريخ"
+              value={historyDateTo}
+              min={historyDateFrom || undefined}
+              onChange={(value) => {
+                setHistoryDateTo(value);
+                setHistoryPage(0);
+              }}
+            />
             <Button
               type="button"
               variant="ghost"
@@ -613,9 +606,12 @@ const OilTrading = () => {
                   {transactions.map((tx) => (
                     <TableRow key={tx.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell className="text-right text-xs font-mono">
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <div className="flex items-start gap-1.5 text-muted-foreground">
                           <Calendar className="h-3.5 w-3.5" />
-                          <span>{formatDate(tx.created_at)}</span>
+                          <div>
+                            <div>{formatDate(tx.created_at)}</div>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground/80">{formatTime(tx.created_at)}</div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

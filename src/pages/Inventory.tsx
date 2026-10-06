@@ -23,10 +23,11 @@ import { useCashBalance } from "@/hooks/useCashBalance";
 import { useRole } from "@/contexts/RoleContext";
 import { useToast } from "@/hooks/use-toast";
 import { Link, Navigate } from "react-router-dom";
-import { formatDate, formatNumber } from "@/lib/formatters";
+import { formatDate, formatNumber, formatTime } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 
 interface CashMovement {
   id: string;
@@ -1195,9 +1196,12 @@ const Inventory = () => {
                                   className="hover:bg-muted/30"
                                 >
                                   <TableCell className="text-right whitespace-nowrap text-xs font-mono">
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-start gap-1">
                                       <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                      {formatDate(movement.created_at)}
+                                      <div>
+                                        <div>{formatDate(movement.created_at)}</div>
+                                        <div className="mt-0.5 text-[10px] text-muted-foreground">{formatTime(movement.created_at)}</div>
+                                      </div>
                                     </div>
                                   </TableCell>
 
@@ -1374,7 +1378,8 @@ const Inventory = () => {
                                   className="hover:bg-muted/30"
                                 >
                                   <TableCell className="text-right text-xs font-mono">
-                                    {formatDate(movement.created_at)}
+                                    <div>{formatDate(movement.created_at)}</div>
+                                    <div className="mt-0.5 text-[10px] text-muted-foreground">{formatTime(movement.created_at)}</div>
                                   </TableCell>
 
                                   <TableCell className="text-right">
@@ -1602,9 +1607,12 @@ const Inventory = () => {
                         return (
                           <TableRow key={sm.id} className="hover:bg-muted/30">
                             <TableCell className="text-right text-xs font-mono">
-                              <div className="flex items-center gap-1 text-muted-foreground">
+                              <div className="flex items-start gap-1 text-muted-foreground">
                                 <Calendar className="h-3.5 w-3.5" />
-                                <span>{formatDate(sm.created_at)}</span>
+                                <div>
+                                  <div>{formatDate(sm.created_at)}</div>
+                                  <div className="mt-0.5 text-[10px] text-muted-foreground/80">{formatTime(sm.created_at)}</div>
+                                </div>
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-semibold text-xs">
@@ -1733,32 +1741,24 @@ const Inventory = () => {
                     <option value="partner">دفع شريك</option>
                   </select>
 
-                  <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">من تاريخ</Label>
-                    <Input
-                      type="date"
-                      value={purchaseDateFrom}
-                      max={purchaseDateTo || undefined}
-                      onChange={(event) => {
-                        setPurchaseDateFrom(event.target.value);
-                        setPurchasePage(0);
-                      }}
-                      className="h-9 text-xs"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">إلى تاريخ</Label>
-                    <Input
-                      type="date"
-                      value={purchaseDateTo}
-                      min={purchaseDateFrom || undefined}
-                      onChange={(event) => {
-                        setPurchaseDateTo(event.target.value);
-                        setPurchasePage(0);
-                      }}
-                      className="h-9 text-xs"
-                    />
-                  </div>
+                  <ClickableDateInput
+                    label="من تاريخ"
+                    value={purchaseDateFrom}
+                    max={purchaseDateTo || undefined}
+                    onChange={(value) => {
+                      setPurchaseDateFrom(value);
+                      setPurchasePage(0);
+                    }}
+                  />
+                  <ClickableDateInput
+                    label="إلى تاريخ"
+                    value={purchaseDateTo}
+                    min={purchaseDateFrom || undefined}
+                    onChange={(value) => {
+                      setPurchaseDateTo(value);
+                      setPurchasePage(0);
+                    }}
+                  />
                   <Button
                     type="button"
                     variant="ghost"
@@ -1811,8 +1811,9 @@ const Inventory = () => {
                     <TableBody>
                       {purchaseHistory.map((purchase) => (
                         <TableRow key={purchase.id}>
-                          <TableCell className="text-xs">
-                            {formatDate(purchase.created_at)}
+                          <TableCell className="text-xs font-mono">
+                            <div>{formatDate(purchase.created_at)}</div>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground">{formatTime(purchase.created_at)}</div>
                           </TableCell>
 
                           <TableCell>
