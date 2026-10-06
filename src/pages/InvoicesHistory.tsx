@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
@@ -23,6 +23,8 @@ import { useDeletedInvoices } from "@/hooks/useDeletedInvoices";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/contexts/RoleContext";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { HistoryPagination } from "@/components/history/HistoryPagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 interface InvoiceRecord {
   id: string;
@@ -63,6 +65,12 @@ export default function InvoicesHistory() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [invoicePage, setInvoicePage] = useState(0);
+  const [invoicePageSize, setInvoicePageSize] = useState(10);
+  const [invoiceCount, setInvoiceCount] = useState(0);
+  const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRecord | null>(null);
   const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
   const [receivableMovements, setReceivableMovements] = useState<ReceivableMovement[]>([]);
@@ -98,7 +106,7 @@ export default function InvoicesHistory() {
     try {
       let query = supabase
         .from("invoices")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("season_id", activeSeason.id);
 
       if (millId || activeSeason.mill_id) {
@@ -107,13 +115,48 @@ export default function InvoicesHistory() {
         query = query.eq("user_id", user.id);
       }
 
-      const [invoiceResult, receivableResult] = await Promise.all([
-        query.order("created_at", { ascending: false }),
-        supabase.from("receivable_movements" as any).select("id, invoice_id, amount, movement_type, reversal_of, created_at").eq("season_id", activeSeason.id).order("created_at", { ascending: false }),
-      ]);
-      const { data } = invoiceResult;
-      setInvoices((data as InvoiceRecord[]) || []);
-      setReceivableMovements((receivableResult.data || []) as ReceivableMovement[]);
+      const normalizedSearch = debouncedSearchTerm.trim().replace(/[%_]/g, "");
+      if (normalizedSearch) query = query.ilike("customer_name", `%${normalizedSearch}%`);
+      if (paymentFilter !== "all") query = query.eq("payment_type", paymentFilter);
+      if (dateFrom) query = query.gte("created_at", new Date(`${dateFrom}T00:00:00`).toISOString());
+      if (dateTo) {
+        const dateToExclusive = new Date(`${dateTo}T00:00:00`);
+        dateToExclusive.setDate(dateToExclusive.getDate() + 1);
+        query = query.lt("created_at", dateToExclusive.toISOString());
+      }
+
+      const from = invoicePage * invoicePageSize;
+      const invoiceResult = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + invoicePageSize - 1);
+
+      if (invoiceResult.error) throw invoiceResult.error;
+
+      const resolvedCount = invoiceResult.count ?? 0;
+      const maxPage = Math.max(0, Math.ceil(resolvedCount / invoicePageSize) - 1);
+      if (invoicePage > maxPage) {
+        setInvoicePage(maxPage);
+        return;
+      }
+
+      const pageInvoices = (invoiceResult.data as InvoiceRecord[]) || [];
+      setInvoices(pageInvoices);
+      setInvoiceCount(resolvedCount);
+
+      const invoiceIds = pageInvoices.map((invoice) => invoice.id);
+      if (invoiceIds.length === 0) {
+        setReceivableMovements([]);
+      } else {
+        const receivableResult = await supabase
+          .from("receivable_movements" as any)
+          .select("id, invoice_id, amount, movement_type, reversal_of, created_at")
+          .eq("season_id", activeSeason.id)
+          .in("invoice_id", invoiceIds)
+          .order("created_at", { ascending: false });
+        if (receivableResult.error) throw receivableResult.error;
+        setReceivableMovements((receivableResult.data || []) as ReceivableMovement[]);
+      }
     } catch (err) {
       console.error("Error fetching invoices:", err);
     } finally {
@@ -125,7 +168,7 @@ export default function InvoicesHistory() {
     if (activeSeason) {
       fetchInvoices();
     }
-  }, [activeSeason?.id, millId, user?.id]);
+  }, [activeSeason?.id, millId, user?.id, debouncedSearchTerm, paymentFilter, dateFrom, dateTo, invoicePage, invoicePageSize]);
 
   const receivableBalance = (invoiceId: string) => receivableMovements
     .filter((movement) => movement.invoice_id === invoiceId)
@@ -178,20 +221,12 @@ export default function InvoicesHistory() {
     }
   };
 
-
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      const matchesSearch = !searchTerm || inv.customer_name.toLowerCase().includes(searchTerm.toLowerCase().trim());
-      const matchesFilter = paymentFilter === "all" || inv.payment_type === paymentFilter;
-      return matchesSearch && matchesFilter;
-    });
-  }, [invoices, searchTerm, paymentFilter]);
-
   const paymentLabel = (type: string) => {
     switch (type) {
       case "oil": return "زيت فقط";
       case "cash": return "نقدي فقط";
       case "mixed": return "دفع مختلط";
+      case "credit": return "آجل";
       default: return type;
     }
   };
@@ -204,10 +239,14 @@ export default function InvoicesHistory() {
         return <Badge className="bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border-blue-300">نقدي فقط</Badge>;
       case "mixed":
         return <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300">دفع مختلط</Badge>;
+      case "credit":
+        return <Badge className="bg-violet-100 dark:bg-violet-950/60 text-violet-800 dark:text-violet-300 border-violet-300">آجل</Badge>;
       default:
         return <Badge variant="outline">{type}</Badge>;
     }
   };
+
+  const hasInvoiceFilters = Boolean(searchTerm || paymentFilter !== "all" || dateFrom || dateTo);
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -244,45 +283,97 @@ export default function InvoicesHistory() {
 
       {/* Main Table Card */}
       <Card className="border-border">
-        <CardHeader className="pb-4">
+        <CardHeader className="space-y-4 pb-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">قائمة الفواتير الصادرة</CardTitle>
                 <Badge variant="secondary" className="text-xs font-mono">
-                  {filteredInvoices.length} فاتورة
+                  {invoiceCount.toLocaleString("ar-u-nu-latn")} فاتورة
                 </Badge>
               </div>
               <CardDescription className="text-xs">
-                انقر على معاينة لعرض تفاصيل الفاتورة أو طباعة لإصدار إيصال حراري 80mm
+                تظهر 10 فواتير افتراضيًا، ويمكنك تضييق النتائج بالاسم والفترة وطريقة الدفع
               </CardDescription>
             </div>
+          </div>
 
-            {/* Search & Filter Bar */}
-            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-              <div className="relative flex-1 sm:w-64">
-                <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="بحث باسم الزبون..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pe-9 text-xs h-9"
-                />
-              </div>
-
-              <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                <SelectTrigger className="h-9 w-full sm:w-36 text-xs gap-1">
-                  <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-                  <SelectValue placeholder="طريقة الدفع" />
-                </SelectTrigger>
-                <SelectContent dir="rtl">
-                  <SelectItem value="all">كل طرق الدفع</SelectItem>
-                  <SelectItem value="oil">زيت فقط</SelectItem>
-                  <SelectItem value="cash">نقدي فقط</SelectItem>
-                  <SelectItem value="mixed">دفع مختلط</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="grid gap-2 rounded-xl border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="relative self-end sm:col-span-2">
+              <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="بحث باسم الزبون..."
+                value={searchTerm}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setInvoicePage(0);
+                }}
+                className="h-9 pe-9 text-xs"
+              />
             </div>
+
+            <Select
+              value={paymentFilter}
+              onValueChange={(value) => {
+                setPaymentFilter(value);
+                setInvoicePage(0);
+              }}
+            >
+              <SelectTrigger className="h-9 self-end text-xs gap-1">
+                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                <SelectValue placeholder="طريقة الدفع" />
+              </SelectTrigger>
+              <SelectContent dir="rtl">
+                <SelectItem value="all">كل طرق الدفع</SelectItem>
+                <SelectItem value="oil">زيت فقط</SelectItem>
+                <SelectItem value="cash">نقدي فقط</SelectItem>
+                <SelectItem value="mixed">دفع مختلط</SelectItem>
+                <SelectItem value="credit">آجل</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="space-y-1">
+              <span className="text-[11px] text-muted-foreground">من تاريخ</span>
+              <Input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(event) => {
+                  setDateFrom(event.target.value);
+                  setInvoicePage(0);
+                }}
+                className="h-9 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[11px] text-muted-foreground">إلى تاريخ</span>
+              <Input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(event) => {
+                  setDateTo(event.target.value);
+                  setInvoicePage(0);
+                }}
+                className="h-9 text-xs"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 self-end text-xs"
+              disabled={!hasInvoiceFilters}
+              onClick={() => {
+                setSearchTerm("");
+                setPaymentFilter("all");
+                setDateFrom("");
+                setDateTo("");
+                setInvoicePage(0);
+              }}
+            >
+              مسح الفلاتر
+            </Button>
           </div>
         </CardHeader>
 
@@ -292,19 +383,20 @@ export default function InvoicesHistory() {
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-sm">جارٍ تحميل سجل الفواتير...</p>
             </div>
-          ) : filteredInvoices.length === 0 ? (
+          ) : invoices.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Receipt className="h-16 w-16 mx-auto mb-3 opacity-30 text-primary" />
               <p className="text-base font-bold text-foreground">لا توجد فواتير مطابقة</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {searchTerm || paymentFilter !== "all" 
+                {hasInvoiceFilters
                   ? "جرب تعديل عبارة البحث أو تغيير فلتر الدفع" 
                   : "لم يتم إصدار فواتير في هذا الموسم بعد"}
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <Table dir="rtl">
+            <div className="overflow-hidden rounded-lg border">
+              <div className="overflow-x-auto">
+                <Table dir="rtl">
                 <TableHeader>
                   <TableRow className="bg-muted/40">
                     <TableHead className="text-right">التاريخ والوقت</TableHead>
@@ -317,7 +409,7 @@ export default function InvoicesHistory() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInvoices.map((inv) => (
+                  {invoices.map((inv) => (
                     <TableRow key={inv.id} className="hover:bg-muted/20">
                       <TableCell className="text-right text-xs text-muted-foreground">
                         <div className="flex items-center gap-1.5 font-mono">
@@ -409,7 +501,18 @@ export default function InvoicesHistory() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
+              <HistoryPagination
+                page={invoicePage}
+                pageSize={invoicePageSize}
+                totalCount={invoiceCount}
+                onPageChange={setInvoicePage}
+                onPageSizeChange={(pageSize) => {
+                  setInvoicePageSize(pageSize);
+                  setInvoicePage(0);
+                }}
+              />
             </div>
           )}
         </CardContent>

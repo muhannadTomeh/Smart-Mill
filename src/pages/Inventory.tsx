@@ -11,7 +11,7 @@ import {
   ShoppingCart, Calendar,
   Package, Plus, RefreshCw, Layers, Tag,
   Handshake, Users, ArrowUpRight, ArrowDownLeft, Archive,
-  ChevronRight, ChevronLeft, Eye, EyeOff
+  ChevronRight, ChevronLeft, Eye, EyeOff, Search, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,6 +25,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Link, Navigate } from "react-router-dom";
 import { formatDate, formatNumber } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { HistoryPagination } from "@/components/history/HistoryPagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 interface CashMovement {
   id: string;
@@ -171,7 +173,15 @@ const Inventory = () => {
   };
 
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
-  const [purchaseDate, setPurchaseDate] = useState(getLocalDateString());
+  const [purchaseDateFrom, setPurchaseDateFrom] = useState("");
+  const [purchaseDateTo, setPurchaseDateTo] = useState("");
+  const [purchaseSearchTerm, setPurchaseSearchTerm] = useState("");
+  const [purchasePaymentFilter, setPurchasePaymentFilter] = useState("all");
+  const [purchasePage, setPurchasePage] = useState(0);
+  const [purchasePageSize, setPurchasePageSize] = useState(10);
+  const [purchaseCount, setPurchaseCount] = useState(0);
+  const [purchaseRefreshKey, setPurchaseRefreshKey] = useState(0);
+  const debouncedPurchaseSearch = useDebouncedValue(purchaseSearchTerm);
   const [expandedSection, setExpandedSection] = useState<
     "oil" | "cash" | "purchases" | "supply" | null
   >(null);
@@ -187,6 +197,7 @@ const Inventory = () => {
   const [stockMovements, setStockMovements] = useState<ProductMovement[]>([]);
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [loadingPurchaseHistory, setLoadingPurchaseHistory] = useState(false);
   const [cashOpeningBalanceExists, setCashOpeningBalanceExists] = useState<boolean | null>(null);
   // Modals state
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
@@ -238,7 +249,12 @@ const Inventory = () => {
   useEffect(() => {
     if (!activeSeason) return;
     void fetchProductsData();
-  }, [activeSeason?.id, purchaseDate]);
+  }, [activeSeason?.id]);
+
+  useEffect(() => {
+    if (!activeSeason) return;
+    void fetchPurchaseHistory();
+  }, [activeSeason?.id, activeSeason?.mill_id, millId, debouncedPurchaseSearch, purchasePaymentFilter, purchaseDateFrom, purchaseDateTo, purchasePage, purchasePageSize, purchaseRefreshKey]);
 
   useEffect(() => {
     setCashOpeningBalanceExists(null);
@@ -272,10 +288,11 @@ const Inventory = () => {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "product_stock_movements", filter: `season_id=eq.${activeSeason.id}` }, () => {
         void fetchProductsData();
+        setPurchaseRefreshKey((value) => value + 1);
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [activeSeason?.id, activeSeason?.mill_id, millId, selectedDate, purchaseDate, refetchCashBalance, refetchInventory]);
+  }, [activeSeason?.id, activeSeason?.mill_id, millId, selectedDate, refetchCashBalance, refetchInventory]);
 
   const fetchReadModels = async () => {
     const effectiveMillId = millId || activeSeason?.mill_id;
@@ -321,12 +338,9 @@ const Inventory = () => {
   const fetchProductsData = async () => {
     if (!activeSeason) return;
     setLoadingProducts(true);
-    const purchaseStartDate = new Date(`${purchaseDate}T00:00:00`);
-    const purchaseEndDate = new Date(`${purchaseDate}T00:00:00`);
-    purchaseEndDate.setDate(purchaseEndDate.getDate() + 1);
     try {
       const effectiveMillId = millId || activeSeason.mill_id;
-      const [prodsRes, balancesRes, supsRes, partsRes, movesRes, purchasesRes, salesRes] = await Promise.all([
+      const [prodsRes, balancesRes, supsRes, partsRes, movesRes, salesRes] = await Promise.all([
         supabase.from("products" as any).select("*").eq("mill_id", effectiveMillId).eq("active", true).order("name"),
         supabase.from("product_season_balances" as any)
           .select("product_id, current_stock")
@@ -339,13 +353,6 @@ const Inventory = () => {
           .eq("season_id", activeSeason.id)
           .order("created_at", { ascending: false })
           .limit(50),
-        supabase.from("product_purchases" as any)
-          .select("*, products(name, unit), suppliers(name), partners(name)")
-          .eq("season_id", activeSeason.id)
-          .gte("created_at", purchaseStartDate.toISOString())
-          .lt("created_at", purchaseEndDate.toISOString())
-          .order("created_at", { ascending: false }),
-
         (supabase.from("product_sales" as any) as any)
           .select("*, products(name, unit)")
           .eq("season_id", activeSeason.id)
@@ -378,13 +385,89 @@ const Inventory = () => {
       if (supsRes.data) setSuppliers(supsRes.data as any);
       if (partsRes.data) setPartners(partsRes.data as any);
       if (movesRes.data) setStockMovements(movesRes.data as any);
-      if (purchasesRes.data) setPurchaseHistory(purchasesRes.data as any[]);
       if (salesRes.data) setSalesHistory(salesRes.data as any[]);
 
     } catch (e) {
       console.error("fetchProductsData error:", e);
     } finally {
       setLoadingProducts(false);
+    }
+  };
+
+  const fetchPurchaseHistory = async () => {
+    if (!activeSeason) return;
+    const effectiveMillId = millId || activeSeason.mill_id;
+    if (!effectiveMillId) return;
+
+    setLoadingPurchaseHistory(true);
+    try {
+      const matchingFilters: string[] = [];
+      const normalizedSearch = debouncedPurchaseSearch.trim().replace(/[%_]/g, "");
+
+      if (normalizedSearch) {
+        const searchPattern = `%${normalizedSearch}%`;
+        const [matchedProducts, matchedSuppliers, matchedPartners] = await Promise.all([
+          supabase.from("products" as any).select("id").eq("mill_id", effectiveMillId).ilike("name", searchPattern),
+          supabase.from("suppliers" as any).select("id").eq("mill_id", effectiveMillId).ilike("name", searchPattern),
+          supabase.from("partners" as any).select("id").eq("mill_id", effectiveMillId).ilike("name", searchPattern),
+        ]);
+
+        if (matchedProducts.error) throw matchedProducts.error;
+        if (matchedSuppliers.error) throw matchedSuppliers.error;
+        if (matchedPartners.error) throw matchedPartners.error;
+
+        const productIds = (matchedProducts.data || []).map((item: any) => item.id);
+        const supplierIds = (matchedSuppliers.data || []).map((item: any) => item.id);
+        const partnerIds = (matchedPartners.data || []).map((item: any) => item.id);
+
+        if (productIds.length > 0) matchingFilters.push(`product_id.in.(${productIds.join(",")})`);
+        if (supplierIds.length > 0) matchingFilters.push(`supplier_id.in.(${supplierIds.join(",")})`);
+        if (partnerIds.length > 0) matchingFilters.push(`partner_id.in.(${partnerIds.join(",")})`);
+
+        if (matchingFilters.length === 0) {
+          setPurchaseHistory([]);
+          setPurchaseCount(0);
+          return;
+        }
+      }
+
+      let query = (supabase.from("product_purchases" as any) as any)
+        .select("*, products(name, unit), suppliers(name), partners(name)", { count: "exact" })
+        .eq("mill_id", effectiveMillId)
+        .eq("season_id", activeSeason.id);
+
+      if (matchingFilters.length > 0) query = query.or(matchingFilters.join(","));
+      if (purchasePaymentFilter !== "all") query = query.eq("payment_method", purchasePaymentFilter);
+      if (purchaseDateFrom) query = query.gte("created_at", new Date(`${purchaseDateFrom}T00:00:00`).toISOString());
+      if (purchaseDateTo) {
+        const dateToExclusive = new Date(`${purchaseDateTo}T00:00:00`);
+        dateToExclusive.setDate(dateToExclusive.getDate() + 1);
+        query = query.lt("created_at", dateToExclusive.toISOString());
+      }
+
+      const from = purchasePage * purchasePageSize;
+      const result = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + purchasePageSize - 1);
+
+      if (result.error) throw result.error;
+
+      const resolvedCount = result.count ?? 0;
+      const maxPage = Math.max(0, Math.ceil(resolvedCount / purchasePageSize) - 1);
+      if (purchasePage > maxPage) {
+        setPurchasePage(maxPage);
+        return;
+      }
+
+      setPurchaseHistory((result.data || []) as any[]);
+      setPurchaseCount(resolvedCount);
+    } catch (error) {
+      console.error("fetchPurchaseHistory error:", error);
+      setPurchaseHistory([]);
+      setPurchaseCount(0);
+    } finally {
+      setLoadingPurchaseHistory(false);
     }
   };
 
@@ -459,7 +542,7 @@ const Inventory = () => {
       return;
     }
     toast({ title: "تم إلغاء عملية الشراء", description: "سُجلت حركات عكسية للكاش والمخزون دون حذف التاريخ." });
-    await Promise.all([fetchProductsData(), refetchInventory(), refetchCashBalance(), fetchReadModels()]);
+    await Promise.all([fetchProductsData(), fetchPurchaseHistory(), refetchInventory(), refetchCashBalance(), fetchReadModels()]);
   };
 
   const adjustProductStock = async (product: Product) => {
@@ -712,6 +795,7 @@ const Inventory = () => {
 
       await Promise.all([
         fetchProductsData(),
+        fetchPurchaseHistory(),
         refetchInventory(),
         refetchCashBalance(),
         fetchReadModels(),
@@ -814,6 +898,13 @@ const Inventory = () => {
     );
   }, [stockMovements, stockPage]);
 
+  const hasPurchaseFilters = Boolean(
+    purchaseSearchTerm ||
+    purchasePaymentFilter !== "all" ||
+    purchaseDateFrom ||
+    purchaseDateTo
+  );
+
   if (isEmployee) {
     return <Navigate to="/queue" replace />;
   }
@@ -839,6 +930,7 @@ const Inventory = () => {
             onClick={() => {
               fetchReadModels();
               fetchProductsData();
+              fetchPurchaseHistory();
               refetchInventory();
             }}
             className="gap-2 rounded-xl text-xs h-9"
@@ -1597,47 +1689,113 @@ const Inventory = () => {
             </CardContent>
           </Card>
 
-          {/* Purchase History - filtered by one selected day */}
+          {/* Purchase History - server filtered and paginated */}
           <Card className="border-border/60 rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="p-4 sm:p-5 border-b border-border/70">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+              <div>
                 <div>
                   <CardTitle className="text-base font-bold flex items-center gap-2">
                     <ShoppingCart className="h-4 w-4 text-primary" />
                     <span>سجل عمليات الشراء</span>
+                    <Badge variant="secondary">{purchaseCount.toLocaleString("ar-u-nu-latn")}</Badge>
                   </CardTitle>
 
                   <CardDescription className="text-xs mt-1">
-                    عمليات شراء وتوريد البضائع في اليوم المحدد
+                    تظهر 10 عمليات افتراضيًا، مع البحث باسم الصنف أو المورّد أو الشريك
                   </CardDescription>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">تاريخ الشراء</Label>
+                <div className="mt-4 grid gap-2 rounded-xl border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-6">
+                  <div className="relative sm:col-span-2">
+                    <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={purchaseSearchTerm}
+                      onChange={(event) => {
+                        setPurchaseSearchTerm(event.target.value);
+                        setPurchasePage(0);
+                      }}
+                      placeholder="اسم الصنف أو المورّد أو الشريك..."
+                      className="h-9 pe-9 text-xs"
+                    />
+                  </div>
 
-                  <Input
-                    type="date"
-                    value={purchaseDate}
-                    onChange={(e) => setPurchaseDate(e.target.value)}
-                    className="w-[180px]"
-                  />
+                  <select
+                    value={purchasePaymentFilter}
+                    onChange={(event) => {
+                      setPurchasePaymentFilter(event.target.value);
+                      setPurchasePage(0);
+                    }}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-xs outline-none"
+                  >
+                    <option value="all">كل طرق التمويل</option>
+                    <option value="cash">نقدي</option>
+                    <option value="credit">آجل</option>
+                    <option value="partner">دفع شريك</option>
+                  </select>
+
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">من تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={purchaseDateFrom}
+                      max={purchaseDateTo || undefined}
+                      onChange={(event) => {
+                        setPurchaseDateFrom(event.target.value);
+                        setPurchasePage(0);
+                      }}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">إلى تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={purchaseDateTo}
+                      min={purchaseDateFrom || undefined}
+                      onChange={(event) => {
+                        setPurchaseDateTo(event.target.value);
+                        setPurchasePage(0);
+                      }}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 gap-1 self-end text-xs"
+                    disabled={!hasPurchaseFilters}
+                    onClick={() => {
+                      setPurchaseSearchTerm("");
+                      setPurchasePaymentFilter("all");
+                      setPurchaseDateFrom("");
+                      setPurchaseDateTo("");
+                      setPurchasePage(0);
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    مسح
+                  </Button>
                 </div>
               </div>
             </CardHeader>
 
             <CardContent className="p-0">
-              {loadingProducts ? (
+              {loadingPurchaseHistory ? (
                 <div className="text-center py-10 text-muted-foreground">
                   جارٍ تحميل عمليات الشراء...
                 </div>
               ) : purchaseHistory.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground">
                   <ShoppingCart className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">لا توجد عمليات شراء في هذا اليوم</p>
+                  <p className="text-sm">
+                    {hasPurchaseFilters ? "لا توجد عمليات تطابق الفلاتر المحددة" : "لا توجد عمليات شراء في هذا الموسم"}
+                  </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
+                <div>
+                  <div className="overflow-x-auto">
+                    <Table>
                     <TableHeader className="bg-muted/40">
                       <TableRow>
                         <TableHead className="text-right">التاريخ</TableHead>
@@ -1709,7 +1867,18 @@ const Inventory = () => {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                    </Table>
+                  </div>
+                  <HistoryPagination
+                    page={purchasePage}
+                    pageSize={purchasePageSize}
+                    totalCount={purchaseCount}
+                    onPageChange={setPurchasePage}
+                    onPageSizeChange={(pageSize) => {
+                      setPurchasePageSize(pageSize);
+                      setPurchasePage(0);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

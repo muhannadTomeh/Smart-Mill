@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ShoppingCart, TrendingUp, TrendingDown, Package, DollarSign,
-  Calendar, RefreshCw, Plus, Filter, X
+  Calendar, RefreshCw, Plus, Filter, X, Search
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -21,6 +21,8 @@ import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
 import { formatDate } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { HistoryPagination } from "@/components/history/HistoryPagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 interface Transaction {
   id: string;
@@ -60,6 +62,14 @@ const OilTrading = () => {
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   // Filter state
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
+  const [historyDateFrom, setHistoryDateFrom] = useState("");
+  const [historyDateTo, setHistoryDateTo] = useState("");
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyPageSize, setHistoryPageSize] = useState(10);
+  const [transactionCount, setTransactionCount] = useState(0);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const debouncedHistorySearch = useDebouncedValue(historySearchTerm);
 
   const [newTransaction, setNewTransaction] = useState({
     type: 'buy' as 'buy' | 'sell',
@@ -73,12 +83,17 @@ const OilTrading = () => {
 
   useEffect(() => {
     if (activeSeason) {
-      fetchTransactions(); fetchPartners();
+      fetchPartners();
     } else {
       setTransactions([]);
+      setTransactionCount(0);
       setLoading(false);
     }
   }, [activeSeason?.id]);
+
+  useEffect(() => {
+    if (activeSeason) void fetchTransactions();
+  }, [activeSeason?.id, millId, typeFilter, debouncedHistorySearch, historyDateFrom, historyDateTo, historyPage, historyPageSize, historyRefreshKey]);
 
   // Realtime updates for oil transactions
   useEffect(() => {
@@ -87,7 +102,7 @@ const OilTrading = () => {
     const channel = supabase
       .channel(`oil_trading_${effectiveMillId || "all"}_${activeSeason.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "oil_transactions" }, () => {
-        void fetchTransactions();
+        setHistoryRefreshKey((value) => value + 1);
       })
       .subscribe();
 
@@ -119,7 +134,7 @@ const OilTrading = () => {
     try {
       let query = supabase
         .from("oil_transactions")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("season_id", activeSeason.id);
 
       const effectiveMillId = millId || activeSeason.mill_id;
@@ -127,10 +142,31 @@ const OilTrading = () => {
         query = query.eq("mill_id", effectiveMillId);
       }
 
-      const { data, error } = await query.order("created_at", { ascending: false });
-      if (error) {
-        console.error("fetchTransactions error:", error);
+      const normalizedSearch = debouncedHistorySearch.trim().replace(/[%_]/g, "");
+      if (normalizedSearch) query = query.ilike("party_name", `%${normalizedSearch}%`);
+      if (typeFilter !== "all") query = query.eq("type", typeFilter);
+      if (historyDateFrom) query = query.gte("created_at", new Date(`${historyDateFrom}T00:00:00`).toISOString());
+      if (historyDateTo) {
+        const dateToExclusive = new Date(`${historyDateTo}T00:00:00`);
+        dateToExclusive.setDate(dateToExclusive.getDate() + 1);
+        query = query.lt("created_at", dateToExclusive.toISOString());
       }
+
+      const from = historyPage * historyPageSize;
+      const { data, error, count } = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + historyPageSize - 1);
+      if (error) throw error;
+
+      const resolvedCount = count ?? 0;
+      const maxPage = Math.max(0, Math.ceil(resolvedCount / historyPageSize) - 1);
+      if (historyPage > maxPage) {
+        setHistoryPage(maxPage);
+        return;
+      }
+
+      setTransactionCount(resolvedCount);
       setTransactions((data || []).map((tx) => ({
         id: tx.id,
         type: tx.type,
@@ -347,10 +383,7 @@ const OilTrading = () => {
 
   const calculatedTotal = (parseFloat(newTransaction.amount) || 0) * (parseFloat(newTransaction.price) || 0);
 
-  const filteredTransactions = transactions.filter((tx) => {
-    if (typeFilter === "all") return true;
-    return tx.type === typeFilter;
-  });
+  const hasHistoryFilters = Boolean(typeFilter !== "all" || historySearchTerm || historyDateFrom || historyDateTo);
 
   return (
     <div className="space-y-6 text-right" dir="rtl">
@@ -429,9 +462,9 @@ const OilTrading = () => {
         <Card className="rounded-2xl border-border/60 shadow-xs bg-gradient-to-br from-card to-muted/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground font-medium">إجمالي العمليات المسجلة</p>
+              <p className="text-xs text-muted-foreground font-medium">نتائج السجل حسب الفلتر</p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
-                {transactions.length} <span className="text-sm font-normal text-muted-foreground">عملية</span>
+                {transactionCount.toLocaleString("ar-u-nu-latn")} <span className="text-sm font-normal text-muted-foreground">عملية</span>
               </h3>
             </div>
             <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
@@ -449,27 +482,85 @@ const OilTrading = () => {
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <ShoppingCart className="h-4 w-4 text-primary" />
                 <span>سجل عمليات البيع والشراء</span>
+                <Badge variant="secondary">{transactionCount.toLocaleString("ar-u-nu-latn")}</Badge>
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                سجل تاريخي كامل لجميع العمليات المنفذة في الموسم الحالي
+                تظهر 10 عمليات افتراضيًا مع بحث وفلترة من قاعدة البيانات
               </CardDescription>
             </div>
+          </div>
 
-            {/* Filter */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 bg-muted/30 border border-border/60 rounded-xl px-2.5 py-1 text-xs">
-                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="h-7 text-xs bg-transparent border-0 text-foreground cursor-pointer"
-                >
-                  <option value="all">جميع العمليات</option>
-                  <option value="buy">عمليات الشراء (📥)</option>
-                  <option value="sell">عمليات البيع (📤)</option>
-                </select>
-              </div>
+          <div className="mt-4 grid gap-2 rounded-xl border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="relative self-end sm:col-span-2">
+              <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={historySearchTerm}
+                onChange={(event) => {
+                  setHistorySearchTerm(event.target.value);
+                  setHistoryPage(0);
+                }}
+                placeholder="بحث باسم البائع أو المشتري..."
+                className="h-9 pe-9 text-xs"
+              />
             </div>
+            <div className="flex h-9 self-end items-center gap-1.5 rounded-md border bg-background px-3">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+              <select
+                value={typeFilter}
+                onChange={(event) => {
+                  setTypeFilter(event.target.value);
+                  setHistoryPage(0);
+                }}
+                className="h-full min-w-0 flex-1 bg-transparent text-xs outline-none"
+              >
+                <option value="all">كل العمليات</option>
+                <option value="buy">شراء زيت</option>
+                <option value="sell">بيع زيت</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">من تاريخ</Label>
+              <Input
+                type="date"
+                value={historyDateFrom}
+                max={historyDateTo || undefined}
+                onChange={(event) => {
+                  setHistoryDateFrom(event.target.value);
+                  setHistoryPage(0);
+                }}
+                className="h-9 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">إلى تاريخ</Label>
+              <Input
+                type="date"
+                value={historyDateTo}
+                min={historyDateFrom || undefined}
+                onChange={(event) => {
+                  setHistoryDateTo(event.target.value);
+                  setHistoryPage(0);
+                }}
+                className="h-9 text-xs"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 self-end gap-1 text-xs"
+              disabled={!hasHistoryFilters}
+              onClick={() => {
+                setTypeFilter("all");
+                setHistorySearchTerm("");
+                setHistoryDateFrom("");
+                setHistoryDateTo("");
+                setHistoryPage(0);
+              }}
+            >
+              <X className="h-3.5 w-3.5" />
+              مسح
+            </Button>
           </div>
         </CardHeader>
 
@@ -479,13 +570,13 @@ const OilTrading = () => {
               <RefreshCw className="h-6 w-6 animate-spin text-primary" />
               <p className="text-xs">جارٍ تحميل سجل العمليات...</p>
             </div>
-          ) : filteredTransactions.length === 0 ? (
+          ) : transactions.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground px-4">
               <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-base font-semibold text-foreground">لا توجد عمليات مسجلة</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                {typeFilter !== "all"
-                  ? "لا توجد عمليات تطابق نوع الفلترة المحدد."
+                {hasHistoryFilters
+                  ? "لا توجد عمليات تطابق البحث أو الفلاتر المحددة."
                   : "لم يتم تسجيل أي عملية بيع أو شراء في هذا الموسم حتى الآن."}
               </p>
               <div className="mt-4">
@@ -502,8 +593,9 @@ const OilTrading = () => {
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
+            <div>
+              <div className="overflow-x-auto">
+                <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
                     <TableHead className="text-right font-bold text-xs">التاريخ</TableHead>
@@ -518,7 +610,7 @@ const OilTrading = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((tx) => (
+                  {transactions.map((tx) => (
                     <TableRow key={tx.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell className="text-right text-xs font-mono">
                         <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -552,7 +644,11 @@ const OilTrading = () => {
                       <TableCell className="text-right">
                         <div className="flex flex-wrap gap-1.5">
                           <Badge variant="outline" className="text-[10px]">
-                            {tx.payment_method === 'credit' ? 'آجل' : 'نقدي'}
+                            {tx.payment_method === 'credit'
+                              ? 'آجل'
+                              : tx.payment_method === 'partner'
+                                ? 'دفع شريك'
+                                : 'نقدي'}
                           </Badge>
                           <Badge variant="outline" className={`text-[10px] ${tx.status === 'cancelled' ? 'border-rose-300 text-rose-700' : 'border-emerald-300 text-emerald-700'}`}>
                             {tx.status === 'cancelled' ? 'ملغاة' : 'فعالة'}
@@ -578,7 +674,18 @@ const OilTrading = () => {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
+              <HistoryPagination
+                page={historyPage}
+                pageSize={historyPageSize}
+                totalCount={transactionCount}
+                onPageChange={setHistoryPage}
+                onPageSizeChange={(pageSize) => {
+                  setHistoryPageSize(pageSize);
+                  setHistoryPage(0);
+                }}
+              />
             </div>
           )}
         </CardContent>
