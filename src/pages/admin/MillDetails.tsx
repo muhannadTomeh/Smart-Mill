@@ -70,6 +70,7 @@ export default function MillDetails() {
   const [notes, setNotes] = useState("");
   const [subscriptionType, setSubscriptionType] = useState<SubscriptionType>("monthly");
   const [subscriptionFee, setSubscriptionFee] = useState<string>("0");
+  const [isEditingSubscriptionPlan, setIsEditingSubscriptionPlan] = useState(false);
   const [payments, setPayments] = useState<any[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [newPayment, setNewPayment] = useState({ amount: "", date: new Date().toISOString().split('T')[0], notes: "" });
@@ -250,6 +251,7 @@ export default function MillDetails() {
       setNotes(safeProfile.subscription_notes);
       setSubscriptionType(safeProfile.subscription_type);
       setSubscriptionFee(String(safeProfile.subscription_fee || "0"));
+      setIsEditingSubscriptionPlan(false);
       setMillCode(safeProfile.mill_code);
     } catch (error: any) {
       console.error("Error fetching mill details:", error);
@@ -379,7 +381,7 @@ export default function MillDetails() {
 
     setUpdating(true);
     try {
-      const { error } = await supabase.rpc("update_mill_subscription_plan_command", {
+      const { data, error } = await supabase.rpc("update_mill_subscription_plan_command", {
         p_mill_id: currentMillRecord.id,
         p_subscription_type: subscriptionType,
         p_subscription_fee: feeNum,
@@ -387,29 +389,43 @@ export default function MillDetails() {
 
       if (error) throw error;
 
+      const savedPlan = data as {
+        subscription_type?: SubscriptionType;
+        subscription_fee?: number | string;
+      } | null;
+      const savedType: SubscriptionType = savedPlan?.subscription_type === "seasonal" ? "seasonal" : "monthly";
+      const savedFee = Number(savedPlan?.subscription_fee ?? feeNum);
+
+      if (!Number.isFinite(savedFee)) {
+        throw new Error("INVALID_SUBSCRIPTION_FEE");
+      }
+
       void supabase.rpc('log_admin_access', {
         target_user_id: currentMillRecord.id,
-        admin_action: `updated_subscription_plan_${subscriptionType}`
+        admin_action: `updated_subscription_plan_${savedType}`
       });
 
       setCurrentMillRecord((prev: any) => ({
         ...prev,
-        subscription_type: subscriptionType,
-        subscription_fee: feeNum,
-        monthly_fee: subscriptionType === "monthly" ? feeNum : 0,
+        subscription_type: savedType,
+        subscription_fee: savedFee,
+        monthly_fee: savedType === "monthly" ? savedFee : 0,
       }));
       setMillData((prev: any) => ({
         ...prev,
         profile: {
           ...prev?.profile,
-          subscription_type: subscriptionType,
-          subscription_fee: feeNum,
+          subscription_type: savedType,
+          subscription_fee: savedFee,
         },
       }));
+      setSubscriptionType(savedType);
+      setSubscriptionFee(String(savedFee));
+      setIsEditingSubscriptionPlan(false);
 
       toast({
-        title: "تم الحفظ",
-        description: `تم حفظ الاشتراك ${subscriptionType === "monthly" ? "الشهري" : "الموسمي"} وقيمته ${feeNum.toLocaleString("ar-u-nu-latn")} ₪.`,
+        title: "تم حفظ خطة الاشتراك",
+        description: `الاشتراك ${savedType === "monthly" ? "الشهري" : "الموسمي"} بقيمة ${savedFee.toLocaleString("ar-u-nu-latn")} ₪ أصبح محفوظًا الآن.`,
       });
     } catch (error: any) {
       console.error("Error saving subscription plan:", error);
@@ -421,6 +437,22 @@ export default function MillDetails() {
     } finally {
       setUpdating(false);
     }
+  };
+
+  const beginSubscriptionPlanEdit = () => {
+    const savedType: SubscriptionType = currentMillRecord?.subscription_type === "seasonal" ? "seasonal" : "monthly";
+    const savedFee = Number(currentMillRecord?.subscription_fee ?? currentMillRecord?.monthly_fee ?? 0);
+    setSubscriptionType(savedType);
+    setSubscriptionFee(String(Number.isFinite(savedFee) ? savedFee : 0));
+    setIsEditingSubscriptionPlan(true);
+  };
+
+  const cancelSubscriptionPlanEdit = () => {
+    const savedType: SubscriptionType = currentMillRecord?.subscription_type === "seasonal" ? "seasonal" : "monthly";
+    const savedFee = Number(currentMillRecord?.subscription_fee ?? currentMillRecord?.monthly_fee ?? 0);
+    setSubscriptionType(savedType);
+    setSubscriptionFee(String(Number.isFinite(savedFee) ? savedFee : 0));
+    setIsEditingSubscriptionPlan(false);
   };
 
   const handleAddPayment = async () => {
@@ -1414,59 +1446,100 @@ export default function MillDetails() {
                 </Dialog>
               </CardHeader>
               <CardContent className="space-y-4 text-right">
-                <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold block">نوع الاشتراك</Label>
-                    <RadioGroup
-                      value={subscriptionType}
-                      onValueChange={(value) => setSubscriptionType(value as SubscriptionType)}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-2"
-                      dir="rtl"
-                    >
-                      <Label
-                        htmlFor="subscription-monthly"
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${subscriptionType === "monthly" ? "border-primary bg-primary/5" : "bg-background"}`}
-                      >
-                        <RadioGroupItem value="monthly" id="subscription-monthly" />
-                        <span>
-                          <span className="block font-bold">شهري</span>
-                          <span className="block text-xs font-normal text-muted-foreground">قيمة متفق عليها لكل شهر</span>
-                        </span>
-                      </Label>
-                      <Label
-                        htmlFor="subscription-seasonal"
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${subscriptionType === "seasonal" ? "border-primary bg-primary/5" : "bg-background"}`}
-                      >
-                        <RadioGroupItem value="seasonal" id="subscription-seasonal" />
-                        <span>
-                          <span className="block font-bold">موسمي</span>
-                          <span className="block text-xs font-normal text-muted-foreground">قيمة متفق عليها لكل موسم</span>
-                        </span>
-                      </Label>
-                    </RadioGroup>
-                  </div>
+                {isEditingSubscriptionPlan ? (
+                  <div className="space-y-3 rounded-xl border border-primary/40 bg-primary/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold">تعديل خطة الاشتراك</p>
+                        <p className="text-xs text-muted-foreground">لن تتغير الخطة المحفوظة قبل الضغط على زر الحفظ.</p>
+                      </div>
+                      <Badge variant="outline">وضع التعديل</Badge>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="subscriptionFee" className="text-sm font-bold block">
-                      قيمة الاشتراك {subscriptionType === "monthly" ? "الشهري" : "الموسمي"} (₪)
-                    </Label>
-                    <Input
-                      id="subscriptionFee"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={subscriptionFee}
-                      onChange={e => setSubscriptionFee(e.target.value)}
-                      className="font-bold text-left font-mono"
-                      dir="ltr"
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold block">نوع الاشتراك</Label>
+                      <RadioGroup
+                        value={subscriptionType}
+                        onValueChange={(value) => setSubscriptionType(value as SubscriptionType)}
+                        className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                        dir="rtl"
+                      >
+                        <Label
+                          htmlFor="subscription-monthly"
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${subscriptionType === "monthly" ? "border-primary bg-primary/5" : "bg-background"}`}
+                        >
+                          <RadioGroupItem value="monthly" id="subscription-monthly" />
+                          <span>
+                            <span className="block font-bold">شهري</span>
+                            <span className="block text-xs font-normal text-muted-foreground">قيمة متفق عليها لكل شهر</span>
+                          </span>
+                        </Label>
+                        <Label
+                          htmlFor="subscription-seasonal"
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${subscriptionType === "seasonal" ? "border-primary bg-primary/5" : "bg-background"}`}
+                        >
+                          <RadioGroupItem value="seasonal" id="subscription-seasonal" />
+                          <span>
+                            <span className="block font-bold">موسمي</span>
+                            <span className="block text-xs font-normal text-muted-foreground">قيمة متفق عليها لكل موسم</span>
+                          </span>
+                        </Label>
+                      </RadioGroup>
+                    </div>
 
-                  <Button onClick={saveSubscriptionPlan} disabled={updating} className="w-full gap-2">
-                    <Save className="h-4 w-4" />
-                    {updating ? "جارٍ حفظ الخطة..." : "حفظ نوع الاشتراك والقيمة"}
-                  </Button>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="subscriptionFee" className="text-sm font-bold block">
+                        قيمة الاشتراك {subscriptionType === "monthly" ? "الشهري" : "الموسمي"} (₪)
+                      </Label>
+                      <Input
+                        id="subscriptionFee"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={subscriptionFee}
+                        onChange={e => setSubscriptionFee(e.target.value)}
+                        className="font-bold text-left font-mono"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <Button variant="outline" onClick={cancelSubscriptionPlanEdit} disabled={updating}>
+                        إلغاء
+                      </Button>
+                      <Button onClick={saveSubscriptionPlan} disabled={updating} className="gap-2 sm:min-w-52">
+                        <Save className="h-4 w-4" />
+                        {updating ? "جارٍ حفظ الخطة..." : "حفظ الخطة"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-green-200 bg-green-50/60 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-full bg-green-100 p-2 text-green-700">
+                          <CheckCircle2 className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-bold text-green-900">الخطة محفوظة</p>
+                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">فعّالة</Badge>
+                          </div>
+                          <p className="mt-1 text-lg font-bold">
+                            اشتراك {subscriptionType === "monthly" ? "شهري" : "موسمي"}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {Number(subscriptionFee || 0).toLocaleString("ar-u-nu-latn")} ₪ لكل {subscriptionType === "monthly" ? "شهر" : "موسم"}
+                          </p>
+                        </div>
+                      </div>
+                      <Button variant="outline" onClick={beginSubscriptionPlanEdit} className="gap-2 bg-background">
+                        <Edit className="h-4 w-4" />
+                        تعديل الخطة
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-xl border bg-background p-3">
