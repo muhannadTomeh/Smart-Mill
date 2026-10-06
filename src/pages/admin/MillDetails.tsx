@@ -755,6 +755,8 @@ export default function MillDetails() {
 
   const lastPayment = payments.length > 0 ? payments[0] : null;
   const totalPayments = payments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
+  const savedSubscriptionType: SubscriptionType = currentMillRecord?.subscription_type === "seasonal" ? "seasonal" : "monthly";
+  const savedSubscriptionFee = Number(currentMillRecord?.subscription_fee ?? currentMillRecord?.monthly_fee ?? 0);
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">جارٍ تحميل إعدادات حساب المعصرة...</div>;
 
@@ -1376,206 +1378,255 @@ export default function MillDetails() {
             </Card>
 
             {/* Subscription plan and payments */}
-            <Card className="border-t-4 border-t-green-500 text-right">
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div className="flex items-center gap-2">
-                  <Banknote className="h-5 w-5 text-green-600" />
-                  <CardTitle className="text-lg text-right">الرسوم والمدفوعات</CardTitle>
-                </div>
-
-                <Dialog
-                  open={isPaymentModalOpen}
-                  onOpenChange={(open) => {
-                    setIsPaymentModalOpen(open);
-                    if (open) paymentIdempotencyKeyRef.current = crypto.randomUUID();
-                  }}
-                >
-                  <DialogTrigger asChild>
-                    <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1.5">
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>تسجيل دفعة</span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent dir="rtl" className="text-right sm:max-w-[425px]">
-                    <DialogHeader className="text-right sm:text-right">
-                      <DialogTitle className="text-right">تسجيل دفعة اشتراك جديدة</DialogTitle>
-                      <DialogDescription className="text-right">
-                        ستُحفظ الدفعة ضمن اشتراك المعصرة {subscriptionType === "monthly" ? "الشهري" : "الموسمي"} الحالي.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-3 text-right">
-                      <div className="space-y-2">
-                        <Label className="text-right block">المبلغ (₪) *</Label>
-                        <Input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          value={newPayment.amount}
-                          onChange={e => setNewPayment({ ...newPayment, amount: e.target.value })}
-                          placeholder="0.00"
-                          dir="ltr"
-                          className="text-left font-mono"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-right block">تاريخ الدفع *</Label>
-                        <Input
-                          type="date"
-                          value={newPayment.date}
-                          onChange={e => setNewPayment({ ...newPayment, date: e.target.value })}
-                          dir="ltr"
-                          className="text-left font-mono"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-right block">ملاحظات الدفعة</Label>
-                        <Textarea
-                          value={newPayment.notes}
-                          onChange={e => setNewPayment({ ...newPayment, notes: e.target.value })}
-                          placeholder="تفاصيل الحوالة أو السداد..."
-                          className="text-right"
-                        />
-                      </div>
+            <Card className="overflow-hidden text-right">
+              <CardHeader className="border-b bg-muted/20 pb-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
+                      <Banknote className="h-5 w-5" />
                     </div>
-                    <DialogFooter>
-                      <Button onClick={handleAddPayment} disabled={updating || !newPayment.amount} className="w-full">
-                        {updating ? "جارٍ التسجيل..." : "تأكيد الدفعة"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent className="space-y-4 text-right">
-                {isEditingSubscriptionPlan ? (
-                  <div className="space-y-3 rounded-xl border border-primary/40 bg-primary/5 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-bold">تعديل خطة الاشتراك</p>
-                        <p className="text-xs text-muted-foreground">لن تتغير الخطة المحفوظة قبل الضغط على زر الحفظ.</p>
-                      </div>
-                      <Badge variant="outline">وضع التعديل</Badge>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold block">نوع الاشتراك</Label>
-                      <RadioGroup
-                        value={subscriptionType}
-                        onValueChange={(value) => setSubscriptionType(value as SubscriptionType)}
-                        className="grid grid-cols-1 sm:grid-cols-2 gap-2"
-                        dir="rtl"
-                      >
-                        <Label
-                          htmlFor="subscription-monthly"
-                          className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${subscriptionType === "monthly" ? "border-primary bg-primary/5" : "bg-background"}`}
-                        >
-                          <RadioGroupItem value="monthly" id="subscription-monthly" />
-                          <span>
-                            <span className="block font-bold">شهري</span>
-                            <span className="block text-xs font-normal text-muted-foreground">قيمة متفق عليها لكل شهر</span>
-                          </span>
-                        </Label>
-                        <Label
-                          htmlFor="subscription-seasonal"
-                          className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${subscriptionType === "seasonal" ? "border-primary bg-primary/5" : "bg-background"}`}
-                        >
-                          <RadioGroupItem value="seasonal" id="subscription-seasonal" />
-                          <span>
-                            <span className="block font-bold">موسمي</span>
-                            <span className="block text-xs font-normal text-muted-foreground">قيمة متفق عليها لكل موسم</span>
-                          </span>
-                        </Label>
-                      </RadioGroup>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="subscriptionFee" className="text-sm font-bold block">
-                        قيمة الاشتراك {subscriptionType === "monthly" ? "الشهري" : "الموسمي"} (₪)
-                      </Label>
-                      <Input
-                        id="subscriptionFee"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={subscriptionFee}
-                        onChange={e => setSubscriptionFee(e.target.value)}
-                        className="font-bold text-left font-mono"
-                        dir="ltr"
-                      />
-                    </div>
-
-                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                      <Button variant="outline" onClick={cancelSubscriptionPlanEdit} disabled={updating}>
-                        إلغاء
-                      </Button>
-                      <Button onClick={saveSubscriptionPlan} disabled={updating} className="gap-2 sm:min-w-52">
-                        <Save className="h-4 w-4" />
-                        {updating ? "جارٍ حفظ الخطة..." : "حفظ الخطة"}
-                      </Button>
+                    <div>
+                      <CardTitle className="text-lg">الاشتراك والفوترة</CardTitle>
+                      <CardDescription className="mt-1">الخطة المتفق عليها وسجل الدفعات</CardDescription>
                     </div>
                   </div>
-                ) : (
-                  <div className="rounded-xl border border-green-200 bg-green-50/60 p-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-green-100 p-2 text-green-700">
-                          <CheckCircle2 className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-bold text-green-900">الخطة محفوظة</p>
-                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">فعّالة</Badge>
-                          </div>
-                          <p className="mt-1 text-lg font-bold">
-                            اشتراك {subscriptionType === "monthly" ? "شهري" : "موسمي"}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {Number(subscriptionFee || 0).toLocaleString("ar-u-nu-latn")} ₪ لكل {subscriptionType === "monthly" ? "شهر" : "موسم"}
-                          </p>
-                        </div>
+                  <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
+                    <CheckCircle2 className="ml-1 h-3.5 w-3.5" />
+                    محفوظة
+                  </Badge>
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-5 p-5">
+                <section className="rounded-2xl border bg-gradient-to-l from-primary/[0.08] to-transparent p-5">
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">الخطة الحالية</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <h3 className="text-xl font-bold">اشتراك {savedSubscriptionType === "monthly" ? "شهري" : "موسمي"}</h3>
+                        <Badge variant="secondary">{savedSubscriptionType === "monthly" ? "كل شهر" : "كل موسم"}</Badge>
                       </div>
-                      <Button variant="outline" onClick={beginSubscriptionPlanEdit} className="gap-2 bg-background">
+                      <div className="mt-3 flex items-baseline gap-1.5">
+                        <span className="text-3xl font-bold tracking-tight">
+                          {(Number.isFinite(savedSubscriptionFee) ? savedSubscriptionFee : 0).toLocaleString("ar-u-nu-latn")}
+                        </span>
+                        <span className="font-semibold">₪</span>
+                        <span className="text-sm text-muted-foreground">/ {savedSubscriptionType === "monthly" ? "شهر" : "موسم"}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:min-w-40">
+                      <Button onClick={() => setIsPaymentModalOpen(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        تسجيل دفعة
+                      </Button>
+                      <Button variant="outline" onClick={beginSubscriptionPlanEdit} className="gap-2 bg-background/80">
                         <Edit className="h-4 w-4" />
                         تعديل الخطة
                       </Button>
                     </div>
                   </div>
-                )}
+                </section>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl border bg-background p-3">
-                    <p className="text-xs text-muted-foreground">إجمالي الدفعات المسجلة</p>
-                    <p className="mt-1 text-lg font-bold text-green-700">{totalPayments.toLocaleString("ar-u-nu-latn")} ₪</p>
+                <div className="grid grid-cols-3 divide-x divide-x-reverse rounded-xl border bg-background">
+                  <div className="p-3 text-center">
+                    <p className="text-xs text-muted-foreground">إجمالي المدفوع</p>
+                    <p className="mt-1 font-bold text-green-700">{totalPayments.toLocaleString("ar-u-nu-latn")} ₪</p>
                   </div>
-                  <div className="rounded-xl border bg-background p-3">
+                  <div className="p-3 text-center">
                     <p className="text-xs text-muted-foreground">عدد الدفعات</p>
-                    <p className="mt-1 text-lg font-bold">{payments.length.toLocaleString("ar-u-nu-latn")}</p>
+                    <p className="mt-1 font-bold">{payments.length.toLocaleString("ar-u-nu-latn")}</p>
+                  </div>
+                  <div className="p-3 text-center">
+                    <p className="text-xs text-muted-foreground">آخر دفعة</p>
+                    <p className="mt-1 truncate text-sm font-bold">{lastPayment ? formatDate(lastPayment.payment_date) : "—"}</p>
                   </div>
                 </div>
 
-                <div className="space-y-2 text-right">
-                  <p className="text-xs font-semibold text-muted-foreground text-right">سجل الدفعات الأخيرة:</p>
-                  <div className="max-h-[160px] overflow-auto space-y-1.5">
-                    {payments.map(p => (
-                      <div key={p.id} className="flex items-center justify-between gap-3 text-xs p-2 bg-muted/30 rounded-lg border">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-green-700">{Number(p.amount).toLocaleString("ar-u-nu-latn")} ₪</span>
-                            <span className="text-muted-foreground">({formatDate(p.payment_date)})</span>
-                          </div>
-                          <span className="text-[11px] text-muted-foreground">
-                            {p.subscription_type === "seasonal" ? "اشتراك موسمي" : "اشتراك شهري"}
-                            {p.subscription_fee != null ? ` — قيمة الخطة ${Number(p.subscription_fee).toLocaleString("ar-u-nu-latn")} ₪` : ""}
-                          </span>
-                        </div>
-                        <span className="text-muted-foreground truncate max-w-[150px]">{safeText(p.notes, '-')}</span>
-                      </div>
-                    ))}
-                    {payments.length === 0 && (
-                      <p className="text-xs text-center text-muted-foreground py-2">لا توجد دفعات مسجلة</p>
-                    )}
+                <section>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="text-sm font-bold">آخر الدفعات</h4>
+                    {payments.length > 0 && <span className="text-xs text-muted-foreground">الأحدث أولًا</span>}
                   </div>
-                </div>
+
+                  {payments.length > 0 ? (
+                    <div className="max-h-[190px] divide-y overflow-y-auto rounded-xl border">
+                      {payments.slice(0, 5).map((payment) => (
+                        <div key={payment.id} className="flex items-center justify-between gap-4 p-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="rounded-lg bg-green-50 p-2 text-green-700">
+                              <Banknote className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-green-700">{Number(payment.amount).toLocaleString("ar-u-nu-latn")} ₪</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {safeText(payment.notes, payment.subscription_type === "seasonal" ? "دفعة اشتراك موسمي" : "دفعة اشتراك شهري")}
+                              </p>
+                            </div>
+                          </div>
+                          <time className="shrink-0 text-xs text-muted-foreground">{formatDate(payment.payment_date)}</time>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed px-4 py-7 text-center">
+                      <Banknote className="mx-auto h-7 w-7 text-muted-foreground/50" />
+                      <p className="mt-2 text-sm font-medium">لا توجد دفعات مسجلة</p>
+                      <p className="mt-1 text-xs text-muted-foreground">استخدم زر «تسجيل دفعة» عند استلام أول دفعة.</p>
+                    </div>
+                  )}
+                </section>
               </CardContent>
+
+              <Dialog
+                open={isEditingSubscriptionPlan}
+                onOpenChange={(open) => open ? beginSubscriptionPlanEdit() : cancelSubscriptionPlanEdit()}
+              >
+                <DialogContent dir="rtl" className="text-right sm:max-w-[520px]">
+                  <DialogHeader className="text-right sm:text-right">
+                    <DialogTitle className="text-right">تعديل خطة الاشتراك</DialogTitle>
+                    <DialogDescription className="text-right">
+                      اختر دورة الاشتراك وحدد القيمة المتفق عليها مع المعصرة.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-5 py-2">
+                    <RadioGroup
+                      value={subscriptionType}
+                      onValueChange={(value) => setSubscriptionType(value as SubscriptionType)}
+                      className="grid grid-cols-2 gap-3"
+                      dir="rtl"
+                    >
+                      <Label
+                        htmlFor="subscription-monthly"
+                        className={`cursor-pointer rounded-xl border p-4 transition-colors ${subscriptionType === "monthly" ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50"}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="monthly" id="subscription-monthly" />
+                          <span className="font-bold">شهري</span>
+                        </div>
+                        <span className="mt-2 block text-xs font-normal text-muted-foreground">دفعة متفق عليها لكل شهر</span>
+                      </Label>
+                      <Label
+                        htmlFor="subscription-seasonal"
+                        className={`cursor-pointer rounded-xl border p-4 transition-colors ${subscriptionType === "seasonal" ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50"}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="seasonal" id="subscription-seasonal" />
+                          <span className="font-bold">موسمي</span>
+                        </div>
+                        <span className="mt-2 block text-xs font-normal text-muted-foreground">دفعة متفق عليها لكل موسم</span>
+                      </Label>
+                    </RadioGroup>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="subscriptionFee" className="block font-medium">
+                        قيمة الاشتراك
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="subscriptionFee"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={subscriptionFee}
+                          onChange={(event) => setSubscriptionFee(event.target.value)}
+                          className="h-12 pl-12 text-left text-lg font-bold font-mono"
+                          dir="ltr"
+                          autoFocus
+                        />
+                        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">₪</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        تُسجّل هذه القيمة لكل {subscriptionType === "monthly" ? "شهر" : "موسم"}، ولا تُنشئ دفعة تلقائيًا.
+                      </p>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="gap-2 sm:gap-2">
+                    <Button variant="outline" onClick={cancelSubscriptionPlanEdit} disabled={updating}>إلغاء</Button>
+                    <Button onClick={saveSubscriptionPlan} disabled={updating} className="gap-2 sm:min-w-36">
+                      <Save className="h-4 w-4" />
+                      {updating ? "جارٍ الحفظ..." : "حفظ التعديلات"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog
+                open={isPaymentModalOpen}
+                onOpenChange={(open) => {
+                  setIsPaymentModalOpen(open);
+                  if (open) paymentIdempotencyKeyRef.current = crypto.randomUUID();
+                }}
+              >
+                <DialogContent dir="rtl" className="text-right sm:max-w-[480px]">
+                  <DialogHeader className="text-right sm:text-right">
+                    <DialogTitle className="text-right">تسجيل دفعة اشتراك</DialogTitle>
+                    <DialogDescription className="text-right">
+                      ستُضاف الدفعة إلى السجل المالي للاشتراك ولن تغيّر قيمة الخطة.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="rounded-xl border bg-muted/30 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted-foreground">الخطة الحالية</span>
+                      <span className="font-bold">
+                        {savedSubscriptionType === "monthly" ? "شهري" : "موسمي"} · {(Number.isFinite(savedSubscriptionFee) ? savedSubscriptionFee : 0).toLocaleString("ar-u-nu-latn")} ₪
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 py-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="block">مبلغ الدفعة *</Label>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={newPayment.amount}
+                            onChange={(event) => setNewPayment({ ...newPayment, amount: event.target.value })}
+                            placeholder="0.00"
+                            dir="ltr"
+                            className="h-11 pl-10 text-left font-mono font-bold"
+                            autoFocus
+                          />
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₪</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="block">تاريخ الدفع *</Label>
+                        <Input
+                          type="date"
+                          value={newPayment.date}
+                          onChange={(event) => setNewPayment({ ...newPayment, date: event.target.value })}
+                          dir="ltr"
+                          className="h-11 text-left font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="block">ملاحظة <span className="font-normal text-muted-foreground">(اختياري)</span></Label>
+                      <Textarea
+                        value={newPayment.notes}
+                        onChange={(event) => setNewPayment({ ...newPayment, notes: event.target.value })}
+                        placeholder="مثال: حوالة بنكية أو دفعة نقدية"
+                        className="min-h-20 text-right"
+                      />
+                    </div>
+                  </div>
+
+                  <DialogFooter className="gap-2 sm:gap-2">
+                    <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)} disabled={updating}>إلغاء</Button>
+                    <Button onClick={handleAddPayment} disabled={updating || !newPayment.amount} className="gap-2 sm:min-w-36">
+                      <Save className="h-4 w-4" />
+                      {updating ? "جارٍ التسجيل..." : "حفظ الدفعة"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </Card>
           </div>
         </TabsContent>
