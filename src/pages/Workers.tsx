@@ -24,6 +24,7 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
 import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
+import { ActionReasonDialog } from "@/components/history/ActionReasonDialog";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 
@@ -89,6 +90,10 @@ const Workers = () => {
   const [paymentPartnerId, setPaymentPartnerId] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reversePaymentTarget, setReversePaymentTarget] = useState<WorkerPayment | null>(null);
+  const [cancelWorkTarget, setCancelWorkTarget] = useState<WorkRecord | null>(null);
+  const [reversingPaymentId, setReversingPaymentId] = useState<string | null>(null);
+  const [cancellingWorkId, setCancellingWorkId] = useState<string | null>(null);
 
   // Add worker dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -273,13 +278,12 @@ const Workers = () => {
     }
   };
 
-  const reversePayment = async (payment: WorkerPayment) => {
+  const reversePayment = async (payment: WorkerPayment, reason: string) => {
     if (isEmployee) {
       toast({ title: "غير مصرح", description: "عكس دفعات العمال متاح لمالك المعصرة فقط.", variant: "destructive" });
       return;
     }
-    const reason = window.prompt("سبب عكس الدفعة (إلزامي)")?.trim();
-    if (!reason) return;
+    setReversingPaymentId(payment.id);
     const { error } = await (supabase.rpc as any)("reverse_worker_payment_command", {
       p_payment_id: payment.id,
       p_reason: reason,
@@ -287,6 +291,7 @@ const Workers = () => {
     });
     if (error) {
       toast({ title: "تعذر عكس الدفعة", description: getArabicErrorMessage(error, "تعذر عكس دفعة العامل."), variant: "destructive" });
+      setReversingPaymentId(null);
       return;
     }
     toast({
@@ -295,14 +300,14 @@ const Workers = () => {
         ? "تم إلغاء التزام الشريك وتحديث مستحقات العامل دون تغيير كاش المعصرة."
         : "تمت إعادة الكاش وتحديث مستحقات العامل.",
     });
+    setReversePaymentTarget(null);
+    setReversingPaymentId(null);
     fetchWorkers();
     fetchPayments();
   };
 
-  const cancelWorkRecord = async (record: WorkRecord) => {
-    const reason = window.prompt("سبب إلغاء سجل العمل (إلزامي)")?.trim();
-    if (!reason) return;
-
+  const cancelWorkRecord = async (record: WorkRecord, reason: string) => {
+    setCancellingWorkId(record.id);
     const { error } = await (supabase.rpc as any)("cancel_work_record_command", {
       p_work_record_id: record.id,
       p_reason: reason,
@@ -315,10 +320,13 @@ const Workers = () => {
         description: getArabicErrorMessage(error, "تعذر إلغاء سجل العمل."),
         variant: "destructive",
       });
+      setCancellingWorkId(null);
       return;
     }
 
     toast({ title: "تم إلغاء سجل العمل", description: "تم تحديث مستحقات العامل مع إبقاء السجل محفوظًا." });
+    setCancelWorkTarget(null);
+    setCancellingWorkId(null);
     await Promise.all([fetchWorkers(), fetchRecords()]);
   };
 
@@ -737,7 +745,7 @@ const Workers = () => {
                                 {record.status === "cancelled" ? (
                                   <CancellationStatusBadge reason={record.cancellation_reason} />
                                 ) : !isEmployee ? (
-                                  <Button size="sm" variant="outline" className="text-rose-700 border-rose-300" onClick={() => void cancelWorkRecord(record)}>
+                                  <Button size="sm" variant="outline" className="text-rose-700 border-rose-300" onClick={() => setCancelWorkTarget(record)}>
                                     إلغاء السجل
                                   </Button>
                                 ) : (
@@ -857,7 +865,7 @@ const Workers = () => {
                                 <TableCell className="text-right text-muted-foreground text-xs">{payment.notes || '—'}</TableCell>
                                 <TableCell className="text-right"><OperationDateTime value={payment.created_at} /></TableCell>
                                 <TableCell className="text-right"><Badge variant={payment.status === "active" ? "default" : "secondary"}>{payment.status === "active" ? "فعالة" : "معكوسة"}</Badge></TableCell>
-                                <TableCell className="text-right">{payment.status === "active" ? <Button size="sm" variant="outline" onClick={() => reversePayment(payment)} disabled={isEmployee}><RotateCcw className="h-3 w-3 me-1" />عكس الدفعة</Button> : <CancellationStatusBadge kind="reversed" reason={payment.reversal_reason} />}</TableCell>
+                                <TableCell className="text-right">{payment.status === "active" ? <Button size="sm" variant="outline" onClick={() => setReversePaymentTarget(payment)} disabled={isEmployee}><RotateCcw className="h-3 w-3 me-1" />عكس الدفعة</Button> : <CancellationStatusBadge kind="reversed" reason={payment.reversal_reason} />}</TableCell>
                               </TableRow>
                             );
                           })}
@@ -873,6 +881,28 @@ const Workers = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ActionReasonDialog
+        open={!!reversePaymentTarget}
+        onOpenChange={(open) => !open && setReversePaymentTarget(null)}
+        title="عكس دفعة العامل"
+        description={reversePaymentTarget?.payment_source === "partner_paid"
+          ? "سيتم إلغاء التزام الشريك وتحديث مدفوعات العامل دون تغيير كاش المعصرة."
+          : "ستُعاد قيمة الدفعة إلى كاش المعصرة ويُحدّث رصيد العامل دون حذف السجل."}
+        confirmLabel="تأكيد العكس"
+        reasonLabel="سبب العكس"
+        pending={!!reversePaymentTarget && reversingPaymentId === reversePaymentTarget.id}
+        onConfirm={(reason) => reversePaymentTarget && void reversePayment(reversePaymentTarget, reason)}
+      />
+
+      <ActionReasonDialog
+        open={!!cancelWorkTarget}
+        onOpenChange={(open) => !open && setCancelWorkTarget(null)}
+        title="إلغاء سجل العمل"
+        description="سيُخصم هذا السجل من إجمالي الأجر المكتسب، ولن يُحذف من التاريخ."
+        pending={!!cancelWorkTarget && cancellingWorkId === cancelWorkTarget.id}
+        onConfirm={(reason) => cancelWorkTarget && void cancelWorkRecord(cancelWorkTarget, reason)}
+      />
 
       {/* ===== Edit Worker Dialog ===== */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

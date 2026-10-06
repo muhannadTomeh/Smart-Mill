@@ -25,6 +25,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
 import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
+import { ActionReasonDialog } from "@/components/history/ActionReasonDialog";
 
 interface Transaction {
   id: string;
@@ -62,6 +63,7 @@ const OilTrading = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [cancellingTransactionId, setCancellingTransactionId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Transaction | null>(null);
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   // Filter state
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -355,19 +357,12 @@ const OilTrading = () => {
     }
   };
 
-  const cancelTransaction = async (transaction: Transaction) => {
-    const reason = window.prompt("اكتب سبب إلغاء عملية الزيت:");
-    if (reason === null) return;
-    if (!reason.trim()) {
-      toast({ title: "سبب الإلغاء مطلوب", description: "يجب إدخال سبب واضح قبل الإلغاء.", variant: "destructive" });
-      return;
-    }
-
+  const cancelTransaction = async (transaction: Transaction, reason: string) => {
     setCancellingTransactionId(transaction.id);
     try {
       const { error } = await supabase.rpc("cancel_oil_trade_command", {
         p_oil_transaction_id: transaction.id,
-        p_reason: reason.trim(),
+        p_reason: reason,
         p_idempotency_key: crypto.randomUUID(),
       });
       if (error) {
@@ -376,6 +371,7 @@ const OilTrading = () => {
         return;
       }
       toast({ title: "تم إلغاء العملية", description: "أُنشئت الحركات العكسية للكاش والزيت دون حذف السجل التاريخي." });
+      setCancelTarget(null);
       await Promise.all([fetchTransactions(), refetchInventory(), refetchCashBalance()]);
     } catch (error: unknown) {
       console.error("cancelTransaction error:", error);
@@ -657,7 +653,7 @@ const OilTrading = () => {
                             variant="outline"
                             size="sm"
                             disabled={cancellingTransactionId === tx.id}
-                            onClick={() => void cancelTransaction(tx)}
+                            onClick={() => setCancelTarget(tx)}
                             className="h-7 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-50 text-[11px]"
                           >
                             {cancellingTransactionId === tx.id ? 'جارٍ الإلغاء...' : 'إلغاء العملية'}
@@ -687,6 +683,15 @@ const OilTrading = () => {
       {/* ─────────────────────────────────────────────────────────────
           ADD TRANSACTION MODAL (DIALOG) — Like Settings Hub Pattern
       ───────────────────────────────────────────────────────────── */}
+      <ActionReasonDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        title="إلغاء عملية الزيت"
+        description="سيتم عكس حركة الزيت والأثر المالي أو الالتزام المرتبط بالعملية مع إبقاء السجل الأصلي."
+        pending={!!cancelTarget && cancellingTransactionId === cancelTarget.id}
+        onConfirm={(reason) => cancelTarget && void cancelTransaction(cancelTarget, reason)}
+      />
+
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="sm:max-w-[500px] text-right rounded-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader className="text-right sm:text-right pb-2 border-b border-border/60">

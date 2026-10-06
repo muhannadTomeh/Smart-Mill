@@ -30,6 +30,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
 import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
+import { ActionReasonDialog } from "@/components/history/ActionReasonDialog";
 
 interface CashMovement {
   id: string;
@@ -81,6 +82,10 @@ interface ProductMovement {
   created_at: string;
   products?: { name: string; unit: string } | null;
   reference_type?: string | null;
+}
+
+interface ProductPurchaseRecord {
+  id: string;
 }
 
 interface SupplierOption {
@@ -199,6 +204,8 @@ const Inventory = () => {
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [stockMovements, setStockMovements] = useState<ProductMovement[]>([]);
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+  const [purchaseCancelTarget, setPurchaseCancelTarget] = useState<ProductPurchaseRecord | null>(null);
+  const [cancellingPurchaseId, setCancellingPurchaseId] = useState<string | null>(null);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingPurchaseHistory, setLoadingPurchaseHistory] = useState(false);
   const [cashOpeningBalanceExists, setCashOpeningBalanceExists] = useState<boolean | null>(null);
@@ -527,24 +534,22 @@ const Inventory = () => {
     }
   };
 
-  const cancelPurchase = async (purchase: any) => {
-    const reason = window.prompt("سبب إلغاء عملية الشراء:");
-    if (reason === null) return;
-    if (!reason.trim()) {
-      toast({ title: "سبب الإلغاء مطلوب", variant: "destructive" });
-      return;
-    }
+  const cancelPurchase = async (purchase: ProductPurchaseRecord, reason: string) => {
+    setCancellingPurchaseId(purchase.id);
     const { error } = await supabase.rpc("cancel_product_purchase_command" as any, {
       p_purchase_id: purchase.id,
-      p_reason: reason.trim(),
+      p_reason: reason,
       p_idempotency_key: crypto.randomUUID(),
     });
     if (error) {
       console.error("cancelPurchase error", error);
       toast({ title: "تعذر الإلغاء", description: getArabicErrorMessage(error, "تعذر إلغاء عملية الشراء."), variant: "destructive" });
+      setCancellingPurchaseId(null);
       return;
     }
     toast({ title: "تم إلغاء عملية الشراء", description: "سُجلت حركات عكسية للكاش والمخزون دون حذف التاريخ." });
+    setPurchaseCancelTarget(null);
+    setCancellingPurchaseId(null);
     await Promise.all([fetchProductsData(), fetchPurchaseHistory(), refetchInventory(), refetchCashBalance(), fetchReadModels()]);
   };
 
@@ -689,23 +694,12 @@ const Inventory = () => {
     }
   }
 
-  const cancelProductSale = async (sale: any) => {
-    const reason = window.prompt("سبب إلغاء عملية البيع:");
-    if (reason === null) return;
-
-    if (!reason.trim()) {
-      toast({
-        title: "سبب الإلغاء مطلوب",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const cancelProductSale = async (sale: any, reason: string) => {
     const { error } = await supabase.rpc(
       "cancel_product_sale_command" as any,
       {
         p_sale_id: sale.id,
-        p_reason: reason.trim(),
+        p_reason: reason,
         p_idempotency_key: crypto.randomUUID(),
       },
     );
@@ -1844,7 +1838,8 @@ const Inventory = () => {
                                 size="sm"
                                 variant="outline"
                                 className="text-rose-700 border-rose-300"
-                                onClick={() => void cancelPurchase(purchase)}
+                                disabled={cancellingPurchaseId === purchase.id}
+                                onClick={() => setPurchaseCancelTarget(purchase)}
                               >
                                 إلغاء
                               </Button>
@@ -1875,6 +1870,15 @@ const Inventory = () => {
 
         </div>
       )}
+
+      <ActionReasonDialog
+        open={!!purchaseCancelTarget}
+        onOpenChange={(open) => !open && setPurchaseCancelTarget(null)}
+        title="إلغاء شراء البضاعة"
+        description="ستُخصم الكمية من مخزون الموسم ويُعكس الكاش أو الالتزام المرتبط بالشراء دون حذف السجل."
+        pending={!!purchaseCancelTarget && cancellingPurchaseId === purchaseCancelTarget.id}
+        onConfirm={(reason) => purchaseCancelTarget && void cancelPurchase(purchaseCancelTarget, reason)}
+      />
 
       {/* ─────────────────────────────────────────────────────────────
           PURCHASE PRODUCT MODAL (ATOMIC BACKEND RPC)

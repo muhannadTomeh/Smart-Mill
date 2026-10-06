@@ -45,6 +45,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatDate } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
+import { ActionReasonDialog } from "@/components/history/ActionReasonDialog";
 
 interface Payable {
   id: string;
@@ -172,6 +173,7 @@ export default function Payables() {
   const [historyTarget, setHistoryTarget] = useState<Payable | null>(null);
   const [settlements, setSettlements] = useState<SettlementHistoryItem[]>([]);
   const [reversingSettlement, setReversingSettlement] = useState<string | null>(null);
+  const [reverseSettlementTarget, setReverseSettlementTarget] = useState<SettlementHistoryItem | null>(null);
 
   // Add Supplier Dialog State
   const [addSupplierOpen, setAddSupplierOpen] = useState(false);
@@ -311,18 +313,17 @@ export default function Payables() {
     setSettlements((data || []) as SettlementHistoryItem[]);
   };
 
-  const reverseSettlement = async (settlement: SettlementHistoryItem) => {
-    const reason = window.prompt("سبب عكس السداد:");
-    if (!reason?.trim()) return;
+  const reverseSettlement = async (settlement: SettlementHistoryItem, reason: string) => {
     setReversingSettlement(settlement.id);
     try {
       const { error } = await supabase.rpc("reverse_payable_settlement_lifecycle_command" as any, {
         p_movement_id: settlement.id,
-        p_reason: reason.trim(),
+        p_reason: reason,
         p_idempotency_key: crypto.randomUUID(),
       });
       if (error) throw error;
       toast({ title: "تم عكس السداد", description: "عادت الذمة ورصيد الكاش — إن وُجد — إلى حالتهما الصحيحة." });
+      setReverseSettlementTarget(null);
       if (historyTarget) await openSettlementHistory(historyTarget);
       await fetchData();
     } catch (err: any) {
@@ -1290,12 +1291,23 @@ export default function Payables() {
             {settlements.length === 0 ? <p className="text-sm text-muted-foreground py-4 text-center">لا توجد دفعات مسجلة عبر المسار الجديد.</p> : settlements.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                 <div><div className="font-medium">{Math.abs(Number(s.amount)).toLocaleString()} ₪</div><div className="mt-1 flex items-center gap-2"><OperationDateTime value={s.created_at} /><span className="text-xs text-muted-foreground">· {s.payment_method === "cash" ? "كاش" : "مصدر خارجي"}</span></div></div>
-                {s.reversed ? <Badge variant="secondary">معكوس</Badge> : <Button size="sm" variant="outline" disabled={reversingSettlement === s.id} onClick={() => reverseSettlement(s)} className="gap-1"><RotateCcw className="h-3 w-3" /> عكس</Button>}
+                {s.reversed ? <Badge variant="secondary">معكوس</Badge> : <Button size="sm" variant="outline" disabled={reversingSettlement === s.id} onClick={() => setReverseSettlementTarget(s)} className="gap-1"><RotateCcw className="h-3 w-3" /> عكس</Button>}
               </div>
             ))}
           </div>
         </DialogContent>
       </Dialog>
+
+      <ActionReasonDialog
+        open={!!reverseSettlementTarget}
+        onOpenChange={(open) => !open && setReverseSettlementTarget(null)}
+        title="عكس دفعة سداد الالتزام"
+        description="سيعود المبلغ إلى رصيد الالتزام، ويُعكس أثر الكاش فقط إذا كان السداد نقديًا."
+        confirmLabel="تأكيد العكس"
+        reasonLabel="سبب العكس"
+        pending={!!reverseSettlementTarget && reversingSettlement === reverseSettlementTarget.id}
+        onConfirm={(reason) => reverseSettlementTarget && void reverseSettlement(reverseSettlementTarget, reason)}
+      />
 
 
       {/* Add Manual Payable Modal */}

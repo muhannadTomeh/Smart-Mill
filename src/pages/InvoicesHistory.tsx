@@ -27,6 +27,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
 import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
+import { ActionReasonDialog } from "@/components/history/ActionReasonDialog";
 
 interface InvoiceRecord {
   id: string;
@@ -76,22 +77,24 @@ export default function InvoicesHistory() {
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRecord | null>(null);
   const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<InvoiceRecord | null>(null);
   const [receivableMovements, setReceivableMovements] = useState<ReceivableMovement[]>([]);
   const [receivableHistoryInvoice, setReceivableHistoryInvoice] = useState<InvoiceRecord | null>(null);
   const [collectingInvoiceId, setCollectingInvoiceId] = useState<string | null>(null);
+  const [reverseCollectionTarget, setReverseCollectionTarget] = useState<ReceivableMovement | null>(null);
+  const [reversingCollectionId, setReversingCollectionId] = useState<string | null>(null);
 
-  const cancelInvoice = async (invoice: InvoiceRecord) => {
-    const reason = window.prompt("سبب إلغاء الفاتورة:");
-    if (!reason?.trim()) return;
+  const cancelInvoice = async (invoice: InvoiceRecord, reason: string) => {
     setCancellingInvoiceId(invoice.id);
     try {
       const { error } = await supabase.rpc("cancel_invoice_lifecycle_command" as any, {
         p_invoice_id: invoice.id,
-        p_reason: reason.trim(),
+        p_reason: reason,
         p_idempotency_key: crypto.randomUUID(),
       });
       if (error) throw error;
       toast({ title: "تم إلغاء الفاتورة", description: "عُكست آثار الكاش والزيت والعبوات من المصدر بأمان." });
+      setCancelTarget(null);
       await fetchInvoices();
     } catch (err: any) {
       console.error("cancelInvoice error", err);
@@ -206,21 +209,23 @@ export default function InvoicesHistory() {
     }
   };
 
-  const reverseCollection = async (movement: ReceivableMovement) => {
-    const reason = window.prompt("سبب عكس التحصيل:");
-    if (!reason?.trim()) return;
+  const reverseCollection = async (movement: ReceivableMovement, reason: string) => {
+    setReversingCollectionId(movement.id);
     try {
       const { error } = await supabase.rpc("reverse_invoice_collection_lifecycle_command" as any, {
         p_movement_id: movement.id,
-        p_reason: reason.trim(),
+        p_reason: reason,
         p_idempotency_key: crypto.randomUUID(),
       });
       if (error) throw error;
       toast({ title: "تم عكس التحصيل", description: "عاد الرصيد المستحق والكاش إلى حالتهما الصحيحة." });
+      setReverseCollectionTarget(null);
       await fetchInvoices();
     } catch (err: any) {
       console.error("reverseInvoiceCollection error", err);
       toast({ title: "تعذر عكس التحصيل", description: getArabicErrorMessage(err, "تعذر عكس دفعة التحصيل."), variant: "destructive" });
+    } finally {
+      setReversingCollectionId(null);
     }
   };
 
@@ -447,7 +452,7 @@ export default function InvoicesHistory() {
                               variant="outline"
                               disabled={cancellingInvoiceId === inv.id}
                               className="h-8 px-2.5 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
-                              onClick={() => cancelInvoice(inv)}
+                              onClick={() => setCancelTarget(inv)}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                               <span>إلغاء</span>
@@ -575,7 +580,7 @@ export default function InvoicesHistory() {
             {receivableMovements.filter((movement) => movement.invoice_id === receivableHistoryInvoice?.id).map((movement) => (
               <div key={movement.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                 <div><div className="font-medium">{Number(movement.amount).toLocaleString()} {currency}</div><div className="mt-1 flex items-center gap-2"><OperationDateTime value={movement.created_at} /><span className="text-xs text-muted-foreground">· {movement.movement_type}</span></div></div>
-                {movement.movement_type === "collection" && !receivableMovements.some((item) => item.reversal_of === movement.id) && !isEmployee && <Button size="sm" variant="outline" onClick={() => reverseCollection(movement)}>عكس</Button>}
+                {movement.movement_type === "collection" && !receivableMovements.some((item) => item.reversal_of === movement.id) && !isEmployee && <Button size="sm" variant="outline" onClick={() => setReverseCollectionTarget(movement)}>عكس</Button>}
                 {movement.movement_type === "collection" && receivableMovements.some((item) => item.reversal_of === movement.id) && <CancellationStatusBadge kind="reversed" />}
                 {movement.movement_type === "collection_reversal" && <CancellationStatusBadge kind="reversal" />}
               </div>
@@ -583,6 +588,26 @@ export default function InvoicesHistory() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ActionReasonDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        title="إلغاء الفاتورة"
+        description="سيتم الاحتفاظ بالفاتورة وإنشاء الحركات العكسية للكاش والزيت والأصناف المرتبطة بها."
+        pending={!!cancelTarget && cancellingInvoiceId === cancelTarget.id}
+        onConfirm={(reason) => cancelTarget && void cancelInvoice(cancelTarget, reason)}
+      />
+
+      <ActionReasonDialog
+        open={!!reverseCollectionTarget}
+        onOpenChange={(open) => !open && setReverseCollectionTarget(null)}
+        title="عكس تحصيل الذمة"
+        description="سيعود المبلغ إلى ذمة الزبون وتُنشأ حركة كاش معاكسة دون حذف التحصيل الأصلي."
+        confirmLabel="تأكيد العكس"
+        reasonLabel="سبب العكس"
+        pending={!!reverseCollectionTarget && reversingCollectionId === reverseCollectionTarget.id}
+        onConfirm={(reason) => reverseCollectionTarget && void reverseCollection(reverseCollectionTarget, reason)}
+      />
 
       {/* Deleted Invoices Dialog (Saved for 24 hours) */}
       <DeletedInvoicesDialog

@@ -40,6 +40,7 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
 import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
+import { ActionReasonDialog } from "@/components/history/ActionReasonDialog";
 
 interface Partner {
   id: string;
@@ -85,6 +86,8 @@ export default function Partners() {
   const [txAmount, setTxAmount] = useState("");
   const [txNotes, setTxNotes] = useState("");
   const [txLoading, setTxLoading] = useState(false);
+  const [reverseTarget, setReverseTarget] = useState<PartnerTx | null>(null);
+  const [reversingTxId, setReversingTxId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeSeason) {
@@ -216,15 +219,12 @@ export default function Partners() {
     }
   };
   // muahnnad
-  const handleReversePartnerTx = async (tx: PartnerTx) => {
-    const reason = window.prompt("اكتب سبب عكس حركة الشريك:");
-    if (!reason?.trim()) return;
-    if (!window.confirm("تأكيد عكس هذه الحركة؟ سيتم إنشاء حركة مالية معاكسة ولن تُحذف الحركة الأصلية.")) return;
-
+  const handleReversePartnerTx = async (tx: PartnerTx, reason: string) => {
+    setReversingTxId(tx.id);
     try {
       const { error } = await supabase.rpc("reverse_partner_transaction_command" as any, {
         p_financial_transaction_id: tx.id,
-        p_reason: reason.trim(),
+        p_reason: reason,
         p_idempotency_key: crypto.randomUUID(),
       });
 
@@ -235,6 +235,7 @@ export default function Partners() {
         description: "تم إنشاء حركة مالية معاكسة بنجاح.",
       });
 
+      setReverseTarget(null);
       await fetchPartners();
     } catch (err: any) {
       toast({
@@ -242,6 +243,8 @@ export default function Partners() {
         description: getArabicErrorMessage(err, "تعذر عكس حركة الشريك."),
         variant: "destructive",
       });
+    } finally {
+      setReversingTxId(null);
     }
   };
   const totalPartnersDue = partners.reduce((s, p) => s + (p.total_due || 0), 0);
@@ -425,7 +428,7 @@ export default function Partners() {
                       <TableCell><OperationDateTime value={tx.created_at} /></TableCell>
                       <TableCell className="text-center">
                         {tx.reference_type === "partner_transaction" && !tx.reversal_of && !reversedPartnerTxIds.has(tx.id) ? (
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void handleReversePartnerTx(tx)}>عكس الحركة</Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReverseTarget(tx)}>عكس الحركة</Button>
                         ) : tx.reversal_of ? (
                           <CancellationStatusBadge kind="reversal" />
                         ) : reversedPartnerTxIds.has(tx.id) ? (
@@ -442,6 +445,17 @@ export default function Partners() {
           </CardContent>
         </Card>
       )}
+
+      <ActionReasonDialog
+        open={!!reverseTarget}
+        onOpenChange={(open) => !open && setReverseTarget(null)}
+        title="عكس حركة الشريك"
+        description="سيتم إنشاء حركة مالية معاكسة، وستبقى الحركة الأصلية محفوظة في السجل."
+        confirmLabel="تأكيد العكس"
+        reasonLabel="سبب العكس"
+        pending={!!reverseTarget && reversingTxId === reverseTarget.id}
+        onConfirm={(reason) => reverseTarget && void handleReversePartnerTx(reverseTarget, reason)}
+      />
 
       {/* Add Partner Dialog */}
       <Dialog open={addPartnerOpen} onOpenChange={setAddPartnerOpen}>

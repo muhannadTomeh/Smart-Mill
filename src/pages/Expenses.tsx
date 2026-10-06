@@ -13,10 +13,6 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,6 +28,7 @@ import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
+import { ActionReasonDialog } from "@/components/history/ActionReasonDialog";
 
 interface Expense {
   id: string;
@@ -115,6 +112,7 @@ const Expenses = () => {
   const [expenseCount, setExpenseCount] = useState(0);
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+  const [cancellingExpenseId, setCancellingExpenseId] = useState<string | null>(null);
 
   useEffect(() => {
     if (addDialogOpen) {
@@ -334,16 +332,17 @@ const Expenses = () => {
     }
   };
 
-  const deleteExpense = async () => {
+  const deleteExpense = async (reason: string) => {
     if (isEmployee) {
       toast({ title: "غير مصرح", description: "ليس لديك صلاحية حذف المصاريف", variant: "destructive" });
       return;
     }
     if (!deleteTarget) return;
     const { id } = deleteTarget;
+    setCancellingExpenseId(id);
     const { error } = await supabase.rpc("cancel_expense_lifecycle_command" as any, {
       p_expense_id: id,
-      p_reason: "إلغاء من واجهة إدارة المصاريف",
+      p_reason: reason,
       p_idempotency_key: crypto.randomUUID(),
     });
     if (!error) {
@@ -363,6 +362,7 @@ const Expenses = () => {
       console.error("cancelExpense error", error);
       toast({ title: "تعذر إلغاء المصروف", description: messages[error.message] || getArabicErrorMessage(error, "تعذر إلغاء المصروف."), variant: "destructive" });
     }
+    setCancellingExpenseId(null);
   };
 
   // Build a distinct list of all available categories for the filter
@@ -994,27 +994,14 @@ const Expenses = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Alert Dialog */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent dir="rtl" className="rounded-2xl max-w-md p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-right text-base font-bold">تأكيد إلغاء المصروف</AlertDialogTitle>
-            <AlertDialogDescription className="text-right text-xs text-muted-foreground mt-2">
-              سيتم الاحتفاظ بالسجل لأغراض التدقيق وإلغاء الحركة المالية المرتبطة به. لا يمكن إلغاء المصروفات
-              المرتبطة بذمم مالية من هذه الشاشة.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 pt-3">
-            <AlertDialogCancel className="text-xs rounded-xl">إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={deleteExpense}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-bold rounded-xl"
-            >
-              تأكيد الإلغاء
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ActionReasonDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="إلغاء المصروف"
+        description="سيبقى المصروف في السجل، ويُعكس أثر الكاش أو الالتزام المرتبط به بأمان."
+        pending={!!deleteTarget && cancellingExpenseId === deleteTarget.id}
+        onConfirm={(reason) => void deleteExpense(reason)}
+      />
     </div>
   );
   return page;
