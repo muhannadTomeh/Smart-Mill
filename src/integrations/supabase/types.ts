@@ -1107,8 +1107,10 @@ export type Database = {
           owner_user_id: string | null
           phone: string | null
           secondary_phone: string | null
+          subscription_fee: number
           subscription_notes: string | null
           subscription_status: string | null
+          subscription_type: string
           updated_at: string | null
         }
         Insert: {
@@ -1122,8 +1124,10 @@ export type Database = {
           owner_user_id?: string | null
           phone?: string | null
           secondary_phone?: string | null
+          subscription_fee?: number
           subscription_notes?: string | null
           subscription_status?: string | null
+          subscription_type?: string
           updated_at?: string | null
         }
         Update: {
@@ -1137,8 +1141,10 @@ export type Database = {
           owner_user_id?: string | null
           phone?: string | null
           secondary_phone?: string | null
+          subscription_fee?: number
           subscription_notes?: string | null
           subscription_status?: string | null
+          subscription_type?: string
           updated_at?: string | null
         }
         Relationships: []
@@ -2132,31 +2138,40 @@ export type Database = {
           amount: number
           created_at: string | null
           id: string
-          mill_id: string | null
+          idempotency_key: string
+          mill_id: string
           mill_user_id: string
           notes: string | null
           payment_date: string
           recorded_by: string
+          subscription_fee: number
+          subscription_type: string
         }
         Insert: {
           amount: number
           created_at?: string | null
           id?: string
-          mill_id?: string | null
+          idempotency_key?: string
+          mill_id: string
           mill_user_id: string
           notes?: string | null
           payment_date?: string
           recorded_by: string
+          subscription_fee?: number
+          subscription_type?: string
         }
         Update: {
           amount?: number
           created_at?: string | null
           id?: string
-          mill_id?: string | null
+          idempotency_key?: string
+          mill_id?: string
           mill_user_id?: string
           notes?: string | null
           payment_date?: string
           recorded_by?: string
+          subscription_fee?: number
+          subscription_type?: string
         }
         Relationships: [
           {
@@ -3120,6 +3135,16 @@ export type Database = {
         }
         Returns: Json
       }
+      record_subscription_payment_command: {
+        Args: {
+          p_amount: number
+          p_idempotency_key: string
+          p_mill_id: string
+          p_notes: string
+          p_payment_date: string
+        }
+        Returns: Json
+      }
       record_vault_deposit_command: {
         Args: {
           p_amount: number
@@ -3186,6 +3211,14 @@ export type Database = {
           p_notes: string
           p_payable_id: string
           p_payment_method: string
+        }
+        Returns: Json
+      }
+      update_mill_subscription_plan_command: {
+        Args: {
+          p_mill_id: string
+          p_subscription_fee: number
+          p_subscription_type: string
         }
         Returns: Json
       }

@@ -9,6 +9,12 @@ type ErrorLike = {
 const ERROR_MESSAGES: Record<string, string> = {
   AUTHENTICATION_REQUIRED: "انتهت جلسة الدخول. سجّل الدخول مجددًا ثم حاول مرة أخرى.",
   PLATFORM_ADMIN_REQUIRED: "هذه العملية متاحة لمشرف النظام العام فقط.",
+  INVALID_SUBSCRIPTION_TYPE: "اختر نوع الاشتراك: شهري أو موسمي.",
+  INVALID_SUBSCRIPTION_FEE: "أدخل قيمة اشتراك صحيحة تساوي صفرًا أو أكثر.",
+  INVALID_SUBSCRIPTION_PAYMENT_AMOUNT: "مبلغ دفعة الاشتراك يجب أن يكون أكبر من صفر.",
+  SUBSCRIPTION_PAYMENT_DATE_REQUIRED: "اختر تاريخ دفعة الاشتراك.",
+  SUBSCRIPTION_FIELDS_PLATFORM_ADMIN_ONLY: "إدارة نوع الاشتراك وقيمته وحالته متاحة لمشرف النظام العام فقط.",
+  IDEMPOTENCY_KEY_CONFLICT: "تعذر تثبيت الدفعة بأمان. أغلق النافذة وافتحها ثم حاول مرة أخرى.",
   MILL_OWNER_REQUIRED: "هذه العملية متاحة لمالك المعصرة فقط.",
   TENANT_ACCESS_DENIED: "لا يمكنك الوصول إلى بيانات معصرة أخرى.",
   TENANT_CONTEXT_MISMATCH: "البيانات المحددة لا تتبع للمعصرة الحالية.",

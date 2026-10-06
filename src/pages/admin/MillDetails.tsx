@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  Info, ArrowRight, Receipt, Package, Calendar, ShieldCheck, ShieldAlert,
-  Save, Plus, History, Banknote, Building2, MapPin, Phone, User, Globe,
-  Clock, UserCheck, ShoppingCart, Wallet, Lock, Mail, Users, CheckCircle2,
+  Info, ArrowRight, Calendar, ShieldCheck, ShieldAlert,
+  Save, Plus, Banknote, Building2, MapPin, Phone, User,
+  UserCheck, Lock, Users, CheckCircle2,
   RotateCcw, Copy, Eye, EyeOff, Edit, Trash2, Key, RefreshCw, UserX
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+type SubscriptionType = "monthly" | "seasonal";
 
 export default function MillDetails() {
   const { id: millId } = useParams();
@@ -65,15 +68,14 @@ export default function MillDetails() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [notes, setNotes] = useState("");
-  const [monthlyFee, setMonthlyFee] = useState<string>("0");
+  const [subscriptionType, setSubscriptionType] = useState<SubscriptionType>("monthly");
+  const [subscriptionFee, setSubscriptionFee] = useState<string>("0");
   const [payments, setPayments] = useState<any[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [newPayment, setNewPayment] = useState({ amount: "", date: new Date().toISOString().split('T')[0], notes: "" });
+  const paymentIdempotencyKeyRef = useRef(crypto.randomUUID());
 
-  // Activities and Cashier accounts state
-  const [queueItems, setQueueItems] = useState<any[]>([]);
-  const [expenses, setExpenses] = useState<any[]>([]);
-  const [oilTransactions, setOilTransactions] = useState<any[]>([]);
+  // Employee accounts state
   const [employees, setEmployees] = useState<any[]>([]);
 
   // Mill Code management
@@ -108,17 +110,6 @@ export default function MillDetails() {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return '---';
       return d.toLocaleDateString("ar-u-nu-latn");
-    } catch {
-      return '---';
-    }
-  };
-
-  const formatDateTime = (dateStr: any) => {
-    if (!dateStr) return '---';
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return '---';
-      return d.toLocaleString("ar-u-nu-latn");
     } catch {
       return '---';
     }
@@ -177,25 +168,13 @@ export default function MillDetails() {
       const canonicalMillId = millObj?.id || millId;
       const [
         seasonsRes,
-        invoicesRes,
-        queueRes,
-        expensesRes,
-        oilRes,
         paymentsRes
       ] = await Promise.all([
         supabase.from("seasons").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }).limit(5),
-        supabase.from("invoices").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
-        supabase.from("queue").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
-        supabase.from("expenses").select("*").eq("mill_id", canonicalMillId).is("voided_at", null).order("created_at", { ascending: false }),
-        supabase.from("oil_transactions").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
         supabase.from("subscription_payments").select("*").eq("mill_id", canonicalMillId).order("payment_date", { ascending: false })
       ]);
 
       const seasons = seasonsRes.data || [];
-      const invoices = invoicesRes.data || [];
-      const queue = queueRes.data || [];
-      const expensesData = expensesRes.data || [];
-      const oilData = oilRes.data || [];
       const paymentsData = paymentsRes.data || [];
 
       // Canonical Mill Memberships employee query
@@ -254,7 +233,8 @@ export default function MillDetails() {
         mill_location: profile?.mill_location || millObj?.location || "غير محدد",
         subscription_status: millObj?.subscription_status || profile?.subscription_status || "active",
         subscription_notes: millObj?.subscription_notes || profile?.subscription_notes || "",
-        monthly_fee: millObj?.monthly_fee ?? profile?.monthly_fee ?? 0,
+        subscription_type: (millObj?.subscription_type === "seasonal" ? "seasonal" : "monthly") as SubscriptionType,
+        subscription_fee: millObj?.subscription_fee ?? millObj?.monthly_fee ?? profile?.monthly_fee ?? 0,
         mill_code: millObj?.mill_code || profile?.mill_code || "",
         phone: profile?.phone || millObj?.phone || "---",
         secondary_phone: profile?.secondary_phone || millObj?.secondary_phone || null,
@@ -262,17 +242,14 @@ export default function MillDetails() {
 
       setMillData({
         profile: safeProfile,
-        currentSeason,
-        invoices: invoices || []
+        currentSeason
       });
-      setQueueItems(queue || []);
-      setExpenses(expensesData || []);
-      setOilTransactions(oilData || []);
       setEmployees(combinedEmployees);
       setPayments(paymentsData || []);
 
       setNotes(safeProfile.subscription_notes);
-      setMonthlyFee(String(safeProfile.monthly_fee || "0"));
+      setSubscriptionType(safeProfile.subscription_type);
+      setSubscriptionFee(String(safeProfile.subscription_fee || "0"));
       setMillCode(safeProfile.mill_code);
     } catch (error: any) {
       console.error("Error fetching mill details:", error);
@@ -388,33 +365,58 @@ export default function MillDetails() {
     }
   };
 
-  const saveMonthlyFee = async () => {
+  const saveSubscriptionPlan = async () => {
     if (!currentMillRecord?.id) return;
+    const feeNum = Number(subscriptionFee);
+    if (!Number.isFinite(feeNum) || feeNum < 0) {
+      toast({
+        variant: "destructive",
+        title: "قيمة غير صحيحة",
+        description: "أدخل قيمة اشتراك صحيحة تساوي صفرًا أو أكثر.",
+      });
+      return;
+    }
+
     setUpdating(true);
     try {
-      const feeNum = parseFloat(monthlyFee) || 0;
-      const { error } = await supabase
-        .from("mills")
-        .update({ monthly_fee: feeNum })
-        .eq("id", currentMillRecord.id);
+      const { error } = await supabase.rpc("update_mill_subscription_plan_command", {
+        p_mill_id: currentMillRecord.id,
+        p_subscription_type: subscriptionType,
+        p_subscription_fee: feeNum,
+      });
 
       if (error) throw error;
 
-      await supabase.rpc('log_admin_access', {
+      void supabase.rpc('log_admin_access', {
         target_user_id: currentMillRecord.id,
-        admin_action: 'updated_monthly_fee'
+        admin_action: `updated_subscription_plan_${subscriptionType}`
       });
+
+      setCurrentMillRecord((prev: any) => ({
+        ...prev,
+        subscription_type: subscriptionType,
+        subscription_fee: feeNum,
+        monthly_fee: subscriptionType === "monthly" ? feeNum : 0,
+      }));
+      setMillData((prev: any) => ({
+        ...prev,
+        profile: {
+          ...prev?.profile,
+          subscription_type: subscriptionType,
+          subscription_fee: feeNum,
+        },
+      }));
 
       toast({
         title: "تم الحفظ",
-        description: "تم تحديث قيمة الاشتراك الشهري",
+        description: `تم حفظ الاشتراك ${subscriptionType === "monthly" ? "الشهري" : "الموسمي"} وقيمته ${feeNum.toLocaleString("ar-u-nu-latn")} ₪.`,
       });
-    } catch (error) {
-      console.error("Error saving fee:", error);
+    } catch (error: any) {
+      console.error("Error saving subscription plan:", error);
       toast({
         variant: "destructive",
         title: "خطأ",
-        description: "فشل حفظ قيمة الاشتراك",
+        description: getArabicErrorMessage(error, "فشل حفظ نوع الاشتراك وقيمته."),
       });
     } finally {
       setUpdating(false);
@@ -423,22 +425,37 @@ export default function MillDetails() {
 
   const handleAddPayment = async () => {
     if (!currentMillRecord?.id) return;
+    const amount = Number(newPayment.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({
+        variant: "destructive",
+        title: "مبلغ غير صحيح",
+        description: "أدخل مبلغ دفعة أكبر من صفر.",
+      });
+      return;
+    }
+    if (!newPayment.date) {
+      toast({
+        variant: "destructive",
+        title: "تاريخ الدفع مطلوب",
+        description: "اختر تاريخ الدفعة قبل الحفظ.",
+      });
+      return;
+    }
+
     setUpdating(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase
-        .from("subscription_payments")
-        .insert({
-          mill_id: currentMillRecord.id,
-          amount: parseFloat(newPayment.amount),
-          payment_date: newPayment.date,
-          notes: newPayment.notes,
-          recorded_by: user?.id
-        });
+      const { error } = await supabase.rpc("record_subscription_payment_command", {
+        p_mill_id: currentMillRecord.id,
+        p_amount: amount,
+        p_payment_date: newPayment.date,
+        p_notes: newPayment.notes,
+        p_idempotency_key: paymentIdempotencyKeyRef.current,
+      });
 
       if (error) throw error;
 
-      await supabase.rpc('log_admin_access', {
+      void supabase.rpc('log_admin_access', {
         target_user_id: currentMillRecord.id,
         admin_action: `added_subscription_payment_${newPayment.amount}`
       });
@@ -450,6 +467,7 @@ export default function MillDetails() {
 
       setIsPaymentModalOpen(false);
       setNewPayment({ amount: "", date: new Date().toISOString().split('T')[0], notes: "" });
+      paymentIdempotencyKeyRef.current = crypto.randomUUID();
 
       const { data: paymentsData } = await supabase
         .from("subscription_payments")
@@ -458,12 +476,12 @@ export default function MillDetails() {
         .order("payment_date", { ascending: false });
 
       setPayments(paymentsData || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding payment:", error);
       toast({
         variant: "destructive",
         title: "خطأ",
-        description: "فشل تسجيل الدفعة",
+        description: getArabicErrorMessage(error, "فشل تسجيل الدفعة."),
       });
     } finally {
       setUpdating(false);
@@ -704,11 +722,9 @@ export default function MillDetails() {
   };
 
   const lastPayment = payments.length > 0 ? payments[0] : null;
-  const monthsSinceLastPayment = (lastPayment && lastPayment.payment_date)
-    ? Math.floor((new Date().getTime() - new Date(lastPayment.payment_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44))
-    : null;
+  const totalPayments = payments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
 
-  if (loading) return <div className="p-8 text-center text-muted-foreground">جارٍ تحميل بيانات وسجلات المعصرة...</div>;
+  if (loading) return <div className="p-8 text-center text-muted-foreground">جارٍ تحميل إعدادات حساب المعصرة...</div>;
 
   if (fetchError || !millData) {
     return (
@@ -749,7 +765,7 @@ export default function MillDetails() {
         <Info className="h-4 w-4 text-blue-600 shrink-0" />
         <AlertTitle className="text-blue-800 font-bold text-right">وضع الإدارة والإشراف العام</AlertTitle>
         <AlertDescription className="text-blue-700 text-xs mt-0.5 text-right">
-          أنت تشاهد وتدير بيانات وحركات <strong>[{safeText(millData.profile?.mill_name, safeText(millData.profile?.display_name, "المعصرة"))}]</strong> بصلاحيات المشرف الكاملة.
+          أنت تدير اشتراك وحسابات <strong>[{safeText(millData.profile?.mill_name, safeText(millData.profile?.display_name, "المعصرة"))}]</strong> بصلاحيات المشرف العام.
         </AlertDescription>
       </Alert>
 
@@ -846,170 +862,58 @@ export default function MillDetails() {
 
         <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-right">إجمالي الفواتير الصادرة</CardTitle>
-            <Receipt className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-right">خطة الاشتراك</CardTitle>
+            <ShieldCheck className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="text-right">
-            <p className="text-2xl font-bold">{millData.invoices.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">فاتورة معصرة مسجلة</p>
+            <p className="text-lg font-bold">
+              {subscriptionType === "monthly" ? "اشتراك شهري" : "اشتراك موسمي"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {Number(subscriptionFee || 0).toLocaleString("ar-u-nu-latn")} ₪ لكل دورة
+            </p>
           </CardContent>
         </Card>
 
         <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-right">حركات الطابور</CardTitle>
-            <Clock className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-right">دفعات الاشتراك</CardTitle>
+            <Banknote className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="text-right">
-            <p className="text-2xl font-bold">{queueItems.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">زبون في سجل الطابور</p>
+            <p className="text-2xl font-bold">{totalPayments.toLocaleString("ar-u-nu-latn")} ₪</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {lastPayment ? `آخر دفعة: ${formatDate(lastPayment.payment_date)}` : "لا توجد دفعات مسجلة"}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="text-right">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-right">حسابات الموظفين (الموظف المعصرة)</CardTitle>
+            <CardTitle className="text-sm font-medium text-right">حسابات موظفي المعصرة</CardTitle>
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="text-right">
             <p className="text-2xl font-bold">{employees.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">حسابات موظف المعصرة فرعية</p>
+            <p className="text-xs text-muted-foreground mt-0.5">حسابات الموظفين المرتبطة بالمعصرة</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Core Tabs: Operations Activity Log & Cashier Employees Management */}
-      <Tabs defaultValue="invoices" className="space-y-4" dir="rtl">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 w-full bg-muted/80 p-1.5 rounded-2xl gap-1" dir="rtl">
-          <TabsTrigger value="invoices" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
-            <Receipt className="h-4 w-4 shrink-0" />
-            <span>سجل الفواتير ({millData.invoices.length})</span>
-          </TabsTrigger>
-          <TabsTrigger value="queue" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
-            <Clock className="h-4 w-4 shrink-0" />
-            <span>حركات الطابور ({queueItems.length})</span>
-          </TabsTrigger>
-          <TabsTrigger value="employees" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
-            <UserCheck className="h-4 w-4 shrink-0" />
-            <span>حسابات الموظف المعصرة ({employees.length})</span>
-          </TabsTrigger>
-          <TabsTrigger value="finance" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
-            <Wallet className="h-4 w-4 shrink-0" />
-            <span>المصاريف والزيت ({expenses.length + oilTransactions.length})</span>
-          </TabsTrigger>
+      {/* Platform administration only: subscription and account access */}
+      <Tabs defaultValue="subscription" className="space-y-4" dir="rtl">
+        <TabsList className="grid grid-cols-2 w-full bg-muted/80 p-1.5 rounded-2xl gap-1" dir="rtl">
           <TabsTrigger value="subscription" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
             <ShieldCheck className="h-4 w-4 shrink-0" />
             <span>الاشتراك والتحكم</span>
           </TabsTrigger>
+          <TabsTrigger value="employees" className="gap-2 justify-center text-xs sm:text-sm font-medium rounded-xl py-2.5">
+            <UserCheck className="h-4 w-4 shrink-0" />
+            <span>حسابات الموظفين ({employees.length})</span>
+          </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: Invoices Log */}
-        <TabsContent value="invoices">
-          <Card className="text-right">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-right">
-                <Receipt className="h-5 w-5 text-primary" />
-                <span>سجل فواتير المعصرة الكاملة</span>
-              </CardTitle>
-              <CardDescription className="text-right">عرض تفاصيل كافة الفواتير المصدرة من قبل المعصرة والمزارعين والكميات</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table dir="rtl">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">اسم المزارع / الزبون</TableHead>
-                    <TableHead className="text-right">الزيت المنتج</TableHead>
-                    <TableHead className="text-right">طريقة الدفع</TableHead>
-                    <TableHead className="text-right">زيت الرد</TableHead>
-                    <TableHead className="text-right">المبلغ النقدي</TableHead>
-                    <TableHead className="text-right">التنكات</TableHead>
-                    <TableHead className="text-right">التاريخ والوقت</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {millData.invoices.map((inv: any) => (
-                    <TableRow key={inv.id}>
-                      <TableCell className="font-bold text-foreground text-right">{inv.customer_name}</TableCell>
-                      <TableCell className="font-medium text-emerald-700 text-right">{inv.oil_produced} كغم</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="outline">
-                          {inv.payment_type === 'oil' ? 'بالزيت' : inv.payment_type === 'cash' ? 'نقداً' : 'مختلط'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{inv.oil_amount > 0 ? `${inv.oil_amount} كغم` : '-'}</TableCell>
-                      <TableCell className="font-bold">{inv.cash_amount > 0 ? `${inv.cash_amount} ₪` : '-'}</TableCell>
-                      <TableCell className="text-xs">{inv.container_type || 'بدون'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDateTime(inv.created_at)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {millData.invoices.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                        لا توجد فواتير مسجلة لهذه المعصرة بعد
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* TAB 2: Queue Activity */}
-        <TabsContent value="queue">
-          <Card className="text-right">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-right">
-                <Clock className="h-5 w-5 text-primary" />
-                <span>سجل حركات وأدوار الطابور</span>
-              </CardTitle>
-              <CardDescription className="text-right">الزبائن المسجلون والشوالات وحالة كل عصرة</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table dir="rtl">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">الاسم</TableHead>
-                    <TableHead className="text-right">الهاتف</TableHead>
-                    <TableHead className="text-right">عدد الشوالات</TableHead>
-                    <TableHead className="text-right">الحالة</TableHead>
-                    <TableHead className="text-right">ملاحظات</TableHead>
-                    <TableHead className="text-right">تاريخ الإدخال</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {queueItems.map((q: any) => (
-                    <TableRow key={q.id}>
-                      <TableCell className="font-bold text-right">{safeText(q.name)}</TableCell>
-                      <TableCell dir="ltr" className="text-right font-mono text-xs">{safeText(q.phone)}</TableCell>
-                      <TableCell className="font-medium text-right">{q.bags} شوال</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={q.status === 'processing' ? 'default' : q.status === 'completed' ? 'secondary' : 'outline'}>
-                          {q.status === 'processing' ? 'قيد العصر ⚙️' : q.status === 'completed' ? 'تم العصر ✅' : 'في الانتظار ⏳'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground text-right">{safeText(q.notes, '-')}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground text-right">
-                        {formatDateTime(q.created_at)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {queueItems.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                        لا توجد حركات طابور مسجلة
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* TAB 3: Cashier Sub-Accounts */}
+        {/* Employee accounts */}
         <TabsContent value="employees">
           {/* Mill Code Section */}
           <Card className="mb-4 border-primary/20 bg-primary/5 text-right">
@@ -1377,90 +1281,7 @@ export default function MillDetails() {
           </Card>
         </TabsContent>
 
-        {/* TAB 4: Expenses & Oil Trading */}
-        <TabsContent value="finance">
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="text-right">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2 text-right">
-                  <Wallet className="h-4 w-4 text-primary" />
-                  <span>سجل المصاريف المسجلة</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table dir="rtl">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">الفئة</TableHead>
-                      <TableHead className="text-right">المبلغ</TableHead>
-                      <TableHead className="text-right">التاريخ</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {expenses.map((exp: any) => (
-                      <TableRow key={exp.id}>
-                        <TableCell className="font-medium text-right">{safeText(exp.category)}</TableCell>
-                        <TableCell className="font-bold text-red-600 text-right">{exp.amount} ₪</TableCell>
-                        <TableCell className="text-xs text-muted-foreground text-right">{formatDate(exp.created_at)}</TableCell>
-                      </TableRow>
-                    ))}
-                    {expenses.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center py-4 text-muted-foreground text-xs">
-                          لا توجد مصاريف مسجلة
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            <Card className="text-right">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2 text-right">
-                  <ShoppingCart className="h-4 w-4 text-primary" />
-                  <span>حركات بيع وشراء الزيت</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table dir="rtl">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">النوع</TableHead>
-                      <TableHead className="text-right">الكمية</TableHead>
-                      <TableHead className="text-right">الإجمالي</TableHead>
-                      <TableHead className="text-right">التاريخ</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {oilTransactions.map((tx: any) => (
-                      <TableRow key={tx.id}>
-                        <TableCell className="text-right">
-                          <Badge variant={tx.type === 'sell' ? 'default' : 'secondary'}>
-                            {tx.type === 'sell' ? 'بيع' : 'شراء'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">{tx.amount} كغم</TableCell>
-                        <TableCell className="font-bold text-right">{tx.total_price} ₪</TableCell>
-                        <TableCell className="text-xs text-muted-foreground text-right">{formatDate(tx.created_at)}</TableCell>
-                      </TableRow>
-                    ))}
-                    {oilTransactions.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-4 text-muted-foreground text-xs">
-                          لا توجد حركات بيع أو شراء زيت
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* TAB 5: Subscription Management & Payments */}
+        {/* Subscription management and platform billing */}
         <TabsContent value="subscription">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Subscription Status Card */}
@@ -1522,7 +1343,7 @@ export default function MillDetails() {
               </CardFooter>
             </Card>
 
-            {/* Monthly Fee & Subscription Payments */}
+            {/* Subscription plan and payments */}
             <Card className="border-t-4 border-t-green-500 text-right">
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <div className="flex items-center gap-2">
@@ -1530,7 +1351,13 @@ export default function MillDetails() {
                   <CardTitle className="text-lg text-right">الرسوم والمدفوعات</CardTitle>
                 </div>
 
-                <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+                <Dialog
+                  open={isPaymentModalOpen}
+                  onOpenChange={(open) => {
+                    setIsPaymentModalOpen(open);
+                    if (open) paymentIdempotencyKeyRef.current = crypto.randomUUID();
+                  }}
+                >
                   <DialogTrigger asChild>
                     <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1.5">
                       <Plus className="h-3.5 w-3.5" />
@@ -1540,12 +1367,17 @@ export default function MillDetails() {
                   <DialogContent dir="rtl" className="text-right sm:max-w-[425px]">
                     <DialogHeader className="text-right sm:text-right">
                       <DialogTitle className="text-right">تسجيل دفعة اشتراك جديدة</DialogTitle>
+                      <DialogDescription className="text-right">
+                        ستُحفظ الدفعة ضمن اشتراك المعصرة {subscriptionType === "monthly" ? "الشهري" : "الموسمي"} الحالي.
+                      </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-3 text-right">
                       <div className="space-y-2">
                         <Label className="text-right block">المبلغ (₪) *</Label>
                         <Input
                           type="number"
+                          min="0.01"
+                          step="0.01"
                           value={newPayment.amount}
                           onChange={e => setNewPayment({ ...newPayment, amount: e.target.value })}
                           placeholder="0.00"
@@ -1582,21 +1414,68 @@ export default function MillDetails() {
                 </Dialog>
               </CardHeader>
               <CardContent className="space-y-4 text-right">
-                <div className="flex items-center justify-between bg-muted/40 p-3 rounded-xl">
-                  <Label htmlFor="monthlyFee" className="text-xs font-semibold">الاشتراك الشهري المتفق عليه:</Label>
-                  <div className="flex items-center gap-1.5">
+                <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold block">نوع الاشتراك</Label>
+                    <RadioGroup
+                      value={subscriptionType}
+                      onValueChange={(value) => setSubscriptionType(value as SubscriptionType)}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                      dir="rtl"
+                    >
+                      <Label
+                        htmlFor="subscription-monthly"
+                        className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${subscriptionType === "monthly" ? "border-primary bg-primary/5" : "bg-background"}`}
+                      >
+                        <RadioGroupItem value="monthly" id="subscription-monthly" />
+                        <span>
+                          <span className="block font-bold">شهري</span>
+                          <span className="block text-xs font-normal text-muted-foreground">قيمة متفق عليها لكل شهر</span>
+                        </span>
+                      </Label>
+                      <Label
+                        htmlFor="subscription-seasonal"
+                        className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${subscriptionType === "seasonal" ? "border-primary bg-primary/5" : "bg-background"}`}
+                      >
+                        <RadioGroupItem value="seasonal" id="subscription-seasonal" />
+                        <span>
+                          <span className="block font-bold">موسمي</span>
+                          <span className="block text-xs font-normal text-muted-foreground">قيمة متفق عليها لكل موسم</span>
+                        </span>
+                      </Label>
+                    </RadioGroup>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="subscriptionFee" className="text-sm font-bold block">
+                      قيمة الاشتراك {subscriptionType === "monthly" ? "الشهري" : "الموسمي"} (₪)
+                    </Label>
                     <Input
-                      id="monthlyFee"
+                      id="subscriptionFee"
                       type="number"
-                      value={monthlyFee}
-                      onChange={e => setMonthlyFee(e.target.value)}
-                      className="w-24 h-8 text-xs font-bold text-left font-mono"
+                      min="0"
+                      step="0.01"
+                      value={subscriptionFee}
+                      onChange={e => setSubscriptionFee(e.target.value)}
+                      className="font-bold text-left font-mono"
                       dir="ltr"
                     />
-                    <span className="text-xs font-bold">₪</span>
-                    <Button size="sm" variant="outline" onClick={saveMonthlyFee} disabled={updating} className="h-8 text-xs">
-                      حفظ
-                    </Button>
+                  </div>
+
+                  <Button onClick={saveSubscriptionPlan} disabled={updating} className="w-full gap-2">
+                    <Save className="h-4 w-4" />
+                    {updating ? "جارٍ حفظ الخطة..." : "حفظ نوع الاشتراك والقيمة"}
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">إجمالي الدفعات المسجلة</p>
+                    <p className="mt-1 text-lg font-bold text-green-700">{totalPayments.toLocaleString("ar-u-nu-latn")} ₪</p>
+                  </div>
+                  <div className="rounded-xl border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">عدد الدفعات</p>
+                    <p className="mt-1 text-lg font-bold">{payments.length.toLocaleString("ar-u-nu-latn")}</p>
                   </div>
                 </div>
 
@@ -1604,10 +1483,16 @@ export default function MillDetails() {
                   <p className="text-xs font-semibold text-muted-foreground text-right">سجل الدفعات الأخيرة:</p>
                   <div className="max-h-[160px] overflow-auto space-y-1.5">
                     {payments.map(p => (
-                      <div key={p.id} className="flex items-center justify-between text-xs p-2 bg-muted/30 rounded-lg border">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-green-700">{p.amount} ₪</span>
-                          <span className="text-muted-foreground">({formatDate(p.payment_date)})</span>
+                      <div key={p.id} className="flex items-center justify-between gap-3 text-xs p-2 bg-muted/30 rounded-lg border">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-green-700">{Number(p.amount).toLocaleString("ar-u-nu-latn")} ₪</span>
+                            <span className="text-muted-foreground">({formatDate(p.payment_date)})</span>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground">
+                            {p.subscription_type === "seasonal" ? "اشتراك موسمي" : "اشتراك شهري"}
+                            {p.subscription_fee != null ? ` — قيمة الخطة ${Number(p.subscription_fee).toLocaleString("ar-u-nu-latn")} ₪` : ""}
+                          </span>
                         </div>
                         <span className="text-muted-foreground truncate max-w-[150px]">{safeText(p.notes, '-')}</span>
                       </div>
