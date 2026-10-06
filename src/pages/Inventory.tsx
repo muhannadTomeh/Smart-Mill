@@ -29,6 +29,7 @@ import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
+import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
 
 interface CashMovement {
   id: string;
@@ -1838,7 +1839,7 @@ const Inventory = () => {
                           </TableCell>
 
                           <TableCell>
-                            {purchase.status !== "cancelled" && (
+                            {purchase.status !== "cancelled" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1847,6 +1848,8 @@ const Inventory = () => {
                               >
                                 إلغاء
                               </Button>
+                            ) : (
+                              <CancellationStatusBadge reason={purchase.cancellation_reason} />
                             )}
                           </TableCell>
                         </TableRow>

@@ -39,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
+import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
 
 interface Partner {
   id: string;
@@ -422,7 +423,17 @@ export default function Partners() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{tx.description}</TableCell>
                       <TableCell><OperationDateTime value={tx.created_at} /></TableCell>
-                      <TableCell className="text-center">{tx.reference_type === "partner_transaction" && !tx.reversal_of && !reversedPartnerTxIds.has(tx.id) ? <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void handleReversePartnerTx(tx)}>عكس الحركة</Button> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                      <TableCell className="text-center">
+                        {tx.reference_type === "partner_transaction" && !tx.reversal_of && !reversedPartnerTxIds.has(tx.id) ? (
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void handleReversePartnerTx(tx)}>عكس الحركة</Button>
+                        ) : tx.reversal_of ? (
+                          <CancellationStatusBadge kind="reversal" />
+                        ) : reversedPartnerTxIds.has(tx.id) ? (
+                          <CancellationStatusBadge kind="reversed" />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

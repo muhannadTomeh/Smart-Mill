@@ -24,6 +24,7 @@ import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
+import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
 
 interface Transaction {
   id: string;
@@ -37,6 +38,7 @@ interface Transaction {
   payment_method: 'cash' | 'credit' | 'partner';
   payable_id: string | null;
   status: 'active' | 'cancelled';
+  cancellation_reason: string | null;
   created_at: string;
 }
 
@@ -184,6 +186,7 @@ const OilTrading = () => {
               : 'cash',
         payable_id: tx.payable_id ?? null,
         status: tx.status === 'cancelled' ? 'cancelled' : 'active',
+        cancellation_reason: tx.cancellation_reason ?? null,
         created_at: tx.created_at,
         source_type: tx.type === 'buy' ? 'oil_purchase' : 'oil_sale',
       })) as Transaction[]);
@@ -659,7 +662,7 @@ const OilTrading = () => {
                           >
                             {cancellingTransactionId === tx.id ? 'جارٍ الإلغاء...' : 'إلغاء العملية'}
                           </Button>
-                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                        ) : <CancellationStatusBadge reason={tx.cancellation_reason} />}
                       </TableCell>
                     </TableRow>
                   ))}

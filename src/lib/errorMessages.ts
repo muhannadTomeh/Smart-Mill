@@ -123,6 +123,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   WORKER_PAYMENT_EXCEEDS_EARNED: "لا يمكن دفع مبلغ أكبر من الأجر المستحق للعامل.",
   WORKER_PAYMENT_FORBIDDEN: "ليس لديك صلاحية تسجيل أو عكس دفعة العامل.",
   WORKER_PAYMENT_LEDGER_NOT_FOUND: "تعذر العثور على الحركة المالية المرتبطة بدفعة العامل.",
+  WORKER_PAYMENT_PAYABLE_NOT_FOUND: "تعذر العثور على التزام الشريك المرتبط بدفعة العامل.",
   WORKER_PAYMENT_RECONCILIATION_REQUIRED: "تعذر عكس الدفعة بسبب عدم تطابق رصيد العامل. راجع سجل العامل.",
   WORK_RECORD_NOT_FOUND: "سجل العمل المحدد غير موجود.",
   WORK_RECORD_ALREADY_CANCELLED: "سجل العمل ملغى مسبقًا.",

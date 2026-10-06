@@ -31,6 +31,7 @@ import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
 
 interface Expense {
   id: string;
@@ -43,6 +44,8 @@ interface Expense {
   partners?: { name: string } | null;
   suppliers?: { name: string } | null;
   created_at: string;
+  voided_at?: string | null;
+  void_reason?: string | null;
 }
 
 interface ExpenseCategory {
@@ -177,8 +180,7 @@ const Expenses = () => {
       let query = supabase
         .from("expenses")
         .select("*, partners(name), suppliers(name)", { count: "exact" })
-        .eq("season_id", activeSeason.id)
-        .is("voided_at", null);
+        .eq("season_id", activeSeason.id);
 
       const effectiveMillId = millId || activeSeason.mill_id;
       if (effectiveMillId) {
@@ -371,7 +373,7 @@ const Expenses = () => {
     ])
   );
 
-  const getCurrentPageTotal = () => expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const getCurrentPageTotal = () => expenses.reduce((sum, exp) => sum + (exp.voided_at ? 0 : exp.amount), 0);
 
   const handleSelectQuickTag = (tag: string) => {
     if (isCustomMode) {
@@ -648,15 +650,19 @@ const Expenses = () => {
                       </TableCell>
                       {!isEmployee && (
                         <TableCell className="text-left">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                            onClick={() => setDeleteTarget(exp)}
-                            title="إلغاء المصروف"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {exp.voided_at ? (
+                            <CancellationStatusBadge reason={exp.void_reason} />
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                              onClick={() => setDeleteTarget(exp)}
+                              title="إلغاء المصروف"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </TableCell>
                       )}
                     </TableRow>

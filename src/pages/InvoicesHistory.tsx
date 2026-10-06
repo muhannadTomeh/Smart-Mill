@@ -26,6 +26,7 @@ import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
+import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
 
 interface InvoiceRecord {
   id: string;
@@ -40,6 +41,7 @@ interface InvoiceRecord {
   created_at: string;
   notes?: string | null;
   voided_at?: string | null;
+  void_reason?: string | null;
 }
 
 interface ReceivableMovement {
@@ -451,6 +453,9 @@ export default function InvoicesHistory() {
                               <span>إلغاء</span>
                             </Button>
                           )}
+                          {inv.voided_at && (
+                            <CancellationStatusBadge reason={inv.void_reason} />
+                          )}
                           {!inv.voided_at && receivableBalance(inv.id) > 0 && (
                             <Button size="sm" variant="outline" disabled={collectingInvoiceId === inv.id} className="h-8 px-2.5 text-xs gap-1" onClick={() => collectReceivable(inv)}>
                               <Wallet className="h-3.5 w-3.5" />
@@ -571,6 +576,8 @@ export default function InvoicesHistory() {
               <div key={movement.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                 <div><div className="font-medium">{Number(movement.amount).toLocaleString()} {currency}</div><div className="mt-1 flex items-center gap-2"><OperationDateTime value={movement.created_at} /><span className="text-xs text-muted-foreground">· {movement.movement_type}</span></div></div>
                 {movement.movement_type === "collection" && !receivableMovements.some((item) => item.reversal_of === movement.id) && !isEmployee && <Button size="sm" variant="outline" onClick={() => reverseCollection(movement)}>عكس</Button>}
+                {movement.movement_type === "collection" && receivableMovements.some((item) => item.reversal_of === movement.id) && <CancellationStatusBadge kind="reversed" />}
+                {movement.movement_type === "collection_reversal" && <CancellationStatusBadge kind="reversal" />}
               </div>
             ))}
           </div>

@@ -23,6 +23,7 @@ import { useRole } from "@/contexts/RoleContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { OperationDateTime } from "@/components/history/OperationDateTime";
+import { CancellationStatusBadge } from "@/components/history/CancellationStatusBadge";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 
@@ -46,8 +47,8 @@ interface WorkRecord {
   amount: number;
   notes: string | null;
   created_at: string;
-  status: "active" | "reversed";
-  reversal_reason: string | null;
+  status: "active" | "cancelled";
+  cancellation_reason: string | null;
 }
 
 interface WorkerPayment {
@@ -288,9 +289,37 @@ const Workers = () => {
       toast({ title: "تعذر عكس الدفعة", description: getArabicErrorMessage(error, "تعذر عكس دفعة العامل."), variant: "destructive" });
       return;
     }
-    toast({ title: "تم عكس الدفعة", description: "تمت إعادة الكاش وتحديث مستحقات العامل." });
+    toast({
+      title: "تم عكس الدفعة",
+      description: payment.payment_source === "partner_paid"
+        ? "تم إلغاء التزام الشريك وتحديث مستحقات العامل دون تغيير كاش المعصرة."
+        : "تمت إعادة الكاش وتحديث مستحقات العامل.",
+    });
     fetchWorkers();
     fetchPayments();
+  };
+
+  const cancelWorkRecord = async (record: WorkRecord) => {
+    const reason = window.prompt("سبب إلغاء سجل العمل (إلزامي)")?.trim();
+    if (!reason) return;
+
+    const { error } = await (supabase.rpc as any)("cancel_work_record_command", {
+      p_work_record_id: record.id,
+      p_reason: reason,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+
+    if (error) {
+      toast({
+        title: "تعذر إلغاء سجل العمل",
+        description: getArabicErrorMessage(error, "تعذر إلغاء سجل العمل."),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "تم إلغاء سجل العمل", description: "تم تحديث مستحقات العامل مع إبقاء السجل محفوظًا." });
+    await Promise.all([fetchWorkers(), fetchRecords()]);
   };
 
   const payWorker = async (
@@ -687,6 +716,8 @@ const Workers = () => {
                           <TableHead className="text-right">المبلغ</TableHead>
                           <TableHead className="text-right">ملاحظات</TableHead>
                           <TableHead className="text-right">التاريخ</TableHead>
+                          <TableHead className="text-right">الحالة</TableHead>
+                          <TableHead className="text-right">الإجراء</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -699,6 +730,20 @@ const Workers = () => {
                               <TableCell className="text-right">{record.amount} ش</TableCell>
                               <TableCell className="text-right text-muted-foreground text-xs">{record.notes || '—'}</TableCell>
                               <TableCell className="text-right"><OperationDateTime value={record.created_at} /></TableCell>
+                              <TableCell className="text-right">
+                                {record.status === "cancelled" ? <CancellationStatusBadge reason={record.cancellation_reason} /> : <Badge variant="outline" className="border-emerald-300 text-emerald-700">فعّال</Badge>}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {record.status === "cancelled" ? (
+                                  <CancellationStatusBadge reason={record.cancellation_reason} />
+                                ) : !isEmployee ? (
+                                  <Button size="sm" variant="outline" className="text-rose-700 border-rose-300" onClick={() => void cancelWorkRecord(record)}>
+                                    إلغاء السجل
+                                  </Button>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
                             </TableRow>
                           );
                         })}
@@ -812,7 +857,7 @@ const Workers = () => {
                                 <TableCell className="text-right text-muted-foreground text-xs">{payment.notes || '—'}</TableCell>
                                 <TableCell className="text-right"><OperationDateTime value={payment.created_at} /></TableCell>
                                 <TableCell className="text-right"><Badge variant={payment.status === "active" ? "default" : "secondary"}>{payment.status === "active" ? "فعالة" : "معكوسة"}</Badge></TableCell>
-                                <TableCell className="text-right">{payment.status === "active" ? <Button size="sm" variant="outline" onClick={() => reversePayment(payment)} disabled={isEmployee}><RotateCcw className="h-3 w-3 me-1" />عكس الدفعة</Button> : <span className="text-xs text-muted-foreground">{payment.reversal_reason || "—"}</span>}</TableCell>
+                                <TableCell className="text-right">{payment.status === "active" ? <Button size="sm" variant="outline" onClick={() => reversePayment(payment)} disabled={isEmployee}><RotateCcw className="h-3 w-3 me-1" />عكس الدفعة</Button> : <CancellationStatusBadge kind="reversed" reason={payment.reversal_reason} />}</TableCell>
                               </TableRow>
                             );
                           })}
