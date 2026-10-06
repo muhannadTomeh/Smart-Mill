@@ -44,6 +44,7 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDate } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
 
 interface Payable {
   id: string;
@@ -938,9 +939,7 @@ export default function Payables() {
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatDate(p.created_at)}
-                          </TableCell>
+                          <TableCell><OperationDateTime value={p.created_at} /></TableCell>
                           <TableCell className="text-center">
                             <div className="flex justify-center gap-1">
                               {p.status !== "paid" && p.status !== "cancelled" && (
@@ -1087,9 +1086,7 @@ export default function Payables() {
                             )}
                           </TableCell>
 
-                          <TableCell className="text-xs">
-                            {formatDate(r.created_at)}
-                          </TableCell>
+                          <TableCell><OperationDateTime value={r.created_at} /></TableCell>
 
                           <TableCell className="text-center">
                             {r.status !== "paid" &&
@@ -1292,7 +1289,7 @@ export default function Payables() {
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {settlements.length === 0 ? <p className="text-sm text-muted-foreground py-4 text-center">لا توجد دفعات مسجلة عبر المسار الجديد.</p> : settlements.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
-                <div><div className="font-medium">{Math.abs(Number(s.amount)).toLocaleString()} ₪</div><div className="text-xs text-muted-foreground">{formatDate(s.created_at)} · {s.payment_method === "cash" ? "كاش" : "مصدر خارجي"}</div></div>
+                <div><div className="font-medium">{Math.abs(Number(s.amount)).toLocaleString()} ₪</div><div className="mt-1 flex items-center gap-2"><OperationDateTime value={s.created_at} /><span className="text-xs text-muted-foreground">· {s.payment_method === "cash" ? "كاش" : "مصدر خارجي"}</span></div></div>
                 {s.reversed ? <Badge variant="secondary">معكوس</Badge> : <Button size="sm" variant="outline" disabled={reversingSettlement === s.id} onClick={() => reverseSettlement(s)} className="gap-1"><RotateCcw className="h-3 w-3" /> عكس</Button>}
               </div>
             ))}

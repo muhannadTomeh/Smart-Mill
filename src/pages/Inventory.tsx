@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Warehouse, Droplets, Wallet, ArrowUp, ArrowDown,
-  ShoppingCart, Calendar,
+  ShoppingCart,
   Package, Plus, RefreshCw, Layers, Tag,
   Handshake, Users, ArrowUpRight, ArrowDownLeft, Archive,
   ChevronRight, ChevronLeft, Eye, EyeOff, Search, X
@@ -23,11 +23,12 @@ import { useCashBalance } from "@/hooks/useCashBalance";
 import { useRole } from "@/contexts/RoleContext";
 import { useToast } from "@/hooks/use-toast";
 import { Link, Navigate } from "react-router-dom";
-import { formatDate, formatNumber, formatTime } from "@/lib/formatters";
+import { formatNumber } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
 
 interface CashMovement {
   id: string;
@@ -1041,15 +1042,12 @@ const Inventory = () => {
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">التاريخ</Label>
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full sm:w-[180px]"
-              />
-            </div>
+            <ClickableDateInput
+              label="التاريخ"
+              value={selectedDate}
+              onChange={setSelectedDate}
+              inputClassName="w-full sm:w-[180px]"
+            />
           </div>
 
 
@@ -1196,13 +1194,7 @@ const Inventory = () => {
                                   className="hover:bg-muted/30"
                                 >
                                   <TableCell className="text-right whitespace-nowrap text-xs font-mono">
-                                    <div className="flex items-start gap-1">
-                                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <div>
-                                        <div>{formatDate(movement.created_at)}</div>
-                                        <div className="mt-0.5 text-[10px] text-muted-foreground">{formatTime(movement.created_at)}</div>
-                                      </div>
-                                    </div>
+                                    <OperationDateTime value={movement.created_at} />
                                   </TableCell>
 
                                   <TableCell className="text-right">
@@ -1378,8 +1370,7 @@ const Inventory = () => {
                                   className="hover:bg-muted/30"
                                 >
                                   <TableCell className="text-right text-xs font-mono">
-                                    <div>{formatDate(movement.created_at)}</div>
-                                    <div className="mt-0.5 text-[10px] text-muted-foreground">{formatTime(movement.created_at)}</div>
+                                    <OperationDateTime value={movement.created_at} />
                                   </TableCell>
 
                                   <TableCell className="text-right">
@@ -1607,13 +1598,7 @@ const Inventory = () => {
                         return (
                           <TableRow key={sm.id} className="hover:bg-muted/30">
                             <TableCell className="text-right text-xs font-mono">
-                              <div className="flex items-start gap-1 text-muted-foreground">
-                                <Calendar className="h-3.5 w-3.5" />
-                                <div>
-                                  <div>{formatDate(sm.created_at)}</div>
-                                  <div className="mt-0.5 text-[10px] text-muted-foreground/80">{formatTime(sm.created_at)}</div>
-                                </div>
-                              </div>
+                              <OperationDateTime value={sm.created_at} />
                             </TableCell>
                             <TableCell className="text-right font-semibold text-xs">
                               {sm.products?.name || "منتج"}
@@ -1812,8 +1797,7 @@ const Inventory = () => {
                       {purchaseHistory.map((purchase) => (
                         <TableRow key={purchase.id}>
                           <TableCell className="text-xs font-mono">
-                            <div>{formatDate(purchase.created_at)}</div>
-                            <div className="mt-0.5 text-[10px] text-muted-foreground">{formatTime(purchase.created_at)}</div>
+                            <OperationDateTime value={purchase.created_at} />
                           </TableCell>
 
                           <TableCell>
@@ -2171,9 +2155,12 @@ const Inventory = () => {
                 .filter((m) => m.type === "purchase" || m.movement_type === "purchase_in")
                 .slice(0, 8)
                 .map((movement) => (
-                  <div key={movement.id} className="flex justify-between border-b pb-2">
-                    <span>{movement.products?.name || "بضاعة"}</span>
-                    <span>+{movement.quantity}</span>
+                  <div key={movement.id} className="flex items-center justify-between gap-3 border-b pb-2">
+                    <div className="space-y-1">
+                      <span className="font-medium text-foreground">{movement.products?.name || "بضاعة"}</span>
+                      <OperationDateTime value={movement.created_at} />
+                    </div>
+                    <span className="font-mono font-bold text-emerald-700">+{movement.quantity}</span>
                   </div>
                 ))}
               {!stockMovements.some(

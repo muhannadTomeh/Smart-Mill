@@ -22,7 +22,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
-import { formatDate } from "@/lib/formatters";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
+import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 
 interface Worker {
@@ -664,8 +665,7 @@ const Workers = () => {
                       <Button size="sm" variant={filterToday ? "default" : "outline"} onClick={() => { setFilterToday(!filterToday); setFilterDate(""); }}>
                         اليوم
                       </Button>
-                      <Input type="date" value={filterDate} onChange={e => { setFilterDate(e.target.value); setFilterToday(false); }}
-                        className="w-44 h-9" />
+                      <ClickableDateInput label="التاريخ" value={filterDate} onChange={(value) => { setFilterDate(value); setFilterToday(false); }} inputClassName="w-44" />
                       <select value={filterWorker} onChange={e => setFilterWorker(e.target.value)}
                         className="h-9 p-1 border rounded-md bg-background text-foreground text-sm min-w-[140px]">
                         <option value="">كل العمال</option>
@@ -698,7 +698,7 @@ const Workers = () => {
                               <TableCell className="text-right">{record.hours ? `${record.hours} ساعة` : `${record.shifts} شفت`}</TableCell>
                               <TableCell className="text-right">{record.amount} ش</TableCell>
                               <TableCell className="text-right text-muted-foreground text-xs">{record.notes || '—'}</TableCell>
-                              <TableCell className="text-right font-mono text-xs">{formatDate(record.created_at)}</TableCell>
+                              <TableCell className="text-right"><OperationDateTime value={record.created_at} /></TableCell>
                             </TableRow>
                           );
                         })}
@@ -770,8 +770,7 @@ const Workers = () => {
                       <Button size="sm" variant={payFilterToday ? "default" : "outline"} onClick={() => { setPayFilterToday(!payFilterToday); setPayFilterDate(""); }}>
                         اليوم
                       </Button>
-                      <Input type="date" value={payFilterDate} onChange={e => { setPayFilterDate(e.target.value); setPayFilterToday(false); }}
-                        className="w-44 h-9" />
+                      <ClickableDateInput label="التاريخ" value={payFilterDate} onChange={(value) => { setPayFilterDate(value); setPayFilterToday(false); }} inputClassName="w-44" />
                       <select value={payFilterWorker} onChange={e => setPayFilterWorker(e.target.value)}
                         className="h-9 p-1 border rounded-md bg-background text-foreground text-sm min-w-[140px]">
                         <option value="">كل العمال</option>
@@ -811,7 +810,7 @@ const Workers = () => {
                                 </TableCell>
 
                                 <TableCell className="text-right text-muted-foreground text-xs">{payment.notes || '—'}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{formatDate(payment.created_at)}</TableCell>
+                                <TableCell className="text-right"><OperationDateTime value={payment.created_at} /></TableCell>
                                 <TableCell className="text-right"><Badge variant={payment.status === "active" ? "default" : "secondary"}>{payment.status === "active" ? "فعالة" : "معكوسة"}</Badge></TableCell>
                                 <TableCell className="text-right">{payment.status === "active" ? <Button size="sm" variant="outline" onClick={() => reversePayment(payment)} disabled={isEmployee}><RotateCcw className="h-3 w-3 me-1" />عكس الدفعة</Button> : <span className="text-xs text-muted-foreground">{payment.reversal_reason || "—"}</span>}</TableCell>
                               </TableRow>

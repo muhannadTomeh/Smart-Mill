@@ -57,6 +57,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 
 type SubscriptionType = "monthly" | "seasonal";
 
@@ -1596,16 +1597,12 @@ export default function MillDetails() {
                           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₪</span>
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label className="block">تاريخ الدفع *</Label>
-                        <Input
-                          type="date"
-                          value={newPayment.date}
-                          onChange={(event) => setNewPayment({ ...newPayment, date: event.target.value })}
-                          dir="ltr"
-                          className="h-11 text-left font-mono"
-                        />
-                      </div>
+                      <ClickableDateInput
+                        label="تاريخ الدفع *"
+                        value={newPayment.date}
+                        onChange={(value) => setNewPayment({ ...newPayment, date: value })}
+                        inputClassName="h-11 text-left font-mono"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label className="block">ملاحظة <span className="font-normal text-muted-foreground">(اختياري)</span></Label>

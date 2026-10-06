@@ -14,6 +14,7 @@ import {
   normalizeCashReturnPricingMode,
 } from "@/lib/cashReturnPricing";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 
 export default function SeasonSetup() {
   const { user, millId } = useAuth();
@@ -171,14 +172,8 @@ export default function SeasonSetup() {
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>تاريخ البداية</Label>
-                <Input type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} className="mt-1" />
-              </div>
-              <div>
-                <Label>تاريخ النهاية (اختياري)</Label>
-                <Input type="date" value={form.end_date} onChange={(e) => set("end_date", e.target.value)} className="mt-1" />
-              </div>
+              <ClickableDateInput label="تاريخ البداية" value={form.start_date} max={form.end_date || undefined} onChange={(value) => set("start_date", value)} />
+              <ClickableDateInput label="تاريخ النهاية (اختياري)" value={form.end_date} min={form.start_date || undefined} onChange={(value) => set("end_date", value)} />
             </div>
           </CardContent>
         </Card>

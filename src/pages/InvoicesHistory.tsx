@@ -11,11 +11,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
-import { formatDate, formatTime } from "@/lib/formatters";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useNavigate } from "react-router-dom";
 import { 
-  FileText, Search, Calendar, Eye, Printer, Filter, 
+  FileText, Search, Eye, Printer, Filter,
   Receipt, Droplets, Wallet, Layers, ArrowUpDown, Trash2
 } from "lucide-react";
 import { DeletedInvoicesDialog } from "@/components/invoices/DeletedInvoicesDialog";
@@ -26,6 +25,7 @@ import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
 
 interface InvoiceRecord {
   id: string;
@@ -405,13 +405,7 @@ export default function InvoicesHistory() {
                   {invoices.map((inv) => (
                     <TableRow key={inv.id} className="hover:bg-muted/20">
                       <TableCell className="text-right text-xs text-muted-foreground">
-                        <div className="flex items-start gap-1.5 font-mono">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          <div>
-                            <div>{formatDate(inv.created_at)}</div>
-                            <div className="mt-0.5 text-[10px] text-muted-foreground/80">{formatTime(inv.created_at)}</div>
-                          </div>
-                        </div>
+                        <OperationDateTime value={inv.created_at} />
                       </TableCell>
 
                       <TableCell className="text-right font-bold text-sm text-foreground">
@@ -575,7 +569,7 @@ export default function InvoicesHistory() {
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {receivableMovements.filter((movement) => movement.invoice_id === receivableHistoryInvoice?.id).map((movement) => (
               <div key={movement.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
-                <div><div className="font-medium">{Number(movement.amount).toLocaleString()} {currency}</div><div className="text-xs text-muted-foreground">{formatDate(movement.created_at)} · {formatTime(movement.created_at)} · {movement.movement_type}</div></div>
+                <div><div className="font-medium">{Number(movement.amount).toLocaleString()} {currency}</div><div className="mt-1 flex items-center gap-2"><OperationDateTime value={movement.created_at} /><span className="text-xs text-muted-foreground">· {movement.movement_type}</span></div></div>
                 {movement.movement_type === "collection" && !receivableMovements.some((item) => item.reversal_of === movement.id) && !isEmployee && <Button size="sm" variant="outline" onClick={() => reverseCollection(movement)}>عكس</Button>}
               </div>
             ))}

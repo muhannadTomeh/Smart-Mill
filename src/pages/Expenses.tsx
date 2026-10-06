@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Sprout, Plus, Calendar, DollarSign, Trash2, Tag, Edit3, 
+  Sprout, Plus, DollarSign, Trash2, Tag, Edit3,
   RefreshCw, X, Receipt, Wallet, Filter, Search
 } from "lucide-react";
 import {
@@ -25,10 +25,11 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatDate, formatNumber, formatTime } from "@/lib/formatters";
+import { formatNumber } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 interface Expense {
@@ -617,13 +618,7 @@ const Expenses = () => {
                   {expenses.map((exp) => (
                     <TableRow key={exp.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell className="text-right text-xs font-mono">
-                        <div className="flex items-start gap-1.5 text-muted-foreground">
-                          <Calendar className="h-3.5 w-3.5" />
-                          <div>
-                            <div>{formatDate(exp.created_at)}</div>
-                            <div className="mt-0.5 text-[10px] text-muted-foreground/80">{formatTime(exp.created_at)}</div>
-                          </div>
-                        </div>
+                        <OperationDateTime value={exp.created_at} />
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge variant="outline" className="text-xs font-semibold bg-muted/40 border-border/60">

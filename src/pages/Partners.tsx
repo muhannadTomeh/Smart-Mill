@@ -38,7 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatDate } from "@/lib/formatters";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
 
 interface Partner {
   id: string;
@@ -421,7 +421,7 @@ export default function Partners() {
                         {tx.direction === "in" ? `+${tx.amount} ₪` : `-${tx.amount} ₪`}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{tx.description}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{formatDate(tx.created_at)}</TableCell>
+                      <TableCell><OperationDateTime value={tx.created_at} /></TableCell>
                       <TableCell className="text-center">{tx.reference_type === "partner_transaction" && !tx.reversal_of && !reversedPartnerTxIds.has(tx.id) ? <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void handleReversePartnerTx(tx)}>عكس الحركة</Button> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
                     </TableRow>
                   ))}

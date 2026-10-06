@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ShoppingCart, TrendingUp, TrendingDown, Package, DollarSign,
-  Calendar, RefreshCw, Plus, Filter, X, Search
+  RefreshCw, Plus, Filter, X, Search
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -19,11 +19,11 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { useInventory } from "@/hooks/useInventory";
 import { useCashBalance } from "@/hooks/useCashBalance";
 import { useCurrency } from "@/hooks/useCurrency";
-import { formatDate, formatTime } from "@/lib/formatters";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { HistoryPagination } from "@/components/history/HistoryPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
 
 interface Transaction {
   id: string;
@@ -606,13 +606,7 @@ const OilTrading = () => {
                   {transactions.map((tx) => (
                     <TableRow key={tx.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell className="text-right text-xs font-mono">
-                        <div className="flex items-start gap-1.5 text-muted-foreground">
-                          <Calendar className="h-3.5 w-3.5" />
-                          <div>
-                            <div>{formatDate(tx.created_at)}</div>
-                            <div className="mt-0.5 text-[10px] text-muted-foreground/80">{formatTime(tx.created_at)}</div>
-                          </div>
-                        </div>
+                        <OperationDateTime value={tx.created_at} />
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge

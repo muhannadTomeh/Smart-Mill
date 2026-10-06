@@ -38,6 +38,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { useCashBalance } from "@/hooks/useCashBalance";
 import { supabase } from "@/integrations/supabase/client";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
+import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 
 type LedgerEvent = {
   id: string;
@@ -64,12 +66,6 @@ const money = new Intl.NumberFormat("ar-PS-u-nu-latn", {
   currency: "ILS",
   maximumFractionDigits: 2,
 });
-const dateTime = new Intl.DateTimeFormat("ar-PS", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-const timeOnly = new Intl.DateTimeFormat("ar-PS", { timeStyle: "short" });
-
 export default function FinancialLedger() {
   const { millId } = useAuth();
   const { activeSeason } = useSeason();
@@ -209,26 +205,18 @@ export default function FinancialLedger() {
 
   const formatEventDate = (dateString: string) => {
     const isToday = dateString.startsWith(todayStr);
-    const dateObj = new Date(dateString);
-    if (isToday) {
-      return (
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
+    return (
+      <div className="flex items-start gap-2 whitespace-nowrap">
+        {isToday && (
           <Badge
             variant="secondary"
-            className="bg-primary/10 text-primary border-primary/20 text-[10px] px-1.5 py-0 font-semibold"
+            className="mt-0.5 bg-primary/10 text-primary border-primary/20 text-[10px] px-1.5 py-0 font-semibold"
           >
             اليوم
           </Badge>
-          <span className="text-xs font-mono text-muted-foreground">
-            {timeOnly.format(dateObj)}
-          </span>
-        </div>
-      );
-    }
-    return (
-      <span className="whitespace-nowrap text-xs text-muted-foreground font-mono">
-        {dateTime.format(dateObj)}
-      </span>
+        )}
+        <OperationDateTime value={dateString} />
+      </div>
     );
   };
 
@@ -630,29 +618,21 @@ export default function FinancialLedger() {
 
 
           <div className="flex flex-wrap items-end gap-3 pt-3 border-t border-border/60">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                من تاريخ
-              </label>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-[160px] h-9 text-xs rounded-xl bg-background"
-              />
-            </div>
+            <ClickableDateInput
+              label="من تاريخ"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={setDateFrom}
+              inputClassName="w-[160px] rounded-xl bg-background"
+            />
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                إلى تاريخ
-              </label>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-[160px] h-9 text-xs rounded-xl bg-background"
-              />
-            </div>
+            <ClickableDateInput
+              label="إلى تاريخ"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={setDateTo}
+              inputClassName="w-[160px] rounded-xl bg-background"
+            />
 
             <Button
               size="sm"

@@ -20,6 +20,7 @@ import { printThermalReceipt } from "@/lib/thermalReceiptPrinter";
 import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { OperationDateTime } from "@/components/history/OperationDateTime";
 
 interface Customer {
   active?: boolean;
@@ -509,10 +510,7 @@ const Customers = () => {
                   {customerInvoices.map((inv) => (
                     <TableRow key={inv.id} className="hover:bg-accent/30 transition-colors">
                       <TableCell className="text-right">
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span>{formatDate(inv.created_at)}</span>
-                        </div>
+                        <OperationDateTime value={inv.created_at} />
                       </TableCell>
                       <TableCell className="text-right font-medium text-sm">
                         {inv.oil_produced} كغم
