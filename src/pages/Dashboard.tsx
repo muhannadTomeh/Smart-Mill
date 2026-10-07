@@ -419,12 +419,14 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <div className="text-left" dir="ltr">
-                    <div className="text-[11px] font-medium text-muted-foreground text-right">الوقت المتبقي</div>
-                    <span className="text-2xl font-bold font-mono text-primary">
-                      {procRemSec !== null ? formatRemaining(procRemSec) : procEstMin ? `${procEstMin}:00` : "غير محدد"}
-                    </span>
-                  </div>
+                  {(procRemSec !== null || procEstMin) && (
+                    <div className="text-left" dir="ltr">
+                      <div className="text-[11px] font-medium text-muted-foreground text-right">الوقت المتبقي</div>
+                      <span className="text-2xl font-bold font-mono text-primary">
+                        {procRemSec !== null ? formatRemaining(procRemSec) : `${procEstMin}:00`}
+                      </span>
+                    </div>
+                  )}
                   <Button
                     size="sm"
                     onClick={() => navigate("/queue")}

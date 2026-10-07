@@ -293,18 +293,18 @@ const Queue = () => {
       phone: newCustomer.phone?.trim() || null,
       bags: bagsCount,
       notes: fallbackNotes,
+      estimated_minutes: estMin,
       status: "waiting",
       position: nextPosition,
     };
 
-    let { data: insertedData, error } = await supabase.from("queue").insert({
-      ...basePayload,
-      ...(estMin ? { estimated_minutes: estMin } : {}),
-    }).select().single();
+    let { data: insertedData, error } = await supabase.from("queue").insert(basePayload).select().single();
 
     if (error && (error.message?.includes("estimated_minutes") || error.code === "PGRST204")) {
+      const legacyPayload = { ...basePayload };
+      delete legacyPayload.estimated_minutes;
       const retry = await supabase.from("queue").insert({
-        ...basePayload,
+        ...legacyPayload,
         notes: fallbackNotes || null,
       }).select().single();
       error = retry.error;
@@ -312,11 +312,8 @@ const Queue = () => {
     }
 
     if (!error) {
-      if (insertedData?.id && estMin) {
-        localStorage.setItem(`queue_est_${insertedData.id}`, String(estMin));
-      }
-      if (newCustomer.name && estMin) {
-        localStorage.setItem(`queue_est_name_${newCustomer.name.trim()}`, String(estMin));
+      if (insertedData?.id && !estMin) {
+        localStorage.removeItem(`queue_est_${insertedData.id}`);
       }
 
       if (shouldPrint) {
@@ -430,10 +427,7 @@ const Queue = () => {
       return updated;
     });
 
-    if (estMin) {
-      localStorage.setItem(`queue_est_${editingCustomer.id}`, String(estMin));
-      localStorage.setItem(`queue_est_name_${editingCustomer.name.trim()}`, String(estMin));
-    }
+    localStorage.removeItem(`queue_est_${editingCustomer.id}`);
 
     let { error } = await supabase
       .from("queue")
@@ -499,9 +493,6 @@ const Queue = () => {
     }
 
     setAdjustingTimeId(id);
-
-    localStorage.setItem(`queue_est_${id}`, String(newEst));
-    if (target.name) localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(newEst));
 
     const updatedNotes = `[وقت_تقديري:${newEst}] ${(target.notes || "").replace(/\[(?:وقت_تقديري|الوقت|est):?[^\]]*\]/gi, "")}`.trim();
 
@@ -605,14 +596,7 @@ const Queue = () => {
 
     try {
       localStorage.setItem(`processing_started_${id}`, startedAt);
-      if (estMin && estMin > 0) {
-        localStorage.setItem(`queue_est_${id}`, String(estMin));
-      } else {
-        localStorage.removeItem(`queue_est_${id}`);
-      }
-      if (target?.name && estMin && estMin > 0) {
-        localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(estMin));
-      }
+      localStorage.removeItem(`queue_est_${id}`);
     } catch { }
 
     const estimatedTimeTag = estMin && estMin > 0 ? `[وقت_تقديري:${estMin}]` : "";
@@ -647,7 +631,7 @@ const Queue = () => {
       console.error("startMilling error", error);
       toast.error(getArabicErrorMessage(error, "تعذر بدء عملية العصر."));
     }
-    else toast.success(estMin ? `تم بدء العصر — الوقت التقديري: ${estMin} دقيقة` : "تم بدء العصر — المدة غير محددة");
+    else toast.success(estMin ? `تم بدء العصر — الوقت التقديري: ${estMin} دقيقة` : "تم بدء العصر");
     await fetchQueue();
   };
 
@@ -856,7 +840,15 @@ const Queue = () => {
           </div>
 
           {/* Primary CTA: + إضافة زبون near the title */}
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (open) {
+                setNewCustomer((previous) => ({ ...previous, estimatedMinutes: "" }));
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button
                 size="sm"
@@ -931,6 +923,7 @@ const Queue = () => {
                   <Input
                     id="estimatedMinutes"
                     type="number"
+                    autoComplete="off"
                     value={newCustomer.estimatedMinutes}
                     onChange={(e) => setNewCustomer((p) => ({ ...p, estimatedMinutes: e.target.value }))}
                     min="1"
@@ -1241,15 +1234,17 @@ const Queue = () => {
                         بدأ {formatTime(p.started_at || p.created_at)}
                       </p>
 
-                      {/* Prominent Operational Timer */}
-                      <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-muted/40 border border-border/50 text-center">
-                        <span className="text-xs font-medium text-muted-foreground mb-1">
-                          الوقت المتبقي
-                        </span>
-                        <span className="text-3xl md:text-4xl font-bold font-mono text-primary tracking-tight" dir="ltr">
-                          {remSec !== null ? formatRemaining(remSec) : estMin ? `${estMin}:00` : "غير محدد"}
-                        </span>
-                      </div>
+                      {/* Show the timer only when the operator entered an estimate. */}
+                      {(remSec !== null || estMin) && (
+                        <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-muted/40 border border-border/50 text-center">
+                          <span className="text-xs font-medium text-muted-foreground mb-1">
+                            الوقت المتبقي
+                          </span>
+                          <span className="text-3xl md:text-4xl font-bold font-mono text-primary tracking-tight" dir="ltr">
+                            {remSec !== null ? formatRemaining(remSec) : `${estMin}:00`}
+                          </span>
+                        </div>
+                      )}
 
                       {/* Repeated five-minute adjustments */}
                       <div className="flex items-center justify-center gap-2" dir="ltr">

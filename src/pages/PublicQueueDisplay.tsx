@@ -140,13 +140,10 @@ export default function PublicQueueDisplay() {
     const mappedItems: QueueItem[] = rawQueue.map((i, idx) => {
       const localMatch = localItems.find((l) => l.id === i.id);
 
-      const localEst = (i.id ? localStorage.getItem(`queue_est_${i.id}`) : null) ||
-        (localMatch ? parseEstimatedMinutes(localMatch) : null);
-
       const localStart = (i.id ? localStorage.getItem(`processing_started_${i.id}`) : null) ||
         (localMatch ? parseStartedAt(localMatch) : null);
 
-      const parsedEst = parseEstimatedMinutes(i) ?? (localEst ? Number(localEst) : null);
+      const parsedEst = parseEstimatedMinutes(i);
       const parsedStartMs = parseStartedAt(i);
       const parsedStart = parsedStartMs ? new Date(parsedStartMs).toISOString() : (localStart ? (typeof localStart === "number" ? new Date(localStart).toISOString() : String(localStart)) : null);
 
@@ -315,15 +312,11 @@ export default function PublicQueueDisplay() {
   const minutes = String(clock.getMinutes()).padStart(2, "0");
 
   // Calculate live second-by-second countdown for current processing customer
-  const currentEstMin = currentItem
-    ? (currentItem.estimated_minutes ||
-      parseEstimatedMinutes(currentItem) ||
-      (currentItem.id ? Number(localStorage.getItem(`queue_est_${currentItem.id}`)) : null))
-    : null;
+  const currentEstMin = currentItem ? parseEstimatedMinutes(currentItem) : null;
   const currentStartedAt = currentItem ? parseStartedAt(currentItem) : null;
 
   let currentRemainingSeconds: number | null = null;
-  let remainingText = "المدة غير محددة";
+  let remainingText = "";
 
   if (currentItem && currentEstMin && currentEstMin > 0) {
     let startMs = currentStartedAt;
@@ -477,7 +470,7 @@ export default function PublicQueueDisplay() {
               </div>
 
               {/* Bottom Operational Countdown Timer */}
-              {displaySettings.show_estimated_time && (
+              {displaySettings.show_estimated_time && currentEstMin && currentEstMin > 0 && (
                 <div className="w-full shrink-0 pt-1">
                   <div className="inline-flex items-center justify-center gap-3 md:gap-4 px-6 md:px-8 py-2 md:py-2.5 rounded-2xl border-2 shadow-xl bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.2)] max-w-full">
                     <span className="text-xl md:text-2xl shrink-0">⏳</span>

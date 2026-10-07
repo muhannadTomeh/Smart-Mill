@@ -611,7 +611,7 @@ export interface ThermalQueueTicketData {
 }
 
 export function formatEstimatedWaitTime(minutes: number | null | undefined): string {
-  if (minutes == null) return "غير محدد";
+  if (minutes == null) return "";
   if (minutes <= 0) return "مباشرة (الدور القادم)";
   if (minutes < 60) return `~${minutes} دقيقة تقريباً`;
   const hours = Math.floor(minutes / 60);
@@ -821,12 +821,12 @@ export function printThermalQueueTicket(data: ThermalQueueTicketData, millName =
       : 'أنت التالي مباشرة (0)'}
       </span>
     </div>
-    <div class="info-row" style="padding: 2px 0; border-top: 1px dotted #ccc; margin-top: 3px; padding-top: 3px;">
+    ${data.estimated_wait_minutes != null ? `<div class="info-row" style="padding: 2px 0; border-top: 1px dotted #ccc; margin-top: 3px; padding-top: 3px;">
       <span class="info-label bold" style="font-size: 12px;">الوقت التقديري المتبقي:</span>
       <span class="info-value bold" style="font-size: 12.5px;">
         ${formatEstimatedWaitTime(data.estimated_wait_minutes)}
       </span>
-    </div>
+    </div>` : ''}
   </div>
 
   ${cleanNotes ? `

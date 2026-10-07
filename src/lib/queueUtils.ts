@@ -16,7 +16,9 @@ export interface QueueItem {
 }
 
 /**
- * Safely parse estimated minutes from database field, notes tag, or localStorage.
+ * Safely parse estimated minutes from canonical database data or a legacy notes tag.
+ * Browser storage is intentionally ignored because a stale value can assign a time
+ * to a queue entry whose canonical estimated_minutes value is null.
  */
 export function parseEstimatedMinutes(item: {
   estimated_minutes?: number | null;
@@ -31,15 +33,6 @@ export function parseEstimatedMinutes(item: {
     try {
       const match = item.notes.match(/\[(?:وقت_تقديري|الوقت|est):?\s*(\d+)/i);
       if (match) return parseInt(match[1], 10);
-    } catch {}
-  }
-  if (item.id && typeof window !== "undefined") {
-    try {
-      const local = localStorage.getItem(`queue_est_${item.id}`);
-      if (local) {
-        const n = parseInt(local, 10);
-        if (!isNaN(n) && n > 0) return n;
-      }
     } catch {}
   }
   return null;
