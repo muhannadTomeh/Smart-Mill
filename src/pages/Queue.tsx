@@ -38,6 +38,9 @@ export { parseEstimatedMinutes, parseStartedAt, getRemainingSeconds, formatRemai
 export type { QueueItem };
 
 const formatTime = formatTimeSafe;
+const DEFAULT_QUEUE_ESTIMATED_MINUTES = 30;
+const QUEUE_TIME_STEP_MINUTES = 5;
+const MIN_QUEUE_ESTIMATED_MINUTES = 5;
 
 const sortByPosition = (a: QueueItem, b: QueueItem) => {
   const posA = Number(a.position) || 0;
@@ -50,7 +53,13 @@ const Queue = () => {
   const [allItems, setAllItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
-  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
+  const [newCustomer, setNewCustomer] = useState({
+    name: "",
+    phone: "",
+    bags: "",
+    notes: "",
+    estimatedMinutes: String(DEFAULT_QUEUE_ESTIMATED_MINUTES),
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<{
@@ -65,6 +74,7 @@ const Queue = () => {
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [selectedForInvoice, setSelectedForInvoice] = useState<QueueItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QueueItem | null>(null);
+  const [adjustingTimeId, setAdjustingTimeId] = useState<string | null>(null);
 
   // Drag & drop reorder state
   const [draggedItem, setDraggedItem] = useState<QueueItem | null>(null);
@@ -217,7 +227,10 @@ const Queue = () => {
       return;
     }
 
-    const estMin = newCustomer.estimatedMinutes ? parseInt(newCustomer.estimatedMinutes, 10) : null;
+    const parsedEstimatedMinutes = Number.parseInt(newCustomer.estimatedMinutes, 10);
+    const estMin = Number.isFinite(parsedEstimatedMinutes) && parsedEstimatedMinutes > 0
+      ? parsedEstimatedMinutes
+      : DEFAULT_QUEUE_ESTIMATED_MINUTES;
     const bagsCount = newCustomer.bags ? parseInt(newCustomer.bags, 10) : 0;
 
     // Resolve by phone first, then create a canonical customer record.  The queue
@@ -324,7 +337,13 @@ const Queue = () => {
         }
       }
 
-      setNewCustomer({ name: "", phone: "", bags: "", notes: "", estimatedMinutes: "" });
+      setNewCustomer({
+        name: "",
+        phone: "",
+        bags: "",
+        notes: "",
+        estimatedMinutes: String(DEFAULT_QUEUE_ESTIMATED_MINUTES),
+      });
       setDialogOpen(false);
       toast.success(`تمت إضافة الزبون "${newCustomer.name.trim()}" برقم دور #${nextPosition}`);
       await fetchQueue();
@@ -461,12 +480,21 @@ const Queue = () => {
     await fetchQueue();
   };
 
-  const addExtraMinutes = async (id: string, extraMins: number) => {
+  const adjustEstimatedMinutes = async (id: string, deltaMinutes: number) => {
+    if (adjustingTimeId === id) return;
+
     const target = allItems.find((i) => i.id === id);
     if (!target) return;
 
-    const currentEst = parseEstimatedMinutes(target) || 30;
-    const newEst = currentEst + extraMins;
+    const currentEst = parseEstimatedMinutes(target) || DEFAULT_QUEUE_ESTIMATED_MINUTES;
+    const newEst = Math.max(MIN_QUEUE_ESTIMATED_MINUTES, currentEst + deltaMinutes);
+
+    if (newEst === currentEst) {
+      toast.info(`لا يمكن تقليل وقت العصر عن ${MIN_QUEUE_ESTIMATED_MINUTES} دقائق`);
+      return;
+    }
+
+    setAdjustingTimeId(id);
 
     localStorage.setItem(`queue_est_${id}`, String(newEst));
     if (target.name) localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(newEst));
@@ -483,17 +511,32 @@ const Queue = () => {
       return updated;
     });
 
-    let { error } = await supabase.from("queue").update({
-      estimated_minutes: newEst,
-      notes: updatedNotes,
-    } as any).eq("id", id);
+    try {
+      let { error } = await supabase.from("queue").update({
+        estimated_minutes: newEst,
+        notes: updatedNotes,
+      } as any).eq("id", id);
 
-    if (error) {
-      await supabase.from("queue").update({ notes: updatedNotes }).eq("id", id);
+      if (error && (error.message?.includes("estimated_minutes") || error.code === "PGRST204")) {
+        const fallback = await supabase.from("queue").update({ notes: updatedNotes }).eq("id", id);
+        error = fallback.error;
+      }
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success(
+        deltaMinutes > 0
+          ? `تمت إضافة ${Math.abs(deltaMinutes)} دقائق`
+          : `تم تقليل ${Math.abs(deltaMinutes)} دقائق`,
+      );
+    } catch (error) {
+      toast.error(getArabicErrorMessage(error, "تعذر تعديل وقت العصر."));
+    } finally {
+      await fetchQueue();
+      setAdjustingTimeId(null);
     }
-
-    toast.success(`تمت إضافة ${extraMins} دقيقة إضافية`);
-    await fetchQueue();
   };
 
   const confirmDelete = async () => {
@@ -870,11 +913,11 @@ const Queue = () => {
                   />
                 </div>
 
-                {/* الوقت التقديري (اختياري) */}
+                {/* الوقت التقديري */}
                 <div className="space-y-1">
                   <Label htmlFor="estimatedMinutes" className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-primary" />
-                    الوقت التقديري بالدقائق (اختياري)
+                    الوقت التقديري بالدقائق
                   </Label>
                   <Input
                     id="estimatedMinutes"
@@ -1188,18 +1231,27 @@ const Queue = () => {
                         </span>
                       </div>
 
-                      {/* Time Extensions: +5 د, +10 د, +15 د */}
-                      <div className="flex items-center justify-center gap-2">
-                        {[5, 10, 15].map((extra) => (
+                      {/* Repeated five-minute adjustments */}
+                      <div className="flex items-center justify-center gap-2" dir="ltr">
+                        {[
+                          { delta: QUEUE_TIME_STEP_MINUTES, label: "+5 د" },
+                          { delta: -QUEUE_TIME_STEP_MINUTES, label: "−5 د" },
+                        ].map(({ delta, label }) => (
                           <Button
-                            key={extra}
+                            key={delta}
                             size="sm"
                             type="button"
                             variant="outline"
-                            className="h-7 px-3 text-xs font-medium rounded-lg border-border hover:bg-muted text-muted-foreground hover:text-foreground"
-                            onClick={() => addExtraMinutes(p.id, extra)}
+                            className={cn(
+                              "h-8 min-w-16 px-3 text-xs font-semibold rounded-lg",
+                              delta > 0
+                                ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                : "border-rose-300 text-rose-700 hover:bg-rose-50",
+                            )}
+                            disabled={adjustingTimeId === p.id}
+                            onClick={() => adjustEstimatedMinutes(p.id, delta)}
                           >
-                            +{extra} د
+                            {label}
                           </Button>
                         ))}
                       </div>
