@@ -43,7 +43,8 @@ import { Label } from "@/components/ui/label";
 import {
   Users, User, Building2, Receipt, Droplets, CalendarCheck, Filter,
   UserPlus, Copy, RefreshCw, CheckCircle2, Phone, Eye, EyeOff, Key,
-  Edit, Trash2, ShieldCheck, Shield, Search, UserX, UserCheck
+  Edit, Trash2, ShieldCheck, Shield, Search, UserX, UserCheck,
+  Bell, LayoutDashboard, WalletCards, ArrowLeft, Activity
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -58,9 +59,10 @@ import {
   AdminAccountItem
 } from "@/lib/credentialVault";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { PlatformFinancePanel } from "@/components/admin/PlatformFinancePanel";
 
 export default function AdminIndex() {
-  const [activeTab, setActiveTab] = useState<string>("mills");
+  const [activeTab, setActiveTab] = useState<string>("overview");
   const [stats, setStats] = useState({
     totalMills: 0,
     activeMills: 0,
@@ -71,6 +73,11 @@ export default function AdminIndex() {
   });
   const [mills, setMills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [platformFinance, setPlatformFinance] = useState({
+    cash_balance: 0,
+    outstanding_dues: 0,
+    open_dues_count: 0,
+  });
 
   // Accounts Management State
   const [accounts, setAccounts] = useState<AdminAccountItem[]>([]);
@@ -404,8 +411,8 @@ export default function AdminIndex() {
     }
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (showPageLoader = true) => {
+    if (showPageLoader) setLoading(true);
     try {
       const [
         { data: millsData, error: millsError },
@@ -413,20 +420,22 @@ export default function AdminIndex() {
         { data: lastPayments },
         { data: seasons },
         { data: invoices },
-        { data: adminRoles }
+        { data: adminRoles },
+        financeSummaryResult,
       ] = await Promise.all([
         (supabase as any).from("mills").select("*").order("created_at", { ascending: false }),
         (supabase as any).from("mill_memberships").select("id, mill_id, user_id, role, username, display_username"),
-        (supabase as any).from("subscription_payments").select("mill_user_id, payment_date, mill_id").order("payment_date", { ascending: false }),
+        (supabase as any).from("subscription_payments").select("mill_user_id, payment_date, mill_id, reversed_at").order("payment_date", { ascending: false }),
         (supabase as any).from("seasons").select("mill_id, status"),
         (supabase as any).from("invoices").select("oil_produced, created_at, user_id, mill_id"),
-        supabase.from("user_roles").select("user_id").eq("role", "platform_admin")
+        supabase.from("user_roles").select("user_id").eq("role", "platform_admin"),
+        supabase.rpc("get_platform_finance_summary"),
       ]);
 
       if (millsError) {
         console.error("Admin data fetch error (mills):", millsError);
         toast.error("فشل جلب قائمة المعاصر: " + (millsError.message || "خطأ غير معروف"));
-        setLoading(false);
+        if (showPageLoader) setLoading(false);
         return;
       }
 
@@ -465,12 +474,16 @@ export default function AdminIndex() {
         totalOil,
       });
 
+      if (!financeSummaryResult.error && financeSummaryResult.data) {
+        setPlatformFinance((current) => ({ ...current, ...financeSummaryResult.data }));
+      }
+
       const millList = pureMillsData.map((mill: any) => {
         const millMembers = membershipsByMill.get(mill.id) || [];
         const ownerMembership = millMembers.find((mm: any) => mm.role === 'mill_owner' || mm.user_id === mill.owner_user_id);
         const employeeCount = millMembers.filter((mm: any) => mm.role === 'mill_employee').length;
         const millInvoices = (invoices || []).filter((inv: any) => inv.mill_id === mill.id);
-        const millPayments = (lastPayments || []).filter((p: any) => p.mill_id === mill.id);
+        const millPayments = (lastPayments || []).filter((p: any) => p.mill_id === mill.id && !p.reversed_at);
         return {
           id: mill.id,
           ownerUserId: mill.owner_user_id,
@@ -499,7 +512,7 @@ export default function AdminIndex() {
       console.error("Admin data fetch error:", error);
       toast.error("حدث خطأ أثناء تحميل بيانات المعاصر");
     } finally {
-      setLoading(false);
+      if (showPageLoader) setLoading(false);
     }
   };
 
@@ -614,18 +627,31 @@ export default function AdminIndex() {
   return (
     <div className="space-y-6 text-right" dir="rtl">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-5 overflow-hidden rounded-3xl border border-emerald-200/70 bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-900 p-5 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-7">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">لوحة تحكم المشرف العام</h1>
-          <p className="text-xs text-muted-foreground mt-1">إدارة المعاصر، الحسابات، بيانات الاعتماد، والاشتراكات</p>
+          <div className="mb-2 flex items-center gap-2 text-emerald-200">
+            <ShieldCheck className="h-5 w-5" />
+            <span className="text-sm font-semibold">مركز إدارة Smart Mill</span>
+          </div>
+          <h1 className="text-3xl font-black tracking-tight sm:text-4xl">لوحة المشرف العام</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-emerald-100/80">إدارة المعاصر والحسابات والاشتراكات والإشعارات وصندوق المنصة من مكان واحد.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2 border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            onClick={() => navigate("/notifications")}
+          >
+            <Bell className="h-4 w-4" />
+            إرسال إشعار يدوي
+          </Button>
           <Dialog open={isCreateModalOpen} onOpenChange={(open) => {
             setIsCreateModalOpen(open);
             if (!open) setCreatedCredentials(null);
           }}>
             <DialogTrigger asChild>
-              <Button className="bg-green-600 hover:bg-green-700 text-white gap-2">
+              <Button className="gap-2 bg-white text-emerald-950 hover:bg-emerald-50">
                 <UserPlus className="h-4 w-4" />
                 <span>إنشاء حساب معصرة جديد</span>
               </Button>
@@ -883,10 +909,18 @@ export default function AdminIndex() {
 
       {/* Main Navigation Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 max-w-xl h-11 p-1 bg-muted/60">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-muted/60 p-1 sm:grid-cols-5">
+          <TabsTrigger value="overview" className="gap-2 py-2.5 text-xs font-semibold sm:text-sm">
+            <LayoutDashboard className="h-4 w-4" />
+            <span>نظرة عامة</span>
+          </TabsTrigger>
           <TabsTrigger value="mills" className="gap-2 text-xs sm:text-sm font-semibold">
             <Building2 className="h-4 w-4" />
             <span>سجل المعاصر ({mills.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="finance" className="gap-2 py-2.5 text-xs font-semibold sm:text-sm">
+            <WalletCards className="h-4 w-4" />
+            <span>صندوق الإدارة</span>
           </TabsTrigger>
           <TabsTrigger value="accounts" className="gap-2 text-xs sm:text-sm font-semibold">
             <Users className="h-4 w-4" />
@@ -897,6 +931,79 @@ export default function AdminIndex() {
             <span>إعدادات التواصل</span>
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview" className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="flex items-center gap-3 p-5">
+                <span className="rounded-2xl bg-emerald-100 p-3 text-emerald-700"><Building2 className="h-5 w-5" /></span>
+                <div><p className="text-xs text-muted-foreground">المعاصر المسجلة</p><p className="mt-1 text-2xl font-black">{stats.totalMills}</p><p className="text-xs text-muted-foreground">{stats.activeMills} بموسم نشط</p></div>
+              </CardContent>
+            </Card>
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="flex items-center gap-3 p-5">
+                <span className="rounded-2xl bg-blue-100 p-3 text-blue-700"><Users className="h-5 w-5" /></span>
+                <div><p className="text-xs text-muted-foreground">حسابات النظام</p><p className="mt-1 text-2xl font-black">{accounts.length}</p><p className="text-xs text-muted-foreground">إدارة مركزية آمنة</p></div>
+              </CardContent>
+            </Card>
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="flex items-center gap-3 p-5">
+                <span className="rounded-2xl bg-teal-100 p-3 text-teal-700"><WalletCards className="h-5 w-5" /></span>
+                <div><p className="text-xs text-muted-foreground">رصيد صندوق الإدارة</p><p className="mt-1 text-2xl font-black">{Number(platformFinance.cash_balance || 0).toLocaleString("ar-u-nu-latn")} ₪</p><p className="text-xs text-muted-foreground">مستقل عن صناديق المعاصر</p></div>
+              </CardContent>
+            </Card>
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="flex items-center gap-3 p-5">
+                <span className="rounded-2xl bg-amber-100 p-3 text-amber-700"><Activity className="h-5 w-5" /></span>
+                <div><p className="text-xs text-muted-foreground">المستحقات المفتوحة</p><p className="mt-1 text-2xl font-black">{Number(platformFinance.outstanding_dues || 0).toLocaleString("ar-u-nu-latn")} ₪</p><p className="text-xs text-muted-foreground">{Number(platformFinance.open_dues_count || 0).toLocaleString("ar-u-nu-latn")} دين يحتاج متابعة</p></div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+            <Card className="overflow-hidden border-border/70 shadow-sm">
+              <CardHeader className="border-b bg-muted/20">
+                <CardTitle className="text-lg">إجراءات سريعة</CardTitle>
+                <CardDescription>المهام الإدارية الأكثر استخدامًا دون البحث بين الصفحات.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
+                <button type="button" onClick={() => setIsCreateModalOpen(true)} className="group flex items-center gap-3 rounded-2xl border p-4 text-right transition hover:border-emerald-300 hover:bg-emerald-50/60">
+                  <span className="rounded-xl bg-emerald-100 p-2.5 text-emerald-700"><UserPlus className="h-5 w-5" /></span>
+                  <span className="flex-1"><span className="block font-bold">إنشاء معصرة</span><span className="text-xs text-muted-foreground">حساب المالك وبيانات الدخول</span></span><ArrowLeft className="h-4 w-4 text-muted-foreground transition group-hover:-translate-x-1" />
+                </button>
+                <button type="button" onClick={() => navigate("/notifications")} className="group flex items-center gap-3 rounded-2xl border p-4 text-right transition hover:border-blue-300 hover:bg-blue-50/60">
+                  <span className="rounded-xl bg-blue-100 p-2.5 text-blue-700"><Bell className="h-5 w-5" /></span>
+                  <span className="flex-1"><span className="block font-bold">إرسال إشعار</span><span className="text-xs text-muted-foreground">لمستخدم محدد أو للجميع</span></span><ArrowLeft className="h-4 w-4 text-muted-foreground transition group-hover:-translate-x-1" />
+                </button>
+                <button type="button" onClick={() => setActiveTab("finance")} className="group flex items-center gap-3 rounded-2xl border p-4 text-right transition hover:border-teal-300 hover:bg-teal-50/60">
+                  <span className="rounded-xl bg-teal-100 p-2.5 text-teal-700"><WalletCards className="h-5 w-5" /></span>
+                  <span className="flex-1"><span className="block font-bold">صندوق الإدارة</span><span className="text-xs text-muted-foreground">الحركات والديون والمستحقات</span></span><ArrowLeft className="h-4 w-4 text-muted-foreground transition group-hover:-translate-x-1" />
+                </button>
+                <button type="button" onClick={() => setActiveTab("accounts")} className="group flex items-center gap-3 rounded-2xl border p-4 text-right transition hover:border-amber-300 hover:bg-amber-50/60">
+                  <span className="rounded-xl bg-amber-100 p-2.5 text-amber-700"><ShieldCheck className="h-5 w-5" /></span>
+                  <span className="flex-1"><span className="block font-bold">إدارة الحسابات</span><span className="text-xs text-muted-foreground">الصلاحيات وبيانات الاعتماد</span></span><ArrowLeft className="h-4 w-4 text-muted-foreground transition group-hover:-translate-x-1" />
+                </button>
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden border-border/70 shadow-sm">
+              <CardHeader className="border-b bg-muted/20">
+                <CardTitle className="text-lg">أحدث المعاصر</CardTitle>
+                <CardDescription>وصول سريع إلى ملفات العملاء.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 p-4">
+                {mills.slice(0, 5).map((mill) => (
+                  <button key={mill.id} type="button" onClick={() => navigate(`/admin/mill/${mill.id}`)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right transition hover:bg-muted/60">
+                    <span className="rounded-lg bg-primary/10 p-2 text-primary"><Building2 className="h-4 w-4" /></span>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{safeText(mill.millName, "معصرة غير مسماة")}</span><span className="block truncate text-xs text-muted-foreground">{safeText(mill.ownerName, "غير محدد")}</span></span>
+                    {getStatusBadge(mill.subscriptionStatus)}
+                  </button>
+                ))}
+                {mills.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">لا توجد معاصر مسجلة بعد.</p>}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         {/* TAB 1: Mills Directory & Stats */}
         <TabsContent value="mills" className="space-y-6">
@@ -1042,6 +1149,10 @@ export default function AdminIndex() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="finance" className="space-y-6">
+          <PlatformFinancePanel onUpdated={() => { void fetchData(false); }} />
         </TabsContent>
 
         {/* TAB 2: Unified Accounts & Credentials Management */}

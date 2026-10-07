@@ -1204,6 +1204,53 @@ export type Database = {
           },
         ]
       }
+      mill_admin_charge_payments: {
+        Row: {
+          amount: number
+          charge_id: string
+          created_at: string
+          created_by: string
+          id: string
+          idempotency_key: string
+          notes: string | null
+          payment_date: string
+          reversed_at: string | null
+          reversed_by: string | null
+        }
+        Insert: {
+          amount: number
+          charge_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          idempotency_key: string
+          notes?: string | null
+          payment_date: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+        }
+        Update: {
+          amount?: number
+          charge_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          idempotency_key?: string
+          notes?: string | null
+          payment_date?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mill_admin_charge_payments_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "mill_admin_charges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mills: {
         Row: {
           country: string | null
@@ -1656,6 +1703,72 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_financial_transactions: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string
+          description: string
+          direction: string
+          id: string
+          idempotency_key: string
+          mill_id: string | null
+          reference_id: string | null
+          reference_type: string
+          reversal_of: string | null
+          reversal_reason: string | null
+          transaction_date: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          created_by: string
+          description: string
+          direction: string
+          id?: string
+          idempotency_key: string
+          mill_id?: string | null
+          reference_id?: string | null
+          reference_type: string
+          reversal_of?: string | null
+          reversal_reason?: string | null
+          transaction_date?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string
+          description?: string
+          direction?: string
+          id?: string
+          idempotency_key?: string
+          mill_id?: string | null
+          reference_id?: string | null
+          reference_type?: string
+          reversal_of?: string | null
+          reversal_reason?: string | null
+          transaction_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_financial_transactions_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_financial_transactions_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "platform_financial_transactions"
             referencedColumns: ["id"]
           },
         ]
@@ -2253,6 +2366,8 @@ export type Database = {
           notes: string | null
           payment_date: string
           recorded_by: string
+          reversed_at: string | null
+          reversed_by: string | null
           subscription_fee: number
           subscription_type: string
         }
@@ -2266,6 +2381,8 @@ export type Database = {
           notes?: string | null
           payment_date?: string
           recorded_by: string
+          reversed_at?: string | null
+          reversed_by?: string | null
           subscription_fee?: number
           subscription_type?: string
         }
@@ -2279,6 +2396,8 @@ export type Database = {
           notes?: string | null
           payment_date?: string
           recorded_by?: string
+          reversed_at?: string | null
+          reversed_by?: string | null
           subscription_fee?: number
           subscription_type?: string
         }
@@ -2892,6 +3011,71 @@ export type Database = {
           },
         ]
       }
+      mill_admin_charge_balances: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          created_by: string | null
+          due_date: string | null
+          effective_status: string | null
+          id: string | null
+          idempotency_key: string | null
+          mill_id: string | null
+          mill_name: string | null
+          notes: string | null
+          paid_amount: number | null
+          remaining_amount: number | null
+          settled_at: string | null
+          settled_by: string | null
+          status: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mill_admin_charges_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_financial_effective_events: {
+        Row: {
+          amount: number | null
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          direction: string | null
+          id: string | null
+          idempotency_key: string | null
+          is_reversed: boolean | null
+          mill_id: string | null
+          mill_name: string | null
+          reference_id: string | null
+          reference_type: string | null
+          reversal_of: string | null
+          reversal_reason: string | null
+          transaction_date: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_financial_transactions_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_financial_transactions_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "platform_financial_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       create_mill_admin_charge_command: {
@@ -2906,6 +3090,7 @@ export type Database = {
         }
         Returns: Json
       }
+      get_platform_finance_summary: { Args: never; Returns: Json }
       mark_all_notifications_read_command: { Args: never; Returns: number }
       mark_notification_read_command: {
         Args: { p_notification_id: string }
@@ -2920,6 +3105,34 @@ export type Database = {
           p_recipient_user_id: string | null
           p_scope: string
           p_title: string
+        }
+        Returns: Json
+      }
+      record_mill_admin_charge_payment_command: {
+        Args: {
+          p_amount: number
+          p_charge_id: string
+          p_idempotency_key: string
+          p_notes: string | null
+          p_payment_date: string
+        }
+        Returns: Json
+      }
+      record_platform_cash_movement_command: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_direction: string
+          p_idempotency_key: string
+          p_transaction_date: string
+        }
+        Returns: Json
+      }
+      reverse_platform_financial_transaction_command: {
+        Args: {
+          p_idempotency_key: string
+          p_reason: string
+          p_transaction_id: string
         }
         Returns: Json
       }

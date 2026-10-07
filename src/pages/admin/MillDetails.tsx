@@ -62,7 +62,12 @@ import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { Checkbox } from "@/components/ui/checkbox";
 
 type SubscriptionType = "monthly" | "seasonal";
-type AdminCharge = Tables<"mill_admin_charges">;
+type AdminCharge = Tables<"mill_admin_charges"> & {
+  mill_name?: string | null;
+  paid_amount: number;
+  remaining_amount: number;
+  effective_status: "outstanding" | "partially_paid" | "paid" | "cancelled";
+};
 
 export default function MillDetails() {
   const { id: millId } = useParams();
@@ -83,6 +88,9 @@ export default function MillDetails() {
   const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
   const [newCharge, setNewCharge] = useState({ title: "", amount: "", dueDate: "", notes: "", notify: true });
   const chargeIdempotencyKeyRef = useRef(crypto.randomUUID());
+  const [paymentCharge, setPaymentCharge] = useState<AdminCharge | null>(null);
+  const [chargePayment, setChargePayment] = useState({ amount: "", date: new Date().toISOString().split('T')[0], notes: "" });
+  const chargePaymentIdempotencyKeyRef = useRef(crypto.randomUUID());
 
   // Employee accounts state
   const [employees, setEmployees] = useState<any[]>([]);
@@ -182,7 +190,7 @@ export default function MillDetails() {
       ] = await Promise.all([
         supabase.from("seasons").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }).limit(5),
         supabase.from("subscription_payments").select("*").eq("mill_id", canonicalMillId).order("payment_date", { ascending: false }),
-        supabase.from("mill_admin_charges").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
+        supabase.from("mill_admin_charge_balances").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
       ]);
 
       const seasons = seasonsRes.data || [];
@@ -257,7 +265,7 @@ export default function MillDetails() {
       });
       setEmployees(combinedEmployees);
       setPayments(paymentsData || []);
-      setAdminCharges(chargesRes.data || []);
+      setAdminCharges((chargesRes.data || []) as AdminCharge[]);
 
       setNotes(safeProfile.subscription_notes);
       setSubscriptionType(safeProfile.subscription_type);
@@ -569,11 +577,11 @@ export default function MillDetails() {
       chargeIdempotencyKeyRef.current = crypto.randomUUID();
 
       const { data: charges } = await supabase
-        .from("mill_admin_charges")
+        .from("mill_admin_charge_balances")
         .select("*")
         .eq("mill_id", currentMillRecord.id)
         .order("created_at", { ascending: false });
-      setAdminCharges(charges || []);
+      setAdminCharges((charges || []) as AdminCharge[]);
     } catch (error: unknown) {
       console.error("Error adding mill admin charge:", error);
       toast({
@@ -586,23 +594,21 @@ export default function MillDetails() {
     }
   };
 
-  const updateAdminChargeStatus = async (chargeId: string, status: "paid" | "cancelled") => {
+  const updateAdminChargeStatus = async (chargeId: string) => {
     setUpdating(true);
     try {
       const { error } = await supabase.rpc("update_mill_admin_charge_status_command", {
         p_charge_id: chargeId,
-        p_status: status,
+        p_status: "cancelled",
       });
       if (error) throw error;
 
-      setAdminCharges((current) => current.map((charge) => (
-        charge.id === chargeId
-          ? { ...charge, status, settled_at: new Date().toISOString() }
-          : charge
-      )));
+      setAdminCharges((current) => current.map((charge) => charge.id === chargeId
+        ? { ...charge, status: "cancelled", effective_status: "cancelled", settled_at: new Date().toISOString() }
+        : charge));
       toast({
-        title: status === "paid" ? "تم تسجيل السداد" : "تم إلغاء الدين",
-        description: status === "paid" ? "أصبح الدين مسددًا في سجل الإدارة." : "تم إغلاق الدين كملغى دون حذفه من السجل.",
+        title: "تم إلغاء الدين",
+        description: "تم إغلاق الدين كملغى دون حذفه من السجل.",
       });
     } catch (error: unknown) {
       console.error("Error updating mill admin charge:", error);
@@ -611,6 +617,55 @@ export default function MillDetails() {
         title: "تعذر تحديث الدين",
         description: getArabicErrorMessage(error, "تعذر تحديث حالة الدين. حاول مرة أخرى."),
       });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const openAdminChargePayment = (charge: AdminCharge) => {
+    chargePaymentIdempotencyKeyRef.current = crypto.randomUUID();
+    setChargePayment({
+      amount: String(Number(charge.remaining_amount || 0)),
+      date: new Date().toISOString().split('T')[0],
+      notes: "",
+    });
+    setPaymentCharge(charge);
+  };
+
+  const handleAdminChargePayment = async () => {
+    if (!paymentCharge) return;
+    const amount = Number(chargePayment.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > Number(paymentCharge.remaining_amount || 0)) {
+      toast({ variant: "destructive", title: "مبلغ غير صحيح", description: "أدخل مبلغًا أكبر من صفر ولا يتجاوز الرصيد المتبقي." });
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const { error } = await supabase.rpc("record_mill_admin_charge_payment_command", {
+        p_charge_id: paymentCharge.id,
+        p_amount: amount,
+        p_payment_date: chargePayment.date,
+        p_notes: chargePayment.notes.trim() || null,
+        p_idempotency_key: chargePaymentIdempotencyKeyRef.current,
+      });
+      if (error) throw error;
+
+      const { data: charges, error: refreshError } = await supabase
+        .from("mill_admin_charge_balances")
+        .select("*")
+        .eq("mill_id", currentMillRecord.id)
+        .order("created_at", { ascending: false });
+      if (refreshError) throw refreshError;
+
+      setAdminCharges((charges || []) as AdminCharge[]);
+      setPaymentCharge(null);
+      setChargePayment({ amount: "", date: new Date().toISOString().split('T')[0], notes: "" });
+      chargePaymentIdempotencyKeyRef.current = crypto.randomUUID();
+      toast({ title: "تم تسجيل الدفعة", description: "أضيفت الدفعة إلى صندوق إدارة المنصة وحُدّث الرصيد المتبقي." });
+    } catch (error: unknown) {
+      console.error("Error recording admin charge payment:", error);
+      toast({ variant: "destructive", title: "تعذر تسجيل الدفعة", description: getArabicErrorMessage(error, "تعذر تسجيل دفعة الدين.") });
     } finally {
       setUpdating(false);
     }
@@ -849,10 +904,11 @@ export default function MillDetails() {
     }
   };
 
-  const lastPayment = payments.length > 0 ? payments[0] : null;
-  const totalPayments = payments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
-  const outstandingAdminCharges = adminCharges.filter((charge) => charge.status === "outstanding");
-  const outstandingAdminChargesTotal = outstandingAdminCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
+  const activePayments = payments.filter((payment) => !payment.reversed_at);
+  const lastPayment = activePayments.length > 0 ? activePayments[0] : null;
+  const totalPayments = activePayments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
+  const outstandingAdminCharges = adminCharges.filter((charge) => charge.effective_status === "outstanding" || charge.effective_status === "partially_paid");
+  const outstandingAdminChargesTotal = outstandingAdminCharges.reduce((total, charge) => total + Number(charge.remaining_amount || 0), 0);
   const savedSubscriptionType: SubscriptionType = currentMillRecord?.subscription_type === "seasonal" ? "seasonal" : "monthly";
   const savedSubscriptionFee = Number(currentMillRecord?.subscription_fee ?? currentMillRecord?.monthly_fee ?? 0);
 
@@ -1533,7 +1589,7 @@ export default function MillDetails() {
                   </div>
                   <div className="p-3 text-center">
                     <p className="text-xs text-muted-foreground">عدد الدفعات</p>
-                    <p className="mt-1 font-bold">{payments.length.toLocaleString("ar-u-nu-latn")}</p>
+                    <p className="mt-1 font-bold">{activePayments.length.toLocaleString("ar-u-nu-latn")}</p>
                   </div>
                   <div className="p-3 text-center">
                     <p className="text-xs text-muted-foreground">آخر دفعة</p>
@@ -1550,7 +1606,7 @@ export default function MillDetails() {
                   {payments.length > 0 ? (
                     <div className="max-h-[190px] divide-y overflow-y-auto rounded-xl border">
                       {payments.slice(0, 5).map((payment) => (
-                        <div key={payment.id} className="flex items-center justify-between gap-4 p-3">
+                        <div key={payment.id} className={`flex items-center justify-between gap-4 p-3 ${payment.reversed_at ? "opacity-60" : ""}`}>
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="rounded-lg bg-green-50 p-2 text-green-700">
                               <Banknote className="h-4 w-4" />
@@ -1562,7 +1618,10 @@ export default function MillDetails() {
                               </p>
                             </div>
                           </div>
-                          <time className="shrink-0 text-xs text-muted-foreground">{formatDate(payment.payment_date)}</time>
+                          <div className="shrink-0 text-left">
+                            <time className="block text-xs text-muted-foreground">{formatDate(payment.payment_date)}</time>
+                            {payment.reversed_at && <Badge variant="secondary" className="mt-1">تم عكسها</Badge>}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1771,7 +1830,9 @@ export default function MillDetails() {
                       <TableHeader>
                         <TableRow>
                           <TableHead className="text-right">الدين</TableHead>
-                          <TableHead className="text-right">المبلغ</TableHead>
+                          <TableHead className="text-right">الأصلي</TableHead>
+                          <TableHead className="text-right">المدفوع</TableHead>
+                          <TableHead className="text-right">المتبقي</TableHead>
                           <TableHead className="text-right">الاستحقاق</TableHead>
                           <TableHead className="text-right">الحالة</TableHead>
                           <TableHead className="text-right">الإجراء</TableHead>
@@ -1785,21 +1846,26 @@ export default function MillDetails() {
                               {charge.notes && <p className="mt-1 max-w-md truncate text-xs text-muted-foreground">{safeText(charge.notes)}</p>}
                             </TableCell>
                             <TableCell className="font-bold">{Number(charge.amount || 0).toLocaleString("ar-u-nu-latn")} ₪</TableCell>
+                            <TableCell className="font-bold text-emerald-700">{Number(charge.paid_amount || 0).toLocaleString("ar-u-nu-latn")} ₪</TableCell>
+                            <TableCell className="font-black text-amber-700">{Number(charge.remaining_amount || 0).toLocaleString("ar-u-nu-latn")} ₪</TableCell>
                             <TableCell>{charge.due_date ? formatDate(charge.due_date) : "غير محدد"}</TableCell>
                             <TableCell>
-                              {charge.status === "outstanding" && <Badge className="border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-100">مستحق</Badge>}
-                              {charge.status === "paid" && <Badge className="border-green-200 bg-green-100 text-green-800 hover:bg-green-100">مسدد</Badge>}
-                              {charge.status === "cancelled" && <Badge variant="secondary">ملغى</Badge>}
+                              {charge.effective_status === "outstanding" && <Badge className="border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-100">مستحق</Badge>}
+                              {charge.effective_status === "partially_paid" && <Badge className="border-blue-200 bg-blue-100 text-blue-800 hover:bg-blue-100">مسدد جزئيًا</Badge>}
+                              {charge.effective_status === "paid" && <Badge className="border-green-200 bg-green-100 text-green-800 hover:bg-green-100">مسدد</Badge>}
+                              {charge.effective_status === "cancelled" && <Badge variant="secondary">ملغى</Badge>}
                             </TableCell>
                             <TableCell>
-                              {charge.status === "outstanding" ? (
+                              {charge.effective_status === "outstanding" || charge.effective_status === "partially_paid" ? (
                                 <div className="flex flex-wrap gap-2">
-                                  <Button size="sm" variant="outline" className="border-green-200 text-green-700" disabled={updating} onClick={() => void updateAdminChargeStatus(charge.id, "paid")}>
-                                    تسجيل مسدد
+                                  <Button size="sm" variant="outline" className="border-green-200 text-green-700" disabled={updating} onClick={() => openAdminChargePayment(charge)}>
+                                    تسجيل دفعة
                                   </Button>
-                                  <Button size="sm" variant="ghost" className="text-destructive" disabled={updating} onClick={() => void updateAdminChargeStatus(charge.id, "cancelled")}>
-                                    إلغاء الدين
-                                  </Button>
+                                  {Number(charge.paid_amount || 0) === 0 && (
+                                    <Button size="sm" variant="ghost" className="text-destructive" disabled={updating} onClick={() => void updateAdminChargeStatus(charge.id)}>
+                                      إلغاء الدين
+                                    </Button>
+                                  )}
                                 </div>
                               ) : (
                                 <span className="text-xs text-muted-foreground">أُغلق في {formatDate(charge.settled_at)}</span>
@@ -1899,6 +1965,37 @@ export default function MillDetails() {
                       <Save className="h-4 w-4" />
                       {updating ? "جارٍ الحفظ..." : "حفظ الدين"}
                     </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={Boolean(paymentCharge)} onOpenChange={(open) => !open && setPaymentCharge(null)}>
+                <DialogContent dir="rtl" className="text-right sm:max-w-[520px]">
+                  <DialogHeader className="text-right sm:text-right">
+                    <DialogTitle>تسجيل دفعة من الدين</DialogTitle>
+                    <DialogDescription>{paymentCharge?.title} — تدخل الدفعة فعليًا إلى صندوق إدارة المنصة.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="grid grid-cols-3 gap-2 rounded-xl border bg-muted/30 p-3 text-center">
+                      <div><p className="text-xs text-muted-foreground">الأصلي</p><p className="font-bold">{Number(paymentCharge?.amount || 0).toLocaleString("ar-u-nu-latn")} ₪</p></div>
+                      <div><p className="text-xs text-muted-foreground">المدفوع</p><p className="font-bold text-emerald-700">{Number(paymentCharge?.paid_amount || 0).toLocaleString("ar-u-nu-latn")} ₪</p></div>
+                      <div><p className="text-xs text-muted-foreground">المتبقي</p><p className="font-black text-amber-700">{Number(paymentCharge?.remaining_amount || 0).toLocaleString("ar-u-nu-latn")} ₪</p></div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-charge-payment-amount">مبلغ الدفعة *</Label>
+                        <Input id="admin-charge-payment-amount" type="number" min="0.01" max={paymentCharge?.remaining_amount} step="0.01" value={chargePayment.amount} onChange={(event) => setChargePayment((current) => ({ ...current, amount: event.target.value }))} dir="ltr" className="text-left font-mono font-bold" autoFocus />
+                      </div>
+                      <ClickableDateInput label="تاريخ الدفع *" value={chargePayment.date} onChange={(date) => setChargePayment((current) => ({ ...current, date }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-charge-payment-notes">ملاحظة (اختياري)</Label>
+                      <Textarea id="admin-charge-payment-notes" value={chargePayment.notes} onChange={(event) => setChargePayment((current) => ({ ...current, notes: event.target.value }))} placeholder="مثال: حوالة بنكية أو دفعة نقدية" />
+                    </div>
+                  </div>
+                  <DialogFooter className="gap-2 sm:gap-2">
+                    <Button variant="outline" onClick={() => setPaymentCharge(null)} disabled={updating}>إلغاء</Button>
+                    <Button onClick={handleAdminChargePayment} disabled={updating || !chargePayment.amount}>{updating ? "جارٍ التسجيل..." : "تسجيل الدفعة"}</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
