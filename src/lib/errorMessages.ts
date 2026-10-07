@@ -130,6 +130,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   WORK_RECORD_FORBIDDEN: "ليس لديك صلاحية تسجيل أو إلغاء عمل العامل.",
   WORK_RECORD_CANCELLATION_EXCEEDS_UNPAID: "لا يمكن إلغاء سجل العمل لأن جزءًا من أجره تم دفعه.",
   MASTER_DATA_ARCHIVE_FORBIDDEN: "ليس لديك صلاحية أرشفة هذا السجل.",
+  CUSTOMER_RESTORE_FORBIDDEN: "ليس لديك صلاحية إزالة هذا الزبون من الأرشيف.",
+  CUSTOMER_NOT_FOUND: "الزبون المطلوب غير موجود أو لم يعد متاحًا.",
   QUEUE_CUSTOMER_TENANT_MISMATCH: "الزبون المحدد لا يتبع لهذه المعصرة.",
   QUEUE_RESTORE_INVALID: "بيانات الدور المؤرشف غير مكتملة ولا يمكن استرجاعه.",
   QUEUE_ENTRY_ALREADY_EXISTS: "تم استرجاع هذا الدور مسبقًا.",

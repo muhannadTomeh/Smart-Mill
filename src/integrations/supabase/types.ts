@@ -3119,6 +3119,10 @@ export type Database = {
         Args: { p_entity: string; p_id: string }
         Returns: Json
       }
+      restore_customer_command: {
+        Args: { p_customer_id: string }
+        Returns: Json
+      }
       record_product_purchase_atomic: {
         Args: {
           p_idempotency_key?: string

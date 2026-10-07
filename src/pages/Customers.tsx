@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Users, Search, FileText, Phone, Calendar, UserPlus, Plus,
-  Printer, Eye, Star, Receipt, BookOpen, Archive
+  Printer, Eye, Star, Receipt, BookOpen, Archive, ArchiveRestore
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -64,6 +64,7 @@ const Customers = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
+  const [restoringCustomerId, setRestoringCustomerId] = useState<string | null>(null);
 
   // New Customer Dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -92,7 +93,9 @@ const Customers = () => {
       try {
         const saved = localStorage.getItem(`starred_customers_${ownerOrMillKey}`);
         if (saved) setStarredIds(JSON.parse(saved));
-      } catch {}
+      } catch {
+        // Starred customers are optional local UI preferences.
+      }
     }
   }, [millId, user?.id]);
 
@@ -105,7 +108,9 @@ const Customers = () => {
       if (ownerOrMillKey) {
         try {
           localStorage.setItem(`starred_customers_${ownerOrMillKey}`, JSON.stringify(next));
-        } catch {}
+        } catch {
+          // Starred customers are optional local UI preferences.
+        }
       }
       toast({
         title: exists ? "تم إلغاء تمييز الزبون" : "تم تمييز الزبون بنجاح ⭐",
@@ -151,6 +156,33 @@ const Customers = () => {
     await fetchCustomers();
   };
 
+  const restoreCustomer = async (customer: Customer) => {
+    if (restoringCustomerId) return;
+
+    setRestoringCustomerId(customer.id);
+    try {
+      const { error } = await supabase.rpc("restore_customer_command", {
+        p_customer_id: customer.id,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "تمت إزالة الزبون من الأرشيف",
+        description: `عاد الزبون "${customer.name}" إلى قائمة الزبائن النشطين مع بقاء فواتيره وحساباته كما هي.`,
+      });
+      await fetchCustomers();
+    } catch (error) {
+      toast({
+        title: "تعذر استرجاع الزبون",
+        description: getArabicErrorMessage(error, "تعذر إزالة الزبون من الأرشيف."),
+        variant: "destructive",
+      });
+    } finally {
+      setRestoringCustomerId(null);
+    }
+  };
+
   const fetchInvoices = async () => {
     if (!activeSeason) return;
     let query = supabase
@@ -173,14 +205,18 @@ const Customers = () => {
       toast({ title: "تنبيه", description: "يرجى كتابة اسم الزبون", variant: "destructive" });
       return;
     }
+    if (!user?.id || !activeSeason) {
+      toast({ title: "تعذر إضافة الزبون", description: "تعذر تحديد المستخدم أو الموسم الحالي.", variant: "destructive" });
+      return;
+    }
     setSavingNewCust(true);
     try {
       const { data, error } = await supabase
         .from("customers")
         .insert({
-          user_id: user?.id!,
-          mill_id: millId || activeSeason?.mill_id || null,
-          season_id: activeSeason!.id,
+          user_id: user.id,
+          mill_id: millId || activeSeason.mill_id || null,
+          season_id: activeSeason.id,
           name: newCustName.trim(),
           phone: newCustPhone.trim() || null,
         })
@@ -195,7 +231,7 @@ const Customers = () => {
       setNewCustPhone("");
       setAddDialogOpen(false);
       await fetchCustomers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("addCustomer error", err);
       toast({ title: "تعذر إضافة الزبون", description: getArabicErrorMessage(err, "تعذر إضافة الزبون."), variant: "destructive" });
     } finally {
@@ -404,15 +440,29 @@ const Customers = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-left">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 px-3 text-xs gap-1.5 rounded-lg border-border hover:bg-muted font-medium"
-                          onClick={() => setSelectedCustomerId(customer.id)}
-                        >
-                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>التفاصيل</span>
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          {showArchived && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 px-3 text-xs gap-1.5 rounded-lg border-emerald-600/30 text-emerald-700 hover:bg-emerald-500/10 font-semibold"
+                              disabled={restoringCustomerId === customer.id}
+                              onClick={() => restoreCustomer(customer)}
+                            >
+                              <ArchiveRestore className="h-3.5 w-3.5" />
+                              <span>{restoringCustomerId === customer.id ? "جارٍ الاسترجاع..." : "إزالة من الأرشيف"}</span>
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-3 text-xs gap-1.5 rounded-lg border-border hover:bg-muted font-medium"
+                            onClick={() => setSelectedCustomerId(customer.id)}
+                          >
+                            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>التفاصيل</span>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
