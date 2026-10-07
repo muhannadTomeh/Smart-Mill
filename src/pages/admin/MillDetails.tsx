@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import {
   Table,
@@ -58,8 +59,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ClickableDateInput } from "@/components/history/ClickableDateInput";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type SubscriptionType = "monthly" | "seasonal";
+type AdminCharge = Tables<"mill_admin_charges">;
 
 export default function MillDetails() {
   const { id: millId } = useParams();
@@ -73,9 +76,13 @@ export default function MillDetails() {
   const [subscriptionFee, setSubscriptionFee] = useState<string>("0");
   const [isEditingSubscriptionPlan, setIsEditingSubscriptionPlan] = useState(false);
   const [payments, setPayments] = useState<any[]>([]);
+  const [adminCharges, setAdminCharges] = useState<AdminCharge[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [newPayment, setNewPayment] = useState({ amount: "", date: new Date().toISOString().split('T')[0], notes: "" });
   const paymentIdempotencyKeyRef = useRef(crypto.randomUUID());
+  const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
+  const [newCharge, setNewCharge] = useState({ title: "", amount: "", dueDate: "", notes: "", notify: true });
+  const chargeIdempotencyKeyRef = useRef(crypto.randomUUID());
 
   // Employee accounts state
   const [employees, setEmployees] = useState<any[]>([]);
@@ -170,10 +177,12 @@ export default function MillDetails() {
       const canonicalMillId = millObj?.id || millId;
       const [
         seasonsRes,
-        paymentsRes
+        paymentsRes,
+        chargesRes,
       ] = await Promise.all([
         supabase.from("seasons").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }).limit(5),
-        supabase.from("subscription_payments").select("*").eq("mill_id", canonicalMillId).order("payment_date", { ascending: false })
+        supabase.from("subscription_payments").select("*").eq("mill_id", canonicalMillId).order("payment_date", { ascending: false }),
+        supabase.from("mill_admin_charges").select("*").eq("mill_id", canonicalMillId).order("created_at", { ascending: false }),
       ]);
 
       const seasons = seasonsRes.data || [];
@@ -248,6 +257,7 @@ export default function MillDetails() {
       });
       setEmployees(combinedEmployees);
       setPayments(paymentsData || []);
+      setAdminCharges(chargesRes.data || []);
 
       setNotes(safeProfile.subscription_notes);
       setSubscriptionType(safeProfile.subscription_type);
@@ -428,7 +438,7 @@ export default function MillDetails() {
         title: "تم حفظ خطة الاشتراك",
         description: `الاشتراك ${savedType === "monthly" ? "الشهري" : "الموسمي"} بقيمة ${savedFee.toLocaleString("ar-u-nu-latn")} ₪ أصبح محفوظًا الآن.`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error saving subscription plan:", error);
       toast({
         variant: "destructive",
@@ -509,12 +519,97 @@ export default function MillDetails() {
         .order("payment_date", { ascending: false });
 
       setPayments(paymentsData || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error adding payment:", error);
       toast({
         variant: "destructive",
         title: "خطأ",
         description: getArabicErrorMessage(error, "فشل تسجيل الدفعة."),
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleAddAdminCharge = async () => {
+    if (!currentMillRecord?.id) return;
+    const amount = Number(newCharge.amount);
+    if (!newCharge.title.trim()) {
+      toast({ variant: "destructive", title: "عنوان الدين مطلوب", description: "اكتب وصفًا واضحًا للدين أو الرسم الإضافي." });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({ variant: "destructive", title: "مبلغ غير صحيح", description: "أدخل مبلغًا أكبر من صفر." });
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const { data, error } = await supabase.rpc("create_mill_admin_charge_command", {
+        p_mill_id: currentMillRecord.id,
+        p_title: newCharge.title.trim(),
+        p_amount: amount,
+        p_due_date: newCharge.dueDate || null,
+        p_notes: newCharge.notes.trim() || null,
+        p_notify: newCharge.notify,
+        p_idempotency_key: chargeIdempotencyKeyRef.current,
+      });
+      if (error) throw error;
+
+      const result = data as { notified_count?: number } | null;
+      toast({
+        title: "تمت إضافة الدين",
+        description: newCharge.notify
+          ? `تم حفظ الدين وإرسال إشعار إلى ${Number(result?.notified_count || 0).toLocaleString("ar-u-nu-latn")} حساب مالك.`
+          : "تم حفظ الدين دون إرسال إشعار.",
+      });
+
+      setIsChargeModalOpen(false);
+      setNewCharge({ title: "", amount: "", dueDate: "", notes: "", notify: true });
+      chargeIdempotencyKeyRef.current = crypto.randomUUID();
+
+      const { data: charges } = await supabase
+        .from("mill_admin_charges")
+        .select("*")
+        .eq("mill_id", currentMillRecord.id)
+        .order("created_at", { ascending: false });
+      setAdminCharges(charges || []);
+    } catch (error: unknown) {
+      console.error("Error adding mill admin charge:", error);
+      toast({
+        variant: "destructive",
+        title: "تعذر إضافة الدين",
+        description: getArabicErrorMessage(error, "تعذر حفظ الدين الإضافي. حاول مرة أخرى."),
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const updateAdminChargeStatus = async (chargeId: string, status: "paid" | "cancelled") => {
+    setUpdating(true);
+    try {
+      const { error } = await supabase.rpc("update_mill_admin_charge_status_command", {
+        p_charge_id: chargeId,
+        p_status: status,
+      });
+      if (error) throw error;
+
+      setAdminCharges((current) => current.map((charge) => (
+        charge.id === chargeId
+          ? { ...charge, status, settled_at: new Date().toISOString() }
+          : charge
+      )));
+      toast({
+        title: status === "paid" ? "تم تسجيل السداد" : "تم إلغاء الدين",
+        description: status === "paid" ? "أصبح الدين مسددًا في سجل الإدارة." : "تم إغلاق الدين كملغى دون حذفه من السجل.",
+      });
+    } catch (error: unknown) {
+      console.error("Error updating mill admin charge:", error);
+      toast({
+        variant: "destructive",
+        title: "تعذر تحديث الدين",
+        description: getArabicErrorMessage(error, "تعذر تحديث حالة الدين. حاول مرة أخرى."),
       });
     } finally {
       setUpdating(false);
@@ -756,6 +851,8 @@ export default function MillDetails() {
 
   const lastPayment = payments.length > 0 ? payments[0] : null;
   const totalPayments = payments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
+  const outstandingAdminCharges = adminCharges.filter((charge) => charge.status === "outstanding");
+  const outstandingAdminChargesTotal = outstandingAdminCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
   const savedSubscriptionType: SubscriptionType = currentMillRecord?.subscription_type === "seasonal" ? "seasonal" : "monthly";
   const savedSubscriptionFee = Number(currentMillRecord?.subscription_fee ?? currentMillRecord?.monthly_fee ?? 0);
 
@@ -1620,6 +1717,187 @@ export default function MillDetails() {
                     <Button onClick={handleAddPayment} disabled={updating || !newPayment.amount} className="gap-2 sm:min-w-36">
                       <Save className="h-4 w-4" />
                       {updating ? "جارٍ التسجيل..." : "حفظ الدفعة"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </Card>
+
+            <Card className="overflow-hidden text-right md:col-span-2">
+              <CardHeader className="border-b bg-muted/20 pb-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700">
+                      <Banknote className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">ديون ورسوم إضافية</CardTitle>
+                      <CardDescription className="mt-1">
+                        مبالغ إدارية مستقلة عن الاشتراك وعن صندوق المعصرة ودفترها المالي.
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Button
+                    className="gap-2"
+                    onClick={() => {
+                      chargeIdempotencyKeyRef.current = crypto.randomUUID();
+                      setIsChargeModalOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة دين آخر
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 p-5">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border bg-amber-50/70 p-4">
+                    <p className="text-xs text-muted-foreground">إجمالي الديون المفتوحة</p>
+                    <p className="mt-1 text-xl font-bold text-amber-800">{outstandingAdminChargesTotal.toLocaleString("ar-u-nu-latn")} ₪</p>
+                  </div>
+                  <div className="rounded-xl border p-4">
+                    <p className="text-xs text-muted-foreground">عدد الديون المفتوحة</p>
+                    <p className="mt-1 text-xl font-bold">{outstandingAdminCharges.length.toLocaleString("ar-u-nu-latn")}</p>
+                  </div>
+                  <div className="rounded-xl border p-4">
+                    <p className="text-xs text-muted-foreground">إجمالي السجل</p>
+                    <p className="mt-1 text-xl font-bold">{adminCharges.length.toLocaleString("ar-u-nu-latn")}</p>
+                  </div>
+                </div>
+
+                {adminCharges.length > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">الدين</TableHead>
+                          <TableHead className="text-right">المبلغ</TableHead>
+                          <TableHead className="text-right">الاستحقاق</TableHead>
+                          <TableHead className="text-right">الحالة</TableHead>
+                          <TableHead className="text-right">الإجراء</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {adminCharges.map((charge) => (
+                          <TableRow key={charge.id}>
+                            <TableCell>
+                              <p className="font-bold">{safeText(charge.title)}</p>
+                              {charge.notes && <p className="mt-1 max-w-md truncate text-xs text-muted-foreground">{safeText(charge.notes)}</p>}
+                            </TableCell>
+                            <TableCell className="font-bold">{Number(charge.amount || 0).toLocaleString("ar-u-nu-latn")} ₪</TableCell>
+                            <TableCell>{charge.due_date ? formatDate(charge.due_date) : "غير محدد"}</TableCell>
+                            <TableCell>
+                              {charge.status === "outstanding" && <Badge className="border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-100">مستحق</Badge>}
+                              {charge.status === "paid" && <Badge className="border-green-200 bg-green-100 text-green-800 hover:bg-green-100">مسدد</Badge>}
+                              {charge.status === "cancelled" && <Badge variant="secondary">ملغى</Badge>}
+                            </TableCell>
+                            <TableCell>
+                              {charge.status === "outstanding" ? (
+                                <div className="flex flex-wrap gap-2">
+                                  <Button size="sm" variant="outline" className="border-green-200 text-green-700" disabled={updating} onClick={() => void updateAdminChargeStatus(charge.id, "paid")}>
+                                    تسجيل مسدد
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="text-destructive" disabled={updating} onClick={() => void updateAdminChargeStatus(charge.id, "cancelled")}>
+                                    إلغاء الدين
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">أُغلق في {formatDate(charge.settled_at)}</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
+                    <Banknote className="mx-auto h-8 w-8 opacity-40" />
+                    <p className="mt-2 text-sm font-medium">لا توجد ديون إضافية مسجلة</p>
+                  </div>
+                )}
+              </CardContent>
+
+              <Dialog
+                open={isChargeModalOpen}
+                onOpenChange={(open) => {
+                  setIsChargeModalOpen(open);
+                  if (open) chargeIdempotencyKeyRef.current = crypto.randomUUID();
+                }}
+              >
+                <DialogContent dir="rtl" className="text-right sm:max-w-[540px]">
+                  <DialogHeader className="text-right sm:text-right">
+                    <DialogTitle className="text-right">إضافة دين أو رسم إداري</DialogTitle>
+                    <DialogDescription className="text-right">
+                      يُحفظ هذا المبلغ في حساب المعصرة لدى إدارة المنصة، ولا يغيّر كاش المعصرة أو تقاريرها التشغيلية.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-charge-title">اسم الدين *</Label>
+                      <Input
+                        id="admin-charge-title"
+                        maxLength={120}
+                        value={newCharge.title}
+                        onChange={(event) => setNewCharge((current) => ({ ...current, title: event.target.value }))}
+                        placeholder="مثال: رسوم إعداد أو خدمة إضافية"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-charge-amount">المبلغ *</Label>
+                        <div className="relative">
+                          <Input
+                            id="admin-charge-amount"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={newCharge.amount}
+                            onChange={(event) => setNewCharge((current) => ({ ...current, amount: event.target.value }))}
+                            placeholder="0.00"
+                            dir="ltr"
+                            className="pl-10 text-left font-mono font-bold"
+                          />
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₪</span>
+                        </div>
+                      </div>
+                      <ClickableDateInput
+                        label="تاريخ الاستحقاق (اختياري)"
+                        value={newCharge.dueDate}
+                        onChange={(value) => setNewCharge((current) => ({ ...current, dueDate: value }))}
+                        inputClassName="text-left font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-charge-notes">ملاحظات (اختياري)</Label>
+                      <Textarea
+                        id="admin-charge-notes"
+                        maxLength={2000}
+                        value={newCharge.notes}
+                        onChange={(event) => setNewCharge((current) => ({ ...current, notes: event.target.value }))}
+                        placeholder="أي تفاصيل إضافية عن سبب الدين"
+                        className="min-h-20"
+                      />
+                    </div>
+                    <Label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-muted/20 p-3">
+                      <Checkbox
+                        checked={newCharge.notify}
+                        onCheckedChange={(checked) => setNewCharge((current) => ({ ...current, notify: checked === true }))}
+                      />
+                      <span>
+                        <span className="block font-medium">إرسال إشعار لمالك المعصرة</span>
+                        <span className="mt-1 block text-xs font-normal text-muted-foreground">سيظهر المبلغ وتاريخ الاستحقاق على جرس الإشعارات.</span>
+                      </span>
+                    </Label>
+                  </div>
+
+                  <DialogFooter className="gap-2 sm:gap-2">
+                    <Button variant="outline" onClick={() => setIsChargeModalOpen(false)} disabled={updating}>إلغاء</Button>
+                    <Button onClick={handleAddAdminCharge} disabled={updating || !newCharge.title || !newCharge.amount} className="gap-2 sm:min-w-36">
+                      <Save className="h-4 w-4" />
+                      {updating ? "جارٍ الحفظ..." : "حفظ الدين"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

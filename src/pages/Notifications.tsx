@@ -1,384 +1,307 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Bell, BellOff, CheckCircle, AlertTriangle, Info, X, Search, Filter, Trash2, Settings, Archive } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Banknote, Bell, CheckCheck, Megaphone, Search, Send } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/contexts/RoleContext";
+import { useNotifications, type AppNotification, type NotificationCategory } from "@/hooks/useNotifications";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { fetchAllAdminAccounts, type AdminAccountItem } from "@/lib/credentialVault";
+import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { cn } from "@/lib/utils";
 
-// البيانات الوهمية للتنبيهات
-const notifications = [
-  {
-    id: 1,
-    type: "warning",
-    title: "مخزون منخفض: الزيت",
-    message: "المخزون الحالي: 50 كغم. الحد الأدنى: 100 كغم",
-    timestamp: "منذ 5 دقائق",
-    isRead: false,
-    priority: "high",
-    action: "مراجعة المخزون",
-    category: "inventory"
-  },
-  {
-    id: 2,
-    type: "success",
-    title: "اكتملت فاتورة الزبون أحمد محمد",
-    message: "تم إنتاج 45 كغم من زيت الزيتون البكر الممتاز",
-    timestamp: "منذ ساعة",
-    isRead: false,
-    priority: "medium",
-    action: "عرض الفاتورة",
-    category: "production"
-  },
-  {
-    id: 3,
-    type: "info",
-    title: "زبون جديد في الطابور",
-    message: "الزبون محمود عبدالله أضيف إلى الطابور",
-    timestamp: "منذ ساعتين",
-    isRead: true,
-    priority: "medium",
-    action: "عرض الطابور",
-    category: "orders"
-  },
-  {
-    id: 4,
-    type: "error",
-    title: "تنبيه: مصروف كبير",
-    message: "تم تسجيل مصروف بقيمة 500 شيكل للصيانة",
-    timestamp: "منذ 3 ساعات",
-    isRead: true,
-    priority: "urgent",
-    action: "مراجعة المصاريف",
-    category: "maintenance"
-  },
-  {
-    id: 5,
-    type: "warning",
-    title: "رصيد عامل مستحق",
-    message: "العامل محمد أحمد لديه رصيد مستحق 200 شيكل",
-    timestamp: "أمس",
-    isRead: true,
-    priority: "medium",
-    action: "دفع الرصيد",
-    category: "workers"
-  }
-]
+const categoryLabels: Record<NotificationCategory, string> = {
+  general: "عام",
+  payment_due: "مستحق مالي",
+  update: "تحديث",
+};
 
-const systemAlerts = [
-  {
-    id: 1,
-    title: "تحديث النظام متوفر",
-    message: "الإصدار 2.1.3 متوفر الآن مع تحسينات في الأداء",
-    type: "system",
-    timestamp: "منذ يوم",
-    isRead: false
-  },
-  {
-    id: 2,
-    title: "نسخة احتياطية مجدولة",
-    message: "سيتم أخذ نسخة احتياطية في الساعة 2:00 ص",
-    type: "system",
-    timestamp: "منذ يومين",
-    isRead: true
-  }
-]
-
-const reports = [
-  {
-    id: 1,
-    title: "تقرير الإنتاج الأسبوعي جاهز",
-    message: "تقرير الأسبوع الحالي",
-    type: "report",
-    timestamp: "منذ يوم",
-    isRead: false,
-    downloadUrl: "/reports/weekly-production.pdf"
-  },
-  {
-    id: 2,
-    title: "تقرير المبيعات الشهري",
-    message: "تقرير الشهر الحالي",
-    type: "report",
-    timestamp: "منذ 3 أيام",
-    isRead: true,
-    downloadUrl: "/reports/monthly-sales.pdf"
-  }
-]
-
-function getNotificationIcon(type: string) {
-  switch (type) {
-    case "success": return <CheckCircle className="h-5 w-5 text-green-500" />
-    case "warning": return <AlertTriangle className="h-5 w-5 text-yellow-500" />
-    case "error": return <AlertTriangle className="h-5 w-5 text-red-500" />
-    case "info": return <Info className="h-5 w-5 text-blue-500" />
-    default: return <Bell className="h-5 w-5 text-muted-foreground" />
-  }
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("ar-u-nu-latn", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-function getPriorityColor(priority: string) {
-  switch (priority) {
-    case "urgent": return "destructive"
-    case "high": return "default"
-    case "medium": return "secondary"
-    case "low": return "outline"
-    default: return "secondary"
-  }
-}
-
-function getPriorityText(priority: string) {
-  switch (priority) {
-    case "urgent": return "عاجل"
-    case "high": return "مرتفع"
-    case "medium": return "متوسط"
-    case "low": return "منخفض"
-    default: return "متوسط"
-  }
-}
-
-function getCategoryText(category: string) {
-  switch (category) {
-    case "inventory": return "المخزون"
-    case "production": return "الإنتاج"
-    case "orders": return "الطابور"
-    case "maintenance": return "المصاريف"
-    case "workers": return "العمال"
-    case "quality": return "الجودة"
-    default: return category
-  }
+function NotificationSymbol({ category }: { category: NotificationCategory }) {
+  if (category === "payment_due") return <Banknote className="h-5 w-5" />;
+  if (category === "update") return <Megaphone className="h-5 w-5" />;
+  return <Bell className="h-5 w-5" />;
 }
 
 export default function Notifications() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
-  const [showUnreadOnly, setShowUnreadOnly] = useState(false)
+  const { user } = useAuth();
+  const { isAdmin } = useRole();
+  const { toast } = useToast();
+  const { notifications, unreadCount, isLoading, error, markRead, markAllRead, refetch } = useNotifications(200, true);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<"all" | NotificationCategory>("all");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [accounts, setAccounts] = useState<AdminAccountItem[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [scope, setScope] = useState<"all" | "user">("all");
+  const [recipientId, setRecipientId] = useState("");
+  const [draft, setDraft] = useState({ title: "", message: "", category: "general" as NotificationCategory });
+  const idempotencyKeyRef = useRef(crypto.randomUUID());
 
-  const filteredNotifications = notifications.filter(notification => {
-    const matchesSearch = notification.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         notification.message.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === "all" || notification.category === selectedCategory
-    const matchesRead = !showUnreadOnly || !notification.isRead
-    return matchesSearch && matchesCategory && matchesRead
-  })
+  useEffect(() => {
+    if (!isAdmin) return;
+    setLoadingAccounts(true);
+    fetchAllAdminAccounts()
+      .then((items) => setAccounts(items.filter((item) => item.is_active && item.user_id !== user?.id)))
+      .catch((loadError) => {
+        console.error("Failed to load notification recipients:", loadError);
+        toast({
+          variant: "destructive",
+          title: "تعذر تحميل المستخدمين",
+          description: getArabicErrorMessage(loadError),
+        });
+      })
+      .finally(() => setLoadingAccounts(false));
+  }, [isAdmin, toast, user?.id]);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length
+  const filtered = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("ar");
+    return notifications.filter((notification) => {
+      const matchesSearch = !term
+        || notification.title.toLocaleLowerCase("ar").includes(term)
+        || notification.message.toLocaleLowerCase("ar").includes(term);
+      const matchesCategory = category === "all" || notification.category === category;
+      const matchesRead = !unreadOnly || !notification.read_at;
+      return matchesSearch && matchesCategory && matchesRead;
+    });
+  }, [category, notifications, search, unreadOnly]);
+
+  const sendNotification = async () => {
+    if (!draft.title.trim() || !draft.message.trim() || (scope === "user" && !recipientId)) {
+      toast({
+        variant: "destructive",
+        title: "بيانات ناقصة",
+        description: "أدخل العنوان والنص، واختر المستخدم عند الإرسال لمستخدم محدد.",
+      });
+      return;
+    }
+
+    setSending(true);
+    try {
+      const { data, error: sendError } = await supabase.rpc("send_notification_command", {
+        p_scope: scope,
+        p_recipient_user_id: scope === "user" ? recipientId : null,
+        p_title: draft.title.trim(),
+        p_message: draft.message.trim(),
+        p_category: draft.category,
+        p_action_url: "/notifications",
+        p_idempotency_key: idempotencyKeyRef.current,
+      });
+      if (sendError) throw sendError;
+
+      const result = data as { delivered_count?: number } | null;
+      const deliveredCount = Number(result?.delivered_count || 0);
+      toast({
+        title: "تم إرسال الإشعار",
+        description: `وصل الإشعار إلى ${deliveredCount.toLocaleString("ar-u-nu-latn")} مستخدم.`,
+      });
+      setDraft({ title: "", message: "", category: "general" });
+      setRecipientId("");
+      idempotencyKeyRef.current = crypto.randomUUID();
+    } catch (sendError) {
+      console.error("Failed to send notification:", sendError);
+      toast({
+        variant: "destructive",
+        title: "تعذر إرسال الإشعار",
+        description: getArabicErrorMessage(sendError, "تعذر إرسال الإشعار. حاول مرة أخرى."),
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const openNotification = (notification: AppNotification) => {
+    if (!notification.read_at) markRead.mutate(notification.id);
+  };
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6" dir="rtl">
-      <div className="flex items-center justify-between space-y-2">
-        <div className="flex items-center gap-3">
-          <h2 className="text-3xl font-bold tracking-tight">الإشعارات</h2>
-          {unreadCount > 0 && (
-            <Badge variant="destructive" className="animate-pulse">
-              {unreadCount} جديد
-            </Badge>
-          )}
+    <div className="mx-auto max-w-6xl space-y-6" dir="rtl">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold sm:text-3xl">الإشعارات</h1>
+            {unreadCount > 0 && <Badge variant="destructive">{unreadCount.toLocaleString("ar-u-nu-latn")} جديد</Badge>}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">المستحقات المالية وتحديثات النظام المهمة</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <Settings className="ml-2 h-4 w-4" />
-            إعدادات الإشعارات
+        {unreadCount > 0 && (
+          <Button variant="outline" className="gap-2" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
+            <CheckCheck className="h-4 w-4" />
+            تحديد الكل كمقروء
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline">
-                <CheckCircle className="ml-2 h-4 w-4" />
-                تحديد الكل كمقروء
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>تحديد جميع الإشعارات كمقروءة؟</AlertDialogTitle>
-                <AlertDialogDescription>
-                  سيتم تحديد جميع الإشعارات الحالية كمقروءة. هل تريد المتابعة؟
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                <AlertDialogAction>تأكيد</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+        )}
       </div>
 
-      <Tabs defaultValue="all" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">جميع الإشعارات</TabsTrigger>
-          <TabsTrigger value="system">إشعارات النظام</TabsTrigger>
-          <TabsTrigger value="reports">التقارير</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+      {isAdmin && (
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-primary" />
+              إرسال إشعار
+            </CardTitle>
+            <CardDescription>أرسل تحديثًا لكل الحسابات النشطة أو إلى مستخدم محدد.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label>المستلم</Label>
+                <Select value={scope} onValueChange={(value) => setScope(value as "all" | "user")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع المستخدمين النشطين</SelectItem>
+                    <SelectItem value="user">مستخدم محدد</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>نوع الإشعار</Label>
+                <Select value={draft.category} onValueChange={(value) => setDraft((current) => ({ ...current, category: value as NotificationCategory }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">عام</SelectItem>
+                    <SelectItem value="payment_due">مستحق مالي</SelectItem>
+                    <SelectItem value="update">تحديث</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {scope === "user" && (
+                <div className="space-y-2">
+                  <Label>المستخدم</Label>
+                  <Select value={recipientId} onValueChange={setRecipientId} disabled={loadingAccounts}>
+                    <SelectTrigger><SelectValue placeholder={loadingAccounts ? "جارٍ التحميل..." : "اختر المستخدم"} /></SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.user_id} value={account.user_id}>
+                          {account.display_name} — {account.mill_name || account.username}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notification-title">العنوان</Label>
               <Input
-                placeholder="البحث في الإشعارات..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-8"
+                id="notification-title"
+                maxLength={120}
+                value={draft.title}
+                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                placeholder="مثال: تذكير بمستحقات الاشتراك"
               />
             </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-[180px]">
-                <Filter className="h-4 w-4 ml-2" />
-                <SelectValue placeholder="اختر الفئة" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع الفئات</SelectItem>
-                <SelectItem value="inventory">المخزون</SelectItem>
-                <SelectItem value="production">الإنتاج</SelectItem>
-                <SelectItem value="orders">الطابور</SelectItem>
-                <SelectItem value="maintenance">المصاريف</SelectItem>
-                <SelectItem value="workers">العمال</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button 
-              variant={showUnreadOnly ? "default" : "outline"}
-              onClick={() => setShowUnreadOnly(!showUnreadOnly)}
-            >
-              {showUnreadOnly ? <Bell className="h-4 w-4 ml-1" /> : <BellOff className="h-4 w-4 ml-1" />}
-              غير مقروء فقط
-            </Button>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="notification-message">نص الإشعار</Label>
+              <Textarea
+                id="notification-message"
+                maxLength={2000}
+                value={draft.message}
+                onChange={(event) => setDraft((current) => ({ ...current, message: event.target.value }))}
+                placeholder="اكتب الرسالة التي ستظهر للمستخدم..."
+                className="min-h-24"
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button className="min-w-36 gap-2" onClick={sendNotification} disabled={sending}>
+                <Send className="h-4 w-4" />
+                {sending ? "جارٍ الإرسال..." : "إرسال الإشعار"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-          <div className="space-y-3">
-            {filteredNotifications.map((notification) => (
-              <Card 
-                key={notification.id} 
-                className={`shadow-soft transition-smooth hover:shadow-olive ${
-                  !notification.isRead ? 'border-r-4 border-r-primary bg-primary/5' : ''
-                }`}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 flex-1">
-                      {getNotificationIcon(notification.type)}
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <h3 className={`font-medium ${!notification.isRead ? 'font-semibold' : ''}`}>
-                            {notification.title}
-                          </h3>
-                          {!notification.isRead && (
-                            <div className="w-2 h-2 bg-primary rounded-full" />
-                          )}
-                          <Badge variant={getPriorityColor(notification.priority) as any} className="text-xs">
-                            {getPriorityText(notification.priority)}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {notification.message}
-                        </p>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span>{notification.timestamp}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {getCategoryText(notification.category)}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm">
-                        {notification.action}
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <CardTitle>سجل الإشعارات</CardTitle>
+              <CardDescription className="mt-1">{filtered.length.toLocaleString("ar-u-nu-latn")} إشعار مطابق</CardDescription>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative sm:w-64">
+                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="بحث في الإشعارات..." className="pr-9" />
+              </div>
+              <Select value={category} onValueChange={(value) => setCategory(value as "all" | NotificationCategory)}>
+                <SelectTrigger className="sm:w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الأنواع</SelectItem>
+                  <SelectItem value="general">عام</SelectItem>
+                  <SelectItem value="payment_due">مستحق مالي</SelectItem>
+                  <SelectItem value="update">تحديث</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant={unreadOnly ? "default" : "outline"} onClick={() => setUnreadOnly((value) => !value)}>
+                غير المقروء فقط
+              </Button>
+            </div>
           </div>
-
-          {filteredNotifications.length === 0 && (
-            <Card className="shadow-soft">
-              <CardContent className="p-8 text-center">
-                <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">لا توجد إشعارات</h3>
-                <p className="text-muted-foreground">
-                  {showUnreadOnly ? "جميع الإشعارات مقروءة" : "لا توجد إشعارات تطابق معايير البحث"}
-                </p>
-              </CardContent>
-            </Card>
+        </CardHeader>
+        <CardContent>
+          {error ? (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center">
+              <p className="font-medium text-destructive">تعذر تحميل الإشعارات</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch()}>إعادة المحاولة</Button>
+            </div>
+          ) : isLoading ? (
+            <div className="p-10 text-center text-muted-foreground">جارٍ تحميل الإشعارات...</div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-12 text-center text-muted-foreground">
+              <Bell className="h-10 w-10 opacity-40" />
+              <p className="font-medium">لا توجد إشعارات مطابقة</p>
+            </div>
+          ) : (
+            <div className="divide-y overflow-hidden rounded-xl border">
+              {filtered.map((notification) => (
+                <button
+                  type="button"
+                  key={notification.id}
+                  onClick={() => openNotification(notification)}
+                  className={cn(
+                    "flex w-full items-start gap-4 p-4 text-right transition-colors hover:bg-muted/50",
+                    !notification.read_at && "bg-primary/[0.05]",
+                  )}
+                >
+                  <span className={cn(
+                    "rounded-full p-2.5",
+                    notification.category === "payment_due" ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-primary",
+                  )}>
+                    <NotificationSymbol category={notification.category} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      {!notification.read_at && <span className="h-2 w-2 rounded-full bg-primary" />}
+                      <span className="font-bold">{notification.title}</span>
+                      <Badge variant="outline">{categoryLabels[notification.category]}</Badge>
+                    </span>
+                    <span className="mt-1.5 block whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{notification.message}</span>
+                    <time className="mt-2 block text-xs text-muted-foreground">{formatDateTime(notification.created_at)}</time>
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
-        </TabsContent>
-
-        <TabsContent value="system" className="space-y-4">
-          <Card className="shadow-soft transition-smooth hover:shadow-olive">
-            <CardHeader>
-              <CardTitle>إشعارات النظام</CardTitle>
-              <CardDescription>
-                تحديثات النظام والصيانة المجدولة
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {systemAlerts.map((alert) => (
-                <div key={alert.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                  <Info className="h-5 w-5 text-blue-500 mt-0.5" />
-                  <div className="flex-1">
-                    <h4 className={`font-medium ${!alert.isRead ? 'font-semibold' : ''}`}>
-                      {alert.title}
-                      {!alert.isRead && <span className="w-2 h-2 bg-primary rounded-full inline-block mr-2" />}
-                    </h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {alert.message}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {alert.timestamp}
-                    </p>
-                  </div>
-                  <Button variant="ghost" size="sm">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="reports" className="space-y-4">
-          <Card className="shadow-soft transition-smooth hover:shadow-olive">
-            <CardHeader>
-              <CardTitle>التقارير الجاهزة</CardTitle>
-              <CardDescription>
-                التقارير المكتملة والجاهزة للتحميل
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {reports.map((report) => (
-                <div key={report.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                    <div>
-                      <h4 className={`font-medium ${!report.isRead ? 'font-semibold' : ''}`}>
-                        {report.title}
-                        {!report.isRead && <span className="w-2 h-2 bg-primary rounded-full inline-block mr-2" />}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        {report.message}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {report.timestamp}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm">
-                      تحميل PDF
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Archive className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
-  )
+  );
 }

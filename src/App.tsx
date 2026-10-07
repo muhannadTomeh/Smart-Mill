@@ -53,6 +53,7 @@ import { AdminRoute } from "./components/AdminRoute";
 import { AdminErrorBoundary } from "./components/AdminErrorBoundary";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { FormDraftPersistence } from "./components/FormDraftPersistence";
+import { NotificationBell } from "./components/NotificationBell";
 
 const queryClient = new QueryClient();
 
@@ -109,6 +110,8 @@ const HeaderBar = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        <NotificationBell />
+
         {/* Quick Add - Only for Mill Owners/Employees */}
         {!isAdmin && (
           <DropdownMenu>
@@ -293,6 +296,7 @@ const ProtectedLayout = () => {
                 <Routes>
                   <Route path="/admin" element={<AdminErrorBoundary><AdminIndex /></AdminErrorBoundary>} />
                   <Route path="/admin/mill/:id" element={<AdminErrorBoundary><MillDetails /></AdminErrorBoundary>} />
+                  <Route path="/notifications" element={<AdminErrorBoundary><Notifications /></AdminErrorBoundary>} />
                   <Route path="*" element={<Navigate to="/admin" replace />} />
                 </Routes>
               </main>
@@ -378,6 +382,7 @@ const SeasonGateContent = () => {
     if (isMillOwner) {
       return (
         <Routes>
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/seasons" element={<Seasons />} />
           <Route path="/seasons/new" element={<SeasonSetup />} />
           <Route path="/seasons/edit/:id" element={<SeasonSetup />} />
@@ -386,10 +391,15 @@ const SeasonGateContent = () => {
       );
     }
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
-        <h2 className="text-xl font-bold mb-2">لا يوجد موسم نشط</h2>
-        <p className="text-muted-foreground">يجب على صاحب المعصرة تفعيل موسم أولاً.</p>
-      </div>
+      <Routes>
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="*" element={(
+          <div className="flex flex-col items-center justify-center p-12 text-center">
+            <h2 className="text-xl font-bold mb-2">لا يوجد موسم نشط</h2>
+            <p className="text-muted-foreground">يجب على صاحب المعصرة تفعيل موسم أولاً.</p>
+          </div>
+        )} />
+      </Routes>
     );
   }
 
@@ -401,6 +411,7 @@ const SeasonGateContent = () => {
       <Route path="/invoices-history" element={<InvoicesHistory />} />
       <Route path="/oil-trading" element={<OilTrading />} />
       <Route path="/queue-display" element={<QueueDisplay />} />
+      <Route path="/notifications" element={<Notifications />} />
 
       {/* 2. Admin Workspace Routes (Owner Only + Re-authenticated) */}
       <Route path="/dashboard" element={<AdminRouteGuard><Dashboard /></AdminRouteGuard>} />
@@ -416,7 +427,6 @@ const SeasonGateContent = () => {
       <Route path="/seasons/new" element={<AdminRouteGuard><SeasonSetup /></AdminRouteGuard>} />
       <Route path="/seasons/edit/:id" element={<AdminRouteGuard><SeasonSetup /></AdminRouteGuard>} />
       <Route path="/settings" element={<AdminRouteGuard><Settings /></AdminRouteGuard>} />
-      <Route path="/notifications" element={<AdminRouteGuard><Notifications /></AdminRouteGuard>} />
 
       {/* Default Catch-all: Redirect to Queue */}
       <Route path="*" element={<Navigate to="/queue" replace />} />

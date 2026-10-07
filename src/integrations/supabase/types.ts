@@ -63,6 +63,62 @@ export type Database = {
         }
         Relationships: []
       }
+      app_notifications: {
+        Row: {
+          action_url: string | null
+          batch_id: string
+          category: string
+          created_at: string
+          created_by: string
+          id: string
+          message: string
+          mill_id: string | null
+          read_at: string | null
+          recipient_user_id: string
+          source_id: string | null
+          source_type: string | null
+          title: string
+        }
+        Insert: {
+          action_url?: string | null
+          batch_id?: string
+          category?: string
+          created_at?: string
+          created_by: string
+          id?: string
+          message: string
+          mill_id?: string | null
+          read_at?: string | null
+          recipient_user_id: string
+          source_id?: string | null
+          source_type?: string | null
+          title: string
+        }
+        Update: {
+          action_url?: string | null
+          batch_id?: string
+          category?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          message?: string
+          mill_id?: string | null
+          read_at?: string | null
+          recipient_user_id?: string
+          source_id?: string | null
+          source_type?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_notifications_mill_id_fkey"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       business_command_receipts: {
         Row: {
           actor_user_id: string
@@ -1088,6 +1144,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "fk_mill_memberships_mill_id"
+            columns: ["mill_id"]
+            isOneToOne: false
+            referencedRelation: "mills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mill_admin_charges: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          due_date: string | null
+          id: string
+          idempotency_key: string
+          mill_id: string
+          notes: string | null
+          settled_at: string | null
+          settled_by: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by: string
+          due_date?: string | null
+          id?: string
+          idempotency_key?: string
+          mill_id: string
+          notes?: string | null
+          settled_at?: string | null
+          settled_by?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          id?: string
+          idempotency_key?: string
+          mill_id?: string
+          notes?: string | null
+          settled_at?: string | null
+          settled_by?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mill_admin_charges_mill_id_fkey"
             columns: ["mill_id"]
             isOneToOne: false
             referencedRelation: "mills"
@@ -2785,6 +2894,39 @@ export type Database = {
       }
     }
     Functions: {
+      create_mill_admin_charge_command: {
+        Args: {
+          p_amount: number
+          p_due_date: string | null
+          p_idempotency_key: string
+          p_mill_id: string
+          p_notes: string | null
+          p_notify: boolean
+          p_title: string
+        }
+        Returns: Json
+      }
+      mark_all_notifications_read_command: { Args: never; Returns: number }
+      mark_notification_read_command: {
+        Args: { p_notification_id: string }
+        Returns: boolean
+      }
+      send_notification_command: {
+        Args: {
+          p_action_url: string | null
+          p_category: string
+          p_idempotency_key: string
+          p_message: string
+          p_recipient_user_id: string | null
+          p_scope: string
+          p_title: string
+        }
+        Returns: Json
+      }
+      update_mill_admin_charge_status_command: {
+        Args: { p_charge_id: string; p_status: string }
+        Returns: Json
+      }
       adjust_product_stock_command: {
         Args: {
           p_idempotency_key: string
