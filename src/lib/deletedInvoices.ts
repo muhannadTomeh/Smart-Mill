@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { parseEstimatedMinutes } from "@/lib/queueUtils";
 
 export interface DeletedInvoice {
   id: string;
@@ -12,6 +13,8 @@ export interface DeletedInvoice {
   season_id?: string | null;
   mill_id?: string | null;
   user_id?: string | null;
+  customer_id?: string | null;
+  estimated_minutes?: number | null;
   deleted_at: string; // ISO
   expires_at: string; // ISO (24h after deleted_at)
   source?: "queue_completed" | "invoice";
@@ -115,33 +118,32 @@ export function clearAllDeletedInvoices(seasonId?: string | null): void {
 }
 
 /**
- * Restores a deleted invoice back into the Supabase queue as "completed" (waiting for invoice)
+ * Restores a deleted queue entry atomically at its previous position.
  */
 export async function restoreDeletedInvoiceToQueue(
   item: DeletedInvoice,
   millId: string,
-  actorUserId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. Re-insert or upsert into queue with status "completed"
-    const payload: any = {
-      id: item.id,
-      mill_id: item.mill_id || millId || null,
-      user_id: item.user_id || actorUserId || null,
-      season_id: item.season_id || null,
-      name: item.name,
-      phone: item.phone,
-      bags: item.bags,
-      position: item.position,
-      notes: item.notes,
-      status: "completed", // Places it back in "3. بانتظار الفاتورة"
-    };
-
-    const { error } = await supabase.from("queue").upsert(payload);
+    const targetMillId = item.mill_id || millId || null;
+    const estimatedMinutes = item.estimated_minutes ?? parseEstimatedMinutes(item);
+    const { error } = await supabase.rpc("restore_queue_entry_command", {
+      p_queue_id: item.id,
+      p_mill_id: targetMillId,
+      p_season_id: item.season_id || null,
+      p_customer_id: item.customer_id || null,
+      p_name: item.name,
+      p_phone: item.phone,
+      p_bags: item.bags,
+      p_notes: item.notes,
+      p_previous_status: item.status,
+      p_previous_position: item.position,
+      p_estimated_minutes: estimatedMinutes,
+    });
 
     if (error) {
-      console.error("Failed to restore invoice to queue in Supabase:", error);
-      return { success: false, error: getArabicErrorMessage(error, "تعذر استعادة الفاتورة المحذوفة.") };
+      console.error("Failed to restore queue entry in Supabase:", error);
+      return { success: false, error: getArabicErrorMessage(error, "تعذر استرجاع الزبون إلى مكانه السابق.") };
     }
 
     // 2. Remove from deleted invoices pool

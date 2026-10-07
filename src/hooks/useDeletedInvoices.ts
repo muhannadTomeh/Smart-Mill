@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export function useDeletedInvoices() {
   const { activeSeason } = useSeason();
-  const { user, millId } = useAuth();
+  const { millId } = useAuth();
   const { toast } = useToast();
 
   const [deletedInvoices, setDeletedInvoices] = useState<DeletedInvoice[]>([]);
@@ -58,13 +58,15 @@ export function useDeletedInvoices() {
   const restoreItem = async (item: DeletedInvoice) => {
     setRestoringId(item.id);
     const targetMillId = item.mill_id || activeSeason?.mill_id || millId || "";
-    const res = await restoreDeletedInvoiceToQueue(item, targetMillId, user?.id);
+    const res = await restoreDeletedInvoiceToQueue(item, targetMillId);
     setRestoringId(null);
 
     if (res.success) {
       toast({
-        title: "تم استرجاع الفاتورة بنجاح",
-        description: `تمت إعادة دور "${item.name}" إلى قائمة بانتظار الفاتورة في الطابور`,
+        title: "تم استرجاع الزبون بنجاح",
+        description: item.status === "completed"
+          ? `تمت إعادة "${item.name}" إلى قائمة بانتظار الفاتورة وفي ترتيبه السابق.`
+          : `تمت إعادة "${item.name}" إلى مكانه السابق في الطابور وإعادة ترتيب الأدوار.`,
       });
       refresh();
       return true;

@@ -29,12 +29,14 @@ interface DeletedInvoicesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectForInvoice?: (item: DeletedInvoice) => void;
+  onRestored?: () => void | Promise<void>;
 }
 
 export function DeletedInvoicesDialog({
   open,
   onOpenChange,
   onSelectForInvoice,
+  onRestored,
 }: DeletedInvoicesDialogProps) {
   const {
     deletedInvoices,
@@ -209,11 +211,14 @@ export function DeletedInvoicesDialog({
                       variant="default"
                       size="sm"
                       disabled={restoringId === item.id}
-                      onClick={() => restoreItem(item)}
+                      onClick={async () => {
+                        const restored = await restoreItem(item);
+                        if (restored) await onRestored?.();
+                      }}
                       className="h-8 text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
                     >
                       <RotateCcw className={`h-3.5 w-3.5 ${restoringId === item.id ? "animate-spin" : ""}`} />
-                      <span>{restoringId === item.id ? "جارٍ الاسترجاع..." : "استرجاع إلى الطابور"}</span>
+                      <span>{restoringId === item.id ? "جارٍ الاسترجاع..." : "استرجاع لمكانه السابق"}</span>
                     </Button>
                   </div>
                 </div>

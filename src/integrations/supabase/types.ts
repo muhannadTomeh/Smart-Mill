@@ -3182,6 +3182,26 @@ export type Database = {
         }
         Returns: Json
       }
+      restore_queue_entry_command: {
+        Args: {
+          p_bags: number | null
+          p_customer_id: string | null
+          p_estimated_minutes: number | null
+          p_mill_id: string
+          p_name: string
+          p_notes: string | null
+          p_phone: string | null
+          p_previous_position: number | null
+          p_previous_status: string | null
+          p_queue_id: string
+          p_season_id: string
+        }
+        Returns: {
+          queue_id: string
+          restored_position: number
+          restored_status: string
+        }[]
+      }
       set_admin_pin: { Args: { new_pin: string }; Returns: boolean }
       set_employee_pin: { Args: { new_pin: string }; Returns: undefined }
       set_report_pin: { Args: { new_pin: string }; Returns: undefined }

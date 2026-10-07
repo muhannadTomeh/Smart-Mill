@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
 import { QuickInvoiceSheet } from "@/components/queue/QuickInvoiceSheet";
+import { DeletedInvoicesDialog } from "@/components/invoices/DeletedInvoicesDialog";
 import { printThermalQueueTicket } from "@/lib/thermalReceiptPrinter";
 import { saveDeletedInvoice } from "@/lib/deletedInvoices";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
@@ -73,6 +74,7 @@ const Queue = () => {
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false);
   const [selectedForInvoice, setSelectedForInvoice] = useState<QueueItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QueueItem | null>(null);
+  const [deletedDialogOpen, setDeletedDialogOpen] = useState(false);
   const [adjustingTimeId, setAdjustingTimeId] = useState<string | null>(null);
 
   // Drag & drop reorder state
@@ -563,7 +565,10 @@ const Queue = () => {
       notes: deleteTarget.notes || null,
       status: deleteTarget.status || "completed",
       season_id: activeSeason?.id || null,
+      mill_id: deleteTarget.mill_id || activeSeason?.mill_id || millId || null,
       user_id: user?.id || null,
+      customer_id: deleteTarget.customer_id || null,
+      estimated_minutes: parseEstimatedMinutes(deleteTarget),
       deleted_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       source: isWaitingForInvoice ? "queue_completed" : "invoice",
@@ -970,6 +975,17 @@ const Queue = () => {
               </div>
             </DialogContent>
           </Dialog>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setDeletedDialogOpen(true)}
+            className="h-9 px-3.5 rounded-lg text-sm font-semibold gap-1.5"
+          >
+            <Undo2 className="h-4 w-4" />
+            <span>الأدوار المؤرشفة</span>
+          </Button>
         </div>
 
         {/* Left side (Secondary Actions): تحديث + شاشة العرض */}
@@ -1561,6 +1577,12 @@ const Queue = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <DeletedInvoicesDialog
+        open={deletedDialogOpen}
+        onOpenChange={setDeletedDialogOpen}
+        onRestored={fetchQueue}
+      />
     </div>
   );
 };

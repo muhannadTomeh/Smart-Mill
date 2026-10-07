@@ -1,5 +1,9 @@
 export interface QueueItem {
   id: string;
+  mill_id?: string | null;
+  season_id?: string | null;
+  user_id?: string | null;
+  customer_id?: string | null;
   name: string;
   phone: string | null;
   bags: number;
