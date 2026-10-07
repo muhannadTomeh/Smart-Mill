@@ -422,7 +422,7 @@ export default function Dashboard() {
                   <div className="text-left" dir="ltr">
                     <div className="text-[11px] font-medium text-muted-foreground text-right">الوقت المتبقي</div>
                     <span className="text-2xl font-bold font-mono text-primary">
-                      {procRemSec !== null ? formatRemaining(procRemSec) : `${procEstMin || 30}:00`}
+                      {procRemSec !== null ? formatRemaining(procRemSec) : procEstMin ? `${procEstMin}:00` : "غير محدد"}
                     </span>
                   </div>
                   <Button

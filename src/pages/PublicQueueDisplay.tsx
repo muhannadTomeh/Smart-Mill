@@ -138,10 +138,9 @@ export default function PublicQueueDisplay() {
 
     // Map queue items and ensure estimated_minutes & started_at are extracted accurately
     const mappedItems: QueueItem[] = rawQueue.map((i, idx) => {
-      const localMatch = localItems.find((l) => l.id === i.id || (l.name && l.name.trim() === i.name?.trim()));
+      const localMatch = localItems.find((l) => l.id === i.id);
 
       const localEst = (i.id ? localStorage.getItem(`queue_est_${i.id}`) : null) ||
-        (i.name ? localStorage.getItem(`queue_est_name_${i.name.trim()}`) : null) ||
         (localMatch ? parseEstimatedMinutes(localMatch) : null);
 
       const localStart = (i.id ? localStorage.getItem(`processing_started_${i.id}`) : null) ||
@@ -173,10 +172,6 @@ export default function PublicQueueDisplay() {
           const nowIso = new Date().toISOString();
           localStorage.setItem(`processing_started_${item.id}`, nowIso);
           item.started_at = nowIso;
-        }
-        if (!item.estimated_minutes) {
-          item.estimated_minutes = 30;
-          if (item.id) localStorage.setItem(`queue_est_${item.id}`, "30");
         }
       }
       return item;
@@ -323,14 +318,12 @@ export default function PublicQueueDisplay() {
   const currentEstMin = currentItem
     ? (currentItem.estimated_minutes ||
       parseEstimatedMinutes(currentItem) ||
-      (currentItem.id ? Number(localStorage.getItem(`queue_est_${currentItem.id}`)) : null) ||
-      (currentItem.name ? Number(localStorage.getItem(`queue_est_name_${currentItem.name.trim()}`)) : null) ||
-      30)
+      (currentItem.id ? Number(localStorage.getItem(`queue_est_${currentItem.id}`)) : null))
     : null;
   const currentStartedAt = currentItem ? parseStartedAt(currentItem) : null;
 
   let currentRemainingSeconds: number | null = null;
-  let remainingText = "30:00";
+  let remainingText = "المدة غير محددة";
 
   if (currentItem && currentEstMin && currentEstMin > 0) {
     let startMs = currentStartedAt;

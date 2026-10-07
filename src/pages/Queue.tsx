@@ -38,7 +38,6 @@ export { parseEstimatedMinutes, parseStartedAt, getRemainingSeconds, formatRemai
 export type { QueueItem };
 
 const formatTime = formatTimeSafe;
-const DEFAULT_QUEUE_ESTIMATED_MINUTES = 30;
 const QUEUE_TIME_STEP_MINUTES = 5;
 const MIN_QUEUE_ESTIMATED_MINUTES = 5;
 
@@ -58,7 +57,7 @@ const Queue = () => {
     phone: "",
     bags: "",
     notes: "",
-    estimatedMinutes: String(DEFAULT_QUEUE_ESTIMATED_MINUTES),
+    estimatedMinutes: "",
   });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -97,7 +96,7 @@ const Queue = () => {
     if (profile?.mill_name) {
       try {
         localStorage.setItem("mill_name", profile.mill_name);
-      } catch {}
+      } catch { }
     }
   }, [profile?.mill_name]);
 
@@ -167,7 +166,7 @@ const Queue = () => {
 
     const raw = (data as QueueItem[]) || [];
     const activeRaw = raw.filter((item) => item.status !== "done");
-    
+
     // Strictly sort by position ascending so physical place and turn number always match
     const sorted = [...activeRaw].sort(sortByPosition);
 
@@ -182,20 +181,22 @@ const Queue = () => {
     setLoading(false);
     try {
       localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(items));
-    } catch {}
+    } catch { }
   };
 
   const calculateQueueWaitAhead = (targetPosition: number) => {
     // 1. Current processing items
     const processingItems = allItems.filter((i) => i.status === "processing");
     let processingRemainingMins = 0;
+    let hasUnknownDuration = false;
     for (const p of processingItems) {
       const remSec = getRemainingSeconds(p, nowMs);
       if (remSec !== null && remSec > 0) {
         processingRemainingMins += Math.max(1, Math.ceil(remSec / 60));
       } else {
-        const pEst = parseEstimatedMinutes(p) || 30;
-        processingRemainingMins += pEst;
+        const pEst = parseEstimatedMinutes(p);
+        if (pEst && pEst > 0) processingRemainingMins += pEst;
+        else hasUnknownDuration = true;
       }
     }
 
@@ -205,12 +206,13 @@ const Queue = () => {
     );
     let waitingMins = 0;
     for (const w of waitingAhead) {
-      const wEst = parseEstimatedMinutes(w) || 30;
-      waitingMins += wEst;
+      const wEst = parseEstimatedMinutes(w);
+      if (wEst && wEst > 0) waitingMins += wEst;
+      else hasUnknownDuration = true;
     }
 
     const aheadCount = processingItems.length + waitingAhead.length;
-    const waitMinutes = processingRemainingMins + waitingMins;
+    const waitMinutes = hasUnknownDuration ? null : processingRemainingMins + waitingMins;
 
     return { aheadCount, waitMinutes };
   };
@@ -230,7 +232,7 @@ const Queue = () => {
     const parsedEstimatedMinutes = Number.parseInt(newCustomer.estimatedMinutes, 10);
     const estMin = Number.isFinite(parsedEstimatedMinutes) && parsedEstimatedMinutes > 0
       ? parsedEstimatedMinutes
-      : DEFAULT_QUEUE_ESTIMATED_MINUTES;
+      : null;
     const bagsCount = newCustomer.bags ? parseInt(newCustomer.bags, 10) : 0;
 
     // Resolve by phone first, then create a canonical customer record.  The queue
@@ -342,7 +344,7 @@ const Queue = () => {
         phone: "",
         bags: "",
         notes: "",
-        estimatedMinutes: String(DEFAULT_QUEUE_ESTIMATED_MINUTES),
+        estimatedMinutes: "",
       });
       setDialogOpen(false);
       toast.success(`تمت إضافة الزبون "${newCustomer.name.trim()}" برقم دور #${nextPosition}`);
@@ -401,7 +403,7 @@ const Queue = () => {
 
     const estMin = editingCustomer.estimatedMinutes ? parseInt(editingCustomer.estimatedMinutes, 10) : null;
     const bagsCount = editingCustomer.bags ? parseInt(editingCustomer.bags, 10) : 0;
-    const fallbackNotes = estMin 
+    const fallbackNotes = estMin
       ? `[وقت_تقديري:${estMin}] ${editingCustomer.notes?.trim() || ""}`.trim()
       : (editingCustomer.notes?.trim() || null);
 
@@ -409,19 +411,19 @@ const Queue = () => {
       const updated = prev.map((i) =>
         i.id === editingCustomer.id
           ? {
-              ...i,
-              name: editingCustomer.name.trim(),
-              phone: editingCustomer.phone?.trim() || null,
-              bags: bagsCount,
-              notes: fallbackNotes,
-              estimated_minutes: estMin,
-            }
+            ...i,
+            name: editingCustomer.name.trim(),
+            phone: editingCustomer.phone?.trim() || null,
+            bags: bagsCount,
+            notes: fallbackNotes,
+            estimated_minutes: estMin,
+          }
           : i
       );
       if (activeSeason) {
         try {
           localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
       return updated;
     });
@@ -466,7 +468,7 @@ const Queue = () => {
       if (activeSeason) {
         try {
           localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
       return updated;
     });
@@ -486,7 +488,7 @@ const Queue = () => {
     const target = allItems.find((i) => i.id === id);
     if (!target) return;
 
-    const currentEst = parseEstimatedMinutes(target) || DEFAULT_QUEUE_ESTIMATED_MINUTES;
+    const currentEst = parseEstimatedMinutes(target) || 0;
     const newEst = Math.max(MIN_QUEUE_ESTIMATED_MINUTES, currentEst + deltaMinutes);
 
     if (newEst === currentEst) {
@@ -506,7 +508,7 @@ const Queue = () => {
       if (activeSeason) {
         try {
           localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
       return updated;
     });
@@ -594,27 +596,29 @@ const Queue = () => {
 
     const startedAt = new Date().toISOString();
     const target = allItems.find((i) => i.id === id);
-    let estMin = target ? parseEstimatedMinutes(target) : null;
-    if (!estMin || estMin <= 0) {
-      estMin = 30;
-    }
+    const estMin = target ? parseEstimatedMinutes(target) : null;
 
     try {
       localStorage.setItem(`processing_started_${id}`, startedAt);
-      localStorage.setItem(`queue_est_${id}`, String(estMin));
-      if (target?.name) {
+      if (estMin && estMin > 0) {
+        localStorage.setItem(`queue_est_${id}`, String(estMin));
+      } else {
+        localStorage.removeItem(`queue_est_${id}`);
+      }
+      if (target?.name && estMin && estMin > 0) {
         localStorage.setItem(`queue_est_name_${target.name.trim()}`, String(estMin));
       }
-    } catch {}
+    } catch { }
 
-    const updatedNotes = `[بدء_العصر:${startedAt}] [وقت_تقديري:${estMin}] ${(target?.notes || "").replace(/\[(?:بدء_العصر|وقت_تقديري|الوقت|est):?[^\]]*\]/gi, "")}`.trim();
+    const estimatedTimeTag = estMin && estMin > 0 ? `[وقت_تقديري:${estMin}]` : "";
+    const updatedNotes = `[بدء_العصر:${startedAt}] ${estimatedTimeTag} ${(target?.notes || "").replace(/\[(?:بدء_العصر|وقت_تقديري|الوقت|est):?[^\]]*\]/gi, "")}`.trim();
 
     setAllItems((prev) => {
       const updated = prev.map((i) => (i.id === id ? { ...i, status: "processing", started_at: startedAt, estimated_minutes: estMin, notes: updatedNotes } : i));
       if (activeSeason) {
         try {
           localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
       return updated;
     });
@@ -638,7 +642,7 @@ const Queue = () => {
       console.error("startMilling error", error);
       toast.error(getArabicErrorMessage(error, "تعذر بدء عملية العصر."));
     }
-    else toast.success(`تم بدء العصر — الوقت التقديري: ${estMin} دقيقة`);
+    else toast.success(estMin ? `تم بدء العصر — الوقت التقديري: ${estMin} دقيقة` : "تم بدء العصر — المدة غير محددة");
     await fetchQueue();
   };
 
@@ -648,7 +652,7 @@ const Queue = () => {
 
     try {
       localStorage.removeItem(`processing_started_${id}`);
-    } catch {}
+    } catch { }
 
     const cleanNotes = (target.notes || "")
       .replace(/\[بدء_العصر:[^\]]*\]/gi, "")
@@ -658,17 +662,17 @@ const Queue = () => {
       const updated = prev.map((i) =>
         i.id === id
           ? {
-              ...i,
-              status: "waiting",
-              started_at: null,
-              notes: cleanNotes || null,
-            }
+            ...i,
+            status: "waiting",
+            started_at: null,
+            notes: cleanNotes || null,
+          }
           : i
       );
       if (activeSeason) {
         try {
           localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
       return updated;
     });
@@ -790,7 +794,7 @@ const Queue = () => {
     if (activeSeason) {
       try {
         localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(sortedCombined));
-      } catch {}
+      } catch { }
     }
     setReorderConfirm(null);
 
@@ -1187,7 +1191,7 @@ const Queue = () => {
               <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                 {processing.map((p) => {
                   const remSec = getRemainingSeconds(p, nowMs);
-                  const estMin = parseEstimatedMinutes(p) || 30;
+                  const estMin = parseEstimatedMinutes(p);
                   return (
                     <div
                       key={p.id}
@@ -1227,15 +1231,15 @@ const Queue = () => {
                           الوقت المتبقي
                         </span>
                         <span className="text-3xl md:text-4xl font-bold font-mono text-primary tracking-tight" dir="ltr">
-                          {remSec !== null ? formatRemaining(remSec) : `${estMin}:00`}
+                          {remSec !== null ? formatRemaining(remSec) : estMin ? `${estMin}:00` : "غير محدد"}
                         </span>
                       </div>
 
                       {/* Repeated five-minute adjustments */}
                       <div className="flex items-center justify-center gap-2" dir="ltr">
                         {[
-                          { delta: QUEUE_TIME_STEP_MINUTES, label: "+5 د" },
-                          { delta: -QUEUE_TIME_STEP_MINUTES, label: "−5 د" },
+                          { delta: QUEUE_TIME_STEP_MINUTES, label: "+5 " },
+                          { delta: -QUEUE_TIME_STEP_MINUTES, label: " -5 " },
                         ].map(({ delta, label }) => (
                           <Button
                             key={delta}
@@ -1248,7 +1252,7 @@ const Queue = () => {
                                 ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                                 : "border-rose-300 text-rose-700 hover:bg-rose-50",
                             )}
-                            disabled={adjustingTimeId === p.id}
+                            disabled={adjustingTimeId === p.id || (delta < 0 && (!estMin || estMin <= MIN_QUEUE_ESTIMATED_MINUTES))}
                             onClick={() => adjustEstimatedMinutes(p.id, delta)}
                           >
                             {label}
@@ -1374,7 +1378,7 @@ const Queue = () => {
               if (activeSeason) {
                 try {
                   localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
-                } catch {}
+                } catch { }
               }
               return updated;
             });
