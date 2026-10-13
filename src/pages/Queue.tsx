@@ -29,13 +29,14 @@ import {
   QueueItem,
   parseEstimatedMinutes,
   parseStartedAt,
+  parseCompletedAt,
   getRemainingSeconds,
   formatRemaining,
   formatTimeSafe,
 } from "@/lib/queueUtils";
 
 // Re-export for backwards compatibility
-export { parseEstimatedMinutes, parseStartedAt, getRemainingSeconds, formatRemaining, formatTimeSafe };
+export { parseEstimatedMinutes, parseStartedAt, parseCompletedAt, getRemainingSeconds, formatRemaining, formatTimeSafe };
 export type { QueueItem };
 
 const formatTime = formatTimeSafe;
@@ -459,8 +460,12 @@ const Queue = () => {
   };
 
   const completeProcessing = async (id: string) => {
+    const completedAt = new Date().toISOString();
+    const targetItem = allItems.find((item) => item.id === id);
+    const existingNotes = (targetItem?.notes || "").replace(/\s*\[completed_at:[^\]]+\]/g, "").trim();
+    const completedNotes = `${existingNotes}${existingNotes ? "\n" : ""}[completed_at:${completedAt}]`;
     setAllItems((prev) => {
-      const updated = prev.map((i) => (i.id === id ? { ...i, status: "completed" } : i));
+      const updated = prev.map((i) => (i.id === id ? { ...i, status: "completed", notes: completedNotes, completed_at: completedAt } : i));
       if (activeSeason) {
         try {
           localStorage.setItem(`active_queue_${activeSeason.id}`, JSON.stringify(updated));
@@ -469,7 +474,7 @@ const Queue = () => {
       return updated;
     });
 
-    const { error } = await supabase.from("queue").update({ status: "completed" }).eq("id", id);
+    const { error } = await supabase.from("queue").update({ status: "completed", notes: completedNotes }).eq("id", id);
     if (error) {
       console.error("finishMilling error", error);
       toast.error(getArabicErrorMessage(error, "تعذر إنهاء عملية العصر."));
@@ -1142,8 +1147,12 @@ const Queue = () => {
 
                       {/* Row 2: Secondary info (Bags, Time, Phone) */}
                       <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                        <span className="font-semibold text-foreground/90">{customer.bags ?? 0} شوال</span>
-                        <span>•</span>
+                        {Number(customer.bags) > 0 && (
+                          <>
+                            <span className="font-semibold text-foreground/90">{customer.bags} شوال</span>
+                            <span>•</span>
+                          </>
+                        )}
                         <span>{formatTime(customer.created_at)}</span>
                         {customer.phone && (
                           <>
@@ -1215,9 +1224,11 @@ const Queue = () => {
                           <h3 className="text-base font-bold text-foreground truncate">
                             {p.name}
                           </h3>
-                          <Badge variant="outline" className="text-xs font-semibold px-2 py-0 border-border text-muted-foreground shrink-0">
-                            {p.bags ?? 0} شوال
-                          </Badge>
+                          {Number(p.bags) > 0 && (
+                            <Badge variant="outline" className="text-xs font-semibold px-2 py-0 border-border text-muted-foreground shrink-0">
+                              {p.bags} شوال
+                            </Badge>
+                          )}
                         </div>
                         <Button
                           size="icon"
@@ -1349,15 +1360,23 @@ const Queue = () => {
                     </div>
 
                     {/* Row 2: Secondary info (Bags, Phone) */}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                      <span className="font-semibold text-foreground/90">{c.bags} شوال</span>
-                      {c.phone && (
-                        <>
-                          <span>•</span>
-                          <span className="font-mono text-[11px]">{c.phone}</span>
-                        </>
-                      )}
-                    </div>
+                    {(Number(c.bags) > 0 || c.phone) && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                        {Number(c.bags) > 0 && (
+                          <span className="font-semibold text-foreground/90">{c.bags} شوال</span>
+                        )}
+                        {c.phone && (
+                          <>
+                            {Number(c.bags) > 0 && <span>•</span>}
+                            <span className="font-mono text-[11px]">{c.phone}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {parseCompletedAt(c) && (
+                      <p className="text-[11px] text-muted-foreground/80">انتهى {formatTime(parseCompletedAt(c))}</p>
+                    )}
 
                     {/* Row 3: Action Button */}
                     <Button

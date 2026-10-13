@@ -39,6 +39,8 @@ export function getDynamicItems(settings: any): DynamicDisplayItem[] {
 }
 
 export interface DisplaySettings {
+  /** شاشة مقسمة للدور الحالي/التالي، أو قائمة طابور كاملة حتى 10 أدوار. */
+  display_layout?: "split" | "queue";
   dynamic_items?: DynamicDisplayItem[];
   ticker_text?: string;
   ticker_speed_seconds?: number;
@@ -55,6 +57,7 @@ export interface DisplaySettings {
 }
 
 export const defaultDisplaySettings: DisplaySettings = {
+  display_layout: "split",
   dynamic_items: [
     { id: "1", title: "سعر الزيت بيع", details: "25 ₪", visible: true },
     { id: "2", title: "رقم التواصل مع المعصرة", details: "0569945677", visible: true },

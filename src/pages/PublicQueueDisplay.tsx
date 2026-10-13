@@ -287,6 +287,10 @@ export default function PublicQueueDisplay() {
   const currentItem = items.find((i) => i.status === "processing");
   const waitingItems = items.filter((i) => i.status === "waiting");
   const nextFive = waitingItems.slice(0, 5);
+  const queueDisplayItems = items
+    .filter((item) => item.status === "processing" || item.status === "waiting")
+    .slice(0, 10);
+  const queueColumns = [queueDisplayItems.slice(0, 5), queueDisplayItems.slice(5, 10)];
 
   // Sound notification on processing change
   useEffect(() => {
@@ -402,16 +406,71 @@ export default function PublicQueueDisplay() {
         )}
       </header>
 
-      {/* Subtle Divider */}
-      <div
-        className="mx-6 md:mx-10 h-px shrink-0"
-        style={{
-          background: "linear-gradient(90deg, transparent, rgba(52,211,153,0.35), transparent)",
-        }}
-      />
-
       {/* Main Split Content: Twin Windows (الدور الحالي - الدور التالي) */}
-      <main className="flex-1 min-h-0 flex overflow-hidden p-4 md:p-6 gap-5 md:gap-6">
+      <main className="flex-1 min-h-0 flex overflow-visible p-4 md:p-6 gap-5 md:gap-6">
+        {displaySettings.display_layout === "queue" ? (
+          <div className="w-full min-h-0 flex flex-col relative pt-3">
+            <div className="absolute -top-12 left-0 right-0 px-5 text-center">
+              <h1 className="text-white text-3xl md:text-4xl font-black drop-shadow">الطابور</h1>
+            </div>
+            <div
+              className="flex-1 min-h-0 rounded-3xl p-3.5 md:p-4 shadow-2xl backdrop-blur-sm overflow-hidden flex flex-col"
+              style={{
+                background: "linear-gradient(170deg, rgba(16,185,129,0.18) 0%, rgba(4,47,21,0.45) 100%)",
+                border: "2px solid rgba(52,211,153,0.45)",
+                boxShadow: "0 0 70px rgba(16,185,129,0.15), inset 0 1px 1px rgba(255,255,255,0.1)",
+              }}
+            >
+              {queueDisplayItems.length > 0 ? (
+              <div className="grid grid-cols-2 gap-4 md:gap-6 flex-1 min-h-0">
+                {queueColumns.map((column, columnIndex) => (
+                  <div key={columnIndex} className="flex flex-col gap-2.5 md:gap-3 min-h-0">
+                    {column.map((item) => {
+                      const isCurrent = item.id === currentItem?.id;
+                      const estimatedTime = isCurrent && remainingText
+                        ? remainingText
+                        : item.estimated_minutes != null && item.estimated_minutes > 0
+                          ? `${item.estimated_minutes} دقيقة`
+                          : null;
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex-1 min-h-0 relative flex items-center px-5 md:px-7 rounded-2xl shadow-md"
+                          dir="rtl"
+                          style={{
+                            background: isCurrent
+                              ? "linear-gradient(90deg, rgba(16,185,129,0.22) 0%, rgba(255,255,255,0.05) 100%)"
+                              : "rgba(255,255,255,0.035)",
+                            border: isCurrent ? "1.5px solid rgba(52,211,153,0.65)" : "1px solid rgba(255,255,255,0.08)",
+                          }}
+                        >
+                          <div className="absolute right-5 md:right-7 flex items-center gap-3 md:gap-4 min-w-0 max-w-[calc(100%-8rem)]" dir="rtl">
+                            <span className="font-black text-white leading-none drop-shadow shrink-0 min-w-[2.5rem] md:min-w-[3.5rem]" style={{ fontSize: "clamp(2rem, 3.7vw, 3.25rem)", textShadow: "0 2px 4px rgba(0,0,0,0.6)" }}>
+                              {item.position}
+                            </span>
+                            <span className="text-white font-black truncate text-2xl md:text-3xl lg:text-4xl drop-shadow leading-normal">{item.name}</span>
+                            {isCurrent && <span className="w-5 h-5 rounded-full bg-amber-300 animate-[qd-fast-pulse_0.75s_ease-in-out_infinite] shadow-[0_0_20px_#fbbf24] shrink-0" aria-label="الدور الحالي" />}
+                          </div>
+                          {estimatedTime && (
+                            <span className="absolute left-5 md:left-7 text-amber-200/90 text-base md:text-lg lg:text-xl font-bold whitespace-nowrap" dir={isCurrent && remainingText ? "ltr" : "rtl"}>
+                              ⏳ {estimatedTime}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              ) : (
+              <div className="flex-1 flex items-center justify-center text-center">
+                <p className="text-white/30 text-2xl font-bold">لا يوجد أدوار في الطابور حالياً</p>
+              </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
         {/* RIGHT COLUMN — Currently Processing (الدور الحالي) */}
         <div
           className="flex-1 flex flex-col justify-between items-center relative rounded-3xl p-5 md:p-7 shadow-2xl backdrop-blur-sm overflow-hidden text-center"
@@ -595,6 +654,8 @@ export default function PublicQueueDisplay() {
             </div>
           )}
         </div>
+          </>
+        )}
       </main>
 
       {/* Bottom Info Bar — Dynamic Custom Items (e.g. Oil Prices, Contact, Announcements) */}
@@ -651,6 +712,10 @@ export default function PublicQueueDisplay() {
       )}
 
       <style>{`
+        @keyframes qd-fast-pulse {
+          0%, 100% { opacity: 0.45; transform: scale(0.82); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
         @keyframes qd-fade-scale {
           0% { opacity: 0; transform: scale(0.95); }
           100% { opacity: 1; transform: scale(1); }

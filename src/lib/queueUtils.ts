@@ -13,6 +13,7 @@ export interface QueueItem {
   status: string;
   estimated_minutes?: number | null;
   started_at?: string | null;
+  completed_at?: string | null;
 }
 
 /**
@@ -72,6 +73,23 @@ export function parseStartedAt(item: {
         if (!isNaN(t)) return t;
       }
     } catch {}
+  }
+  return null;
+}
+
+/** Read the completion time from the database column or the compatible notes fallback. */
+export function parseCompletedAt(item: {
+  completed_at?: string | null;
+  notes?: string | null;
+}): string | null {
+  if (item.completed_at) {
+    const parsed = new Date(item.completed_at).getTime();
+    if (!isNaN(parsed)) return item.completed_at;
+  }
+  const match = item.notes?.match(/\[completed_at:([^\]]+)\]/);
+  if (match) {
+    const parsed = new Date(match[1]).getTime();
+    if (!isNaN(parsed)) return match[1];
   }
   return null;
 }

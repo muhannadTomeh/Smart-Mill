@@ -1392,6 +1392,31 @@ export default function Settings() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6 pt-5">
+            <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 space-y-3">
+              <div>
+                <h3 className="font-bold text-sm text-foreground">شكل شاشة الطابور</h3>
+                <p className="text-xs text-muted-foreground mt-1">اختر الطريقة التي تظهر بها الأدوار على شاشة التلفزيون.</p>
+              </div>
+              <RadioGroup
+                value={displaySettings.display_layout || "split"}
+                onValueChange={(value) => updateDisplaySetting("display_layout", value as "split" | "queue")}
+                className="grid gap-3 sm:grid-cols-2"
+              >
+                <Label htmlFor="display-layout-split" className={cn("cursor-pointer rounded-xl border p-3.5 transition-colors", (displaySettings.display_layout || "split") === "split" ? "border-primary bg-primary/10" : "border-border bg-card")}>
+                  <div className="flex items-start gap-2">
+                    <RadioGroupItem value="split" id="display-layout-split" className="mt-0.5" />
+                    <span><span className="block text-sm font-bold">الدور الحالي والدور التالي</span><span className="block text-xs text-muted-foreground mt-1">بطاقة كبيرة للدور قيد العصر وخمسة أدوار تالية.</span></span>
+                  </div>
+                </Label>
+                <Label htmlFor="display-layout-queue" className={cn("cursor-pointer rounded-xl border p-3.5 transition-colors", displaySettings.display_layout === "queue" ? "border-primary bg-primary/10" : "border-border bg-card")}>
+                  <div className="flex items-start gap-2">
+                    <RadioGroupItem value="queue" id="display-layout-queue" className="mt-0.5" />
+                    <span><span className="block text-sm font-bold">قائمة الطابور حتى 10 أشخاص</span><span className="block text-xs text-muted-foreground mt-1">قائمتان مع دائرة نابضة صغيرة بجانب الدور الحالي فقط.</span></span>
+                  </div>
+                </Label>
+              </RadioGroup>
+            </div>
+
             <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 space-y-4">
               <div>
                 <h3 className="font-bold text-sm text-foreground">ترويسة شاشة العرض</h3>

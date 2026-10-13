@@ -408,9 +408,11 @@ export default function Dashboard() {
                         <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
                         قيد العصر حالياً
                       </span>
-                      <Badge variant="outline" className="text-[11px] font-semibold border-primary/30 text-foreground">
-                        {currentProcessing.bags ?? 0} شوال
-                      </Badge>
+                      {Number(currentProcessing.bags) > 0 && (
+                        <Badge variant="outline" className="text-[11px] font-semibold border-primary/30 text-foreground">
+                          {currentProcessing.bags} شوال
+                        </Badge>
+                      )}
                     </div>
                     <h3 className="text-base font-bold text-foreground mt-0.5">
                       {currentProcessing.name}
@@ -486,9 +488,11 @@ export default function Dashboard() {
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
-                        <span>{item.bags ?? 0} شوال</span>
-                      </div>
+                      {Number(item.bags) > 0 && (
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
+                          <span>{item.bags} شوال</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -2053,6 +2053,7 @@ export type Database = {
         Row: {
           bags: number
           customer_id: string | null
+          completed_at: string | null
           created_at: string
           estimated_minutes: number | null
           id: string
@@ -2069,6 +2070,7 @@ export type Database = {
         Insert: {
           bags: number
           customer_id?: string | null
+          completed_at?: string | null
           created_at?: string
           estimated_minutes?: number | null
           id?: string
@@ -2085,6 +2087,7 @@ export type Database = {
         Update: {
           bags?: number
           customer_id?: string | null
+          completed_at?: string | null
           created_at?: string
           estimated_minutes?: number | null
           id?: string

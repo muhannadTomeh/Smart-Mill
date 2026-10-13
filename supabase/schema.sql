@@ -141,7 +141,8 @@ CREATE TABLE public.queue (
   position integer DEFAULT 0,
   status text NOT NULL DEFAULT 'waiting',
   season_id uuid REFERENCES public.seasons(id),
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz
 );
 
 -- Invoices
