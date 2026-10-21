@@ -1,3 +1,5 @@
+import { formatTime } from "@/lib/formatters";
+
 export interface ThermalReceiptData {
   invoice_number?: string | number;
   customer_name: string;
@@ -118,11 +120,7 @@ export function printThermalReceipt(data: ThermalReceiptData, millName = "الم
     month: "2-digit",
     day: "2-digit",
   });
-  const formattedTime = dateObj.toLocaleTimeString("ar-u-nu-latn", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formattedTime = formatTime(dateObj);
 
   const netOilForCustomer = Math.max(0, data.oil_produced - Number(data.oil_amount || 0));
 
@@ -333,11 +331,7 @@ export function printThermalZReport(data: ThermalZReportData, millName = "الم
     month: "2-digit",
     day: "2-digit",
   });
-  const formattedTime = dateObj.toLocaleTimeString("ar-u-nu-latn", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formattedTime = formatTime(dateObj);
 
   const diffStatus =
     Math.abs(data.difference) < 0.01
@@ -635,11 +629,7 @@ export function printThermalQueueTicket(data: ThermalQueueTicketData, millName =
     month: "2-digit",
     day: "2-digit",
   });
-  const formattedTime = dateObj.toLocaleTimeString("ar-u-nu-latn", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formattedTime = formatTime(dateObj);
 
   // Strip internal tags from notes (e.g. [وقت_تقديري:30], [بدء_العصر:...])
   const cleanNotes = data.notes

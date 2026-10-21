@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { TIME_FORMAT_CHANGE_EVENT } from "@/hooks/useTimeFormat";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -456,7 +457,16 @@ const RadixPointerEventsWatchdog = () => {
   return null;
 };
 
-const App = () => (
+const App = () => {
+  const [, setTimeFormatVersion] = useState(0);
+
+  useEffect(() => {
+    const rerender = () => setTimeFormatVersion((version) => version + 1);
+    window.addEventListener(TIME_FORMAT_CHANGE_EVENT, rerender);
+    return () => window.removeEventListener(TIME_FORMAT_CHANGE_EVENT, rerender);
+  }, []);
+
+  return (
   <AppErrorBoundary fallbackTitle="تعذر تشغيل التطبيق">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -483,6 +493,7 @@ const App = () => (
       </TooltipProvider>
     </QueryClientProvider>
   </AppErrorBoundary>
-);
+  );
+};
 
 export default App;

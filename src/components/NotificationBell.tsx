@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications, type AppNotification } from "@/hooks/useNotifications";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/lib/formatters";
 
 function notificationIcon(category: AppNotification["category"]) {
   if (category === "payment_due") return <Banknote className="h-4 w-4" />;
@@ -16,13 +17,7 @@ function notificationIcon(category: AppNotification["category"]) {
 function formatNotificationTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("ar-u-nu-latn", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTime(date);
 }
 
 export function NotificationBell() {

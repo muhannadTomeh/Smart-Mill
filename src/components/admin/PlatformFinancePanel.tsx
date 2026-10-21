@@ -32,6 +32,7 @@ import { ClickableDateInput } from "@/components/history/ClickableDateInput";
 import { supabase } from "@/integrations/supabase/client";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { cn } from "@/lib/utils";
+import { formatTime as formatSystemTime } from "@/lib/formatters";
 
 interface PlatformFinanceSummary {
   cash_balance: number;
@@ -95,7 +96,7 @@ const formatDate = (value: string | null) => {
 const formatTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleTimeString("ar-u-nu-latn", { hour: "2-digit", minute: "2-digit" });
+  return formatSystemTime(date);
 };
 
 const categoryLabel: Record<PlatformTransaction["category"], string> = {

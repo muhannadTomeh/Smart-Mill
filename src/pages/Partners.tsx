@@ -102,7 +102,7 @@ export default function Partners() {
     setLoading(true);
 
     try {
-      const [partnersRes, payablesRes, txsRes] = await Promise.all([
+      const [partnersRes, payablesRes, partnerBalanceRes, txsRes] = await Promise.all([
         supabase.from("partners" as any).select("*").eq("mill_id", effectiveMillId).eq("active", true).order("name", { ascending: true }),
         supabase
           .from("payables" as any)
@@ -110,6 +110,13 @@ export default function Partners() {
           .eq("season_id", activeSeason.id)
           .eq("type", "due_to_partner")
           .in("status", ["unpaid", "partially_paid"]),
+        supabase
+          .from("financial_transactions" as any)
+          .select("party_id, amount, direction")
+          .eq("mill_id", effectiveMillId)
+          .eq("season_id", activeSeason.id)
+          .eq("party_type", "partner")
+          .eq("status", "active"),
         supabase.from("financial_transactions" as any).select("*").eq("mill_id", effectiveMillId).eq("season_id", activeSeason.id).eq("party_type", "partner").order("created_at", { ascending: false }).limit(20)]); const partnerList: Partner[] = (partnersRes.data || []) as any;
       const duesMap: Record<string, number> = {};
       ((payablesRes.data || []) as any[]).forEach((p) => {
@@ -118,9 +125,21 @@ export default function Partners() {
         }
       });
 
+      const partnerCashMap: Record<string, number> = {};
+      ((partnerBalanceRes.data || []) as any[]).forEach((transaction) => {
+        if (!transaction.party_id) return;
+        const amount = Number(transaction.amount || 0);
+        const signedAmount = transaction.direction === "in"
+          ? amount
+          : transaction.direction === "out"
+            ? -amount
+            : 0;
+        partnerCashMap[transaction.party_id] = (partnerCashMap[transaction.party_id] || 0) + signedAmount;
+      });
+
       const enriched = partnerList.map((pt) => ({
         ...pt,
-        total_due: duesMap[pt.id] || 0,
+        total_due: Math.max(0, (duesMap[pt.id] || 0) + (partnerCashMap[pt.id] || 0)),
       }));
 
       setPartners(enriched);

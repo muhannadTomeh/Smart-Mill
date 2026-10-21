@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSeason } from "@/contexts/SeasonContext";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
+import { getTimeParts } from "@/lib/formatters";
 
 interface QueueItem {
   id: string;
@@ -28,6 +30,7 @@ export default function QueueDisplay() {
   const [fadeKey, setFadeKey] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const clock = useClock();
+  const { timeFormat } = useTimeFormat();
 
   const fetchQueue = async () => {
     if (!activeSeason) return;
@@ -84,8 +87,7 @@ export default function QueueDisplay() {
     }
   }, [currentItem?.id]);
 
-  const hours = String(clock.getHours()).padStart(2, "0");
-  const minutes = String(clock.getMinutes()).padStart(2, "0");
+  const { hours, minutes, period } = getTimeParts(clock, { timeFormat });
 
   return (
     <div className="fixed inset-0 overflow-hidden flex flex-col" dir="rtl"
@@ -101,7 +103,7 @@ export default function QueueDisplay() {
           <span className="text-white/80 text-5xl font-bold tracking-widest"
             style={{ textShadow: "0 0 20px rgba(255,255,255,0.1)" }}
           >
-            {hours}:{minutes}
+            {hours}:{minutes}{period && <span className="ms-2 text-2xl text-green-300">{period}</span>}
           </span>
         </div>
       </div>

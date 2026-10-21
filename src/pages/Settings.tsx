@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+﻿import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,7 @@ import {
   ShieldCheck, Building2, MapPin, User, Phone, Globe, UserCheck,
   Tv, ExternalLink, Copy, Sparkles, SlidersHorizontal, Receipt,
   Users, ChevronLeft, ArrowRight, HardHat, Printer, Coins,
-  Package, DollarSign, Lock, CheckCircle2, AlertCircle, Pencil
+  Package, DollarSign, Lock, CheckCircle2, AlertCircle, Pencil, Clock3
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useCurrency, POPULAR_CURRENCIES } from "@/hooks/useCurrency";
@@ -30,6 +30,7 @@ import { useSeason } from "@/contexts/SeasonContext";
 import { Link, useSearchParams } from "react-router-dom";
 import { storeCredential } from "@/lib/credentialVault";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
 import {
   calculateCashReturnAmount,
   calculateOilReturnQuantity,
@@ -71,6 +72,7 @@ type MainSectionId =
 type SubSettingId =
   // Operations sub-settings
   | "pressing_rates"     // إعدادات العصر والأسعار
+  | "time_format"        // صيغة الوقت
   | "display_screen"     // شاشة العرض
   // Invoices & Receipts sub-settings
   | "currency"           // العملة المعتمدة
@@ -91,6 +93,7 @@ export default function Settings() {
   const { settings, loading } = useSettings();
   const { currency, setCurrency, currencies } = useCurrency();
   const { toast } = useToast();
+  const { timeFormat, setTimeFormat } = useTimeFormat();
 
   // Navigation State: Hub -> Section -> SubSetting -> Edit
   const [activeSection, setActiveSection] = useState<MainSectionId | null>(null);
@@ -864,6 +867,7 @@ export default function Settings() {
                     <span>/</span>
                     <span className="font-bold text-foreground">
                       {activeSubSetting === "pressing_rates" && "إعدادات العصر والأسعار"}
+                      {activeSubSetting === "time_format" && "صيغة الوقت"}
                       {activeSubSetting === "display_screen" && "شاشة العرض العامة"}
                       {activeSubSetting === "currency" && "العملة المعتمدة"}
                       {activeSubSetting === "expense_categories" && "أنواع المصاريف"}
@@ -1166,6 +1170,20 @@ export default function Settings() {
               <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
             </div>
 
+            {/* SubCard: صيغة الوقت */}
+            <div
+              onClick={() => openSubSetting("time_format")}
+              className="group flex items-center justify-between p-5 rounded-2xl border border-border/70 bg-card hover:bg-card/90 hover:border-amber-500/50 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Clock3 className="h-5 w-5" />
+                </div>
+                <h3 className="font-bold text-base text-foreground group-hover:text-primary transition-colors">صيغة الوقت</h3>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground/60 group-hover:text-primary group-hover:-translate-x-1 transition-all shrink-0" />
+            </div>
+
             {/* SubCard: شاشة العرض */}
             <div
               onClick={() => openSubSetting("display_screen")}
@@ -1191,17 +1209,35 @@ export default function Settings() {
         </div>
       )}
 
+      {activeSection === "operations" && activeSubSetting === "time_format" && (
+        <Card className="rounded-2xl border-border/70 shadow-sm" dir="rtl">
+          <CardHeader className="border-b border-border/50 pb-4 text-right">
+            <CardTitle className="flex items-center gap-2 text-lg"><Clock3 className="h-5 w-5 text-amber-500" />صيغة الوقت</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <RadioGroup value={timeFormat} onValueChange={(value) => setTimeFormat(value as "12" | "24")} className="grid grid-cols-2 gap-3" dir="rtl">
+              <Label htmlFor="global-time-format-24" className={cn("flex cursor-pointer items-center justify-between rounded-xl border p-4 font-bold transition-colors", timeFormat === "24" ? "border-primary bg-primary/10" : "border-border bg-card")}>
+                <span dir="ltr">24</span><RadioGroupItem value="24" id="global-time-format-24" />
+              </Label>
+              <Label htmlFor="global-time-format-12" className={cn("flex cursor-pointer items-center justify-between rounded-xl border p-4 font-bold transition-colors", timeFormat === "12" ? "border-primary bg-primary/10" : "border-border bg-card")}>
+                <span dir="ltr">12</span><RadioGroupItem value="12" id="global-time-format-12" />
+              </Label>
+            </RadioGroup>
+          </CardContent>
+        </Card>
+      )}
+
       {/* OPERATIONS SUB-SETTING 1: إعدادات العصر والأسعار */}
       {activeSection === "operations" && activeSubSetting === "pressing_rates" && (
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="pb-4 border-b border-border/50">
-            <CardTitle className="text-lg flex items-center gap-2">
+        <Card className="rounded-2xl border-border/70 shadow-sm" dir="rtl">
+          <CardHeader className="pb-4 border-b border-border/50 text-right">
+            <CardTitle className="text-lg flex items-center gap-2 text-right">
               <Coins className="h-5 w-5 text-amber-500" />
               إعدادات العصر والأسعار الثابتة
             </CardTitle>
             <CardDescription>الثوابت المستخدمة في حساب الفواتير ونسب الرد والأسعار</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6 pt-6">
+          <CardContent className="space-y-6 pt-6 text-right">
             <div className="max-w-xl space-y-2">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">نسبة الرد بالزيت (%)</Label>
@@ -1211,7 +1247,7 @@ export default function Settings() {
                   onChange={(e) => setForm((p) => ({ ...p, return_percent: e.target.value }))}
                   min="0"
                   step="0.1"
-                  className="rounded-xl"
+                  className="rounded-xl text-right"
                 />
               </div>
             </div>
@@ -1232,17 +1268,18 @@ export default function Settings() {
                   }))
                 }
                 className="grid gap-3 lg:grid-cols-3"
+                dir="rtl"
               >
                 <Label
                   htmlFor="cash-return-fixed"
                   className={cn(
-                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 transition-colors",
+                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 text-right transition-colors",
                     form.cash_return_pricing_mode === "fixed_per_produced_kg"
                       ? "border-primary bg-primary/5"
                       : "border-border hover:bg-muted/50",
                   )}
                 >
-                  <span className="flex items-center gap-2 font-semibold">
+                  <span className="flex flex-row-reverse items-center justify-end gap-2 font-semibold">
                     <RadioGroupItem id="cash-return-fixed" value="fixed_per_produced_kg" />
                     مبلغ ثابت لكل كغم زيت منتج
                   </span>
@@ -1257,7 +1294,7 @@ export default function Settings() {
                     step="0.1"
                     disabled={form.cash_return_pricing_mode !== "fixed_per_produced_kg"}
                     aria-label={`التكلفة الثابتة (${selectedCurrency}/كغم زيت منتج)`}
-                    className="rounded-xl"
+                    className="rounded-xl text-right"
                   />
                   <span className="text-xs text-muted-foreground">
                     كمية الزيت المنتج × {form.cash_return_cost || "0"} {selectedCurrency}
@@ -1267,13 +1304,13 @@ export default function Settings() {
                 <Label
                   htmlFor="cash-return-buy-price"
                   className={cn(
-                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 transition-colors",
+                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 text-right transition-colors",
                     form.cash_return_pricing_mode === "oil_return_at_buy_price"
                       ? "border-primary bg-primary/5"
                       : "border-border hover:bg-muted/50",
                   )}
                 >
-                  <span className="flex items-center gap-2 font-semibold">
+                  <span className="flex flex-row-reverse items-center justify-end gap-2 font-semibold">
                     <RadioGroupItem id="cash-return-buy-price" value="oil_return_at_buy_price" />
                     حسب سعر شراء الزيت
                   </span>
@@ -1285,13 +1322,13 @@ export default function Settings() {
                 <Label
                   htmlFor="cash-return-sell-price"
                   className={cn(
-                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 transition-colors",
+                    "flex cursor-pointer flex-col gap-3 rounded-xl border p-4 text-right transition-colors",
                     form.cash_return_pricing_mode === "oil_return_at_sell_price"
                       ? "border-primary bg-primary/5"
                       : "border-border hover:bg-muted/50",
                   )}
                 >
-                  <span className="flex items-center gap-2 font-semibold">
+                  <span className="flex flex-row-reverse items-center justify-end gap-2 font-semibold">
                     <RadioGroupItem id="cash-return-sell-price" value="oil_return_at_sell_price" />
                     حسب سعر بيع الزيت
                   </span>
@@ -1313,7 +1350,7 @@ export default function Settings() {
                   onChange={(e) => setForm((p) => ({ ...p, oil_sell_price: e.target.value }))}
                   min="0"
                   step="0.1"
-                  className="rounded-xl"
+                  className="rounded-xl text-right"
                 />
               </div>
               <div className="space-y-2">
@@ -1324,7 +1361,7 @@ export default function Settings() {
                   onChange={(e) => setForm((p) => ({ ...p, oil_buy_price: e.target.value }))}
                   min="0"
                   step="0.1"
-                  className="rounded-xl"
+                  className="rounded-xl text-right"
                 />
               </div>
             </div>

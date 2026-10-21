@@ -1,3 +1,5 @@
+import { formatTime } from "@/lib/formatters";
+
 export interface QueueItem {
   id: string;
   mill_id?: string | null;
@@ -135,7 +137,7 @@ export function formatTimeSafe(dateStr?: string | null): string {
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return "--:--";
-    return d.toLocaleTimeString("ar-u-nu-latn", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return formatTime(d);
   } catch {
     return "--:--";
   }

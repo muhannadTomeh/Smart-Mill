@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchAllAdminAccounts, type AdminAccountItem } from "@/lib/credentialVault";
 import { getArabicErrorMessage } from "@/lib/errorMessages";
 import { cn } from "@/lib/utils";
+import { formatDateTime as formatSystemDateTime } from "@/lib/formatters";
 
 const categoryLabels: Record<NotificationCategory, string> = {
   general: "عام",
@@ -25,13 +26,7 @@ const categoryLabels: Record<NotificationCategory, string> = {
 function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("ar-u-nu-latn", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatSystemDateTime(date);
 }
 
 function NotificationSymbol({ category }: { category: NotificationCategory }) {

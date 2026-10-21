@@ -25,6 +25,8 @@ import {
   getDynamicItems,
   DynamicDisplayItem,
 } from "@/hooks/useDisplaySettings";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
+import { getTimeParts } from "@/lib/formatters";
 
 interface SeasonInfo {
   name: string;
@@ -311,9 +313,11 @@ export default function PublicQueueDisplay() {
     }
   }, [currentItem?.id]);
 
+  const { timeFormat } = useTimeFormat();
+  const clockParts = getTimeParts(clock, { timeFormat });
   const nowMs = clock.getTime();
-  const hours = String(clock.getHours()).padStart(2, "0");
-  const minutes = String(clock.getMinutes()).padStart(2, "0");
+  const hours = clockParts.hours;
+  const minutes = clockParts.minutes;
 
   // Calculate live second-by-second countdown for current processing customer
   const currentEstMin = currentItem ? parseEstimatedMinutes(currentItem) : null;
@@ -393,10 +397,15 @@ export default function PublicQueueDisplay() {
           <div className="flex items-center gap-3 bg-white/[0.04] border border-white/[0.08] px-5 py-2 rounded-2xl backdrop-blur-md shadow-inner">
             <div className="flex flex-col items-end text-left font-mono">
               <span
-                className="text-white text-3xl md:text-4xl font-black tracking-wider leading-none"
+                className="text-white text-3xl md:text-4xl font-black tracking-wider leading-none flex items-center gap-2"
                 style={{ textShadow: "0 0 20px rgba(255,255,255,0.25)" }}
               >
-                {hours}:{minutes}
+                <span>{hours}:{minutes}</span>
+                {clockParts.period && (
+                  <span className="text-emerald-400 text-xl md:text-2xl font-bold font-sans">
+                    {clockParts.period}
+                  </span>
+                )}
               </span>
               <span className="text-emerald-400/80 text-xs md:text-sm font-sans font-medium mt-1">
                 {formattedDate}
@@ -751,4 +760,3 @@ export default function PublicQueueDisplay() {
     </div>
   );
 }
-
